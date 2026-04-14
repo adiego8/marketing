@@ -1,65 +1,150 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { listRuns, triggerRun } from "@/lib/api";
+import type { RunListItem } from "@/lib/types";
+
+export default function Dashboard() {
+  const [runs, setRuns] = useState<RunListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [triggering, setTriggering] = useState(false);
+
+  const fetchRuns = async () => {
+    try {
+      const data = await listRuns({ limit: 10 });
+      setRuns(data);
+    } catch (e) {
+      console.error("Failed to fetch runs:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRuns();
+  }, []);
+
+  const handleTrigger = async () => {
+    setTriggering(true);
+    try {
+      await triggerRun("daily");
+      setTimeout(fetchRuns, 1000);
+    } catch (e) {
+      console.error("Failed to trigger run:", e);
+    } finally {
+      setTriggering(false);
+    }
+  };
+
+  const completed = runs.filter((r) => r.status === "completed").length;
+  const failed = runs.filter((r) => r.status === "failed").length;
+  const running = runs.filter((r) => r.status === "running").length;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-zinc-500 text-sm">Marketing Agent Overview</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="flex gap-2">
+          <Button onClick={handleTrigger} disabled={triggering}>
+            {triggering ? "Triggering..." : "Trigger Daily Run"}
+          </Button>
+          <Link href="/onboarding">
+            <Button variant="outline">New Research</Button>
+          </Link>
         </div>
-      </main>
+      </div>
+
+      <div className="grid grid-cols-4 gap-4 mb-8">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-zinc-500">Total Runs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">{runs.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-zinc-500">Completed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-green-600">{completed}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-zinc-500">Failed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-red-600">{failed}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-zinc-500">Running</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-blue-600">{running}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Runs</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <p className="text-zinc-500 text-sm">Loading...</p>
+          ) : runs.length === 0 ? (
+            <p className="text-zinc-500 text-sm">
+              No runs yet. Trigger your first daily run!
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-zinc-500">
+                  <th className="pb-2 font-medium">Run ID</th>
+                  <th className="pb-2 font-medium">Task</th>
+                  <th className="pb-2 font-medium">Status</th>
+                  <th className="pb-2 font-medium">Created</th>
+                  <th className="pb-2 font-medium"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {runs.map((run) => (
+                  <tr key={run.id} className="border-b last:border-0">
+                    <td className="py-3 font-mono text-xs">
+                      {run.id.slice(0, 8)}...
+                    </td>
+                    <td className="py-3">{run.task_type}</td>
+                    <td className="py-3">
+                      <StatusBadge status={run.status} />
+                    </td>
+                    <td className="py-3 text-zinc-500">
+                      {new Date(run.created_at).toLocaleString()}
+                    </td>
+                    <td className="py-3">
+                      <Link href={`/runs/${run.id}`}>
+                        <Button variant="ghost" size="sm">
+                          View
+                        </Button>
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
