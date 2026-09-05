@@ -26,6 +26,7 @@ export default function ClientListPage() {
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Create form
   const [newName, setNewName] = useState("");
@@ -46,8 +47,12 @@ export default function ClientListPage() {
       if (search) params.search = search;
       const data = await listClients(params);
       setClients(data);
+      setError(null);
     } catch (e) {
+      // Rendered, not just logged: an empty list and a failed request look
+      // identical otherwise, which is exactly when you need to tell them apart.
       console.error("Failed to fetch clients:", e);
+      setError(e instanceof Error ? e.message : "Could not load clients");
     } finally {
       setLoading(false);
     }
@@ -175,6 +180,12 @@ export default function ClientListPage() {
           <option value="archived">Archived</option>
         </select>
       </div>
+
+      {error && (
+        <p className="text-sm text-red-700 bg-red-50 border border-red-200 p-3 rounded mb-4">
+          {error}
+        </p>
+      )}
 
       {/* Client table */}
       <Card>

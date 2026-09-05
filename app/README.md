@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Marketing Agent
 
-## Getting Started
+Turns a client's weekly content quota into a dated, channel-assigned schedule:
+what to post, where, when, and why. Asset generation is deliberately out of
+scope — the agent plans, a human writes.
 
-First, run the development server:
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # then fill it in
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`.env.local` needs, at minimum:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Var | Where from |
+|---|---|
+| `NEXT_PUBLIC_FIREBASE_*` | Firebase console → Project settings → General → SDK setup |
+| `FIREBASE_PROJECT_ID` / `_CLIENT_EMAIL` / `_PRIVATE_KEY` | Project settings → Service accounts → Generate new private key |
+| `OPENAI_API_KEY` | Campaign generation and slot themes |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The client and Admin values must name the **same** Firebase project. Without the
+Admin ones every API route answers `503` naming what is missing, rather than a
+misleading `401`.
 
-## Learn More
+`FIREBASE_DATABASE_ID` is optional; see `.env.example`.
 
-To learn more about Next.js, take a look at the following resources:
+## Running
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run dev        # localhost:3008
+npm run seed       # after signing in once — creates a client with a quota
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The first person to sign in claims the agency and becomes its admin. Run the
+seed **after** that, so it attaches to the agency your sign-in created.
 
-## Deploy on Vercel
+## Firestore indexes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Two composite indexes are required, declared in `firestore.indexes.json`:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Collection | Fields | Serves |
+|---|---|---|
+| `marketing_slots` | `clientId`, `date` | loading the slots in a planning horizon |
+| `marketing_plan_runs` | `clientId`, `createdAt desc` | listing past plan runs |
+
+Deploy them with:
+
+```bash
+firebase deploy --only firestore:indexes
+```
+
+If you skip this, the first query that needs one fails with an error containing
+a one-click console URL to create it. That is fine for local work; deploy the
+file for anything shared.
+
+## Checks
+
+```bash
+npm run test        # 94 tests over the planner's pure functions
+npm run typecheck
+npm run build
+npm run lint
+```
+
+The tests cover gap arithmetic, ISO week boundaries, and date assignment —
+where a bug produces a plausible-looking but wrong calendar (DST drift, a
+53-week ISO year, posts landing on a weekend). They use injected fakes, so
+they prove the algorithm, not the Firestore integration.
+
+## What works today
+
+Dashboard, Strategy, Branding, Campaigns and Plan. Onboarding, Calendar, Runs
+and Assets are unlinked from the nav: their endpoints still proxy to the FastAPI
+backend in `../` and have not been ported. Calendar returns with Google sync;
+Runs and Assets are slated for deletion.
+
+`next.config.ts` proxies anything unported to `localhost:8080` as a `fallback`
+rewrite — after dynamic routes, so anything implemented here wins.

@@ -16,6 +16,15 @@ import type { DecodedIdToken } from "firebase-admin/auth";
 // Authorisation is marketing-specific. The Firebase project is shared with
 // numerico-website, so a valid ID token only proves the caller is a numerico
 // user; membership in marketing_members is what grants access here.
+//
+// marketing_members is a RECORD, not a rule. Today the first person to sign in
+// claims the agency and becomes its admin, which is what an MVP needs. When
+// billing goes live, numerico grants a `marketer` entitlement on a
+// customers/{id} document — the same rail already carrying engage, handy and
+// mywelltax — and that grant writes the member document here. Routes keep
+// asking one question and only the source of the answer moves, so none of them
+// change. numericoDb in lib/firebase-admin.ts is the handle for reading those
+// entitlements when that lands.
 
 export interface Session {
   uid: string;

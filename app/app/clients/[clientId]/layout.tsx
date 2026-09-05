@@ -41,16 +41,17 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   const prefix = `/clients/${clientId}`;
 
+  // Only routes whose endpoints are ported to this app. Onboarding, Calendar,
+  // Runs and Assets still proxy to the FastAPI backend, so linking them would
+  // hand you a 500. Their pages are left in place: Calendar returns with
+  // Google sync, Onboarding when research is ported, and Runs/Assets are slated
+  // for deletion along with the Python.
   const NAV_ITEMS = [
     { href: prefix, label: "Dashboard", icon: "◻" },
-    { href: `${prefix}/onboarding`, label: "Onboarding", icon: "+" },
     { href: `${prefix}/strategy`, label: "Strategy", icon: "◎" },
     { href: `${prefix}/branding`, label: "Branding", icon: "◐" },
     { href: `${prefix}/campaigns`, label: "Campaigns", icon: "◈" },
     { href: `${prefix}/plan`, label: "Plan", icon: "▥" },
-    { href: `${prefix}/calendar`, label: "Calendar", icon: "▦" },
-    { href: `${prefix}/runs`, label: "Runs", icon: "▶" },
-    { href: `${prefix}/assets`, label: "Assets", icon: "▤" },
   ];
 
   return (

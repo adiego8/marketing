@@ -13,7 +13,6 @@ import {
   getCampaign,
   improveCampaign,
   reviewCampaign,
-  triggerRun,
   acceptCampaign,
   rejectCampaign,
   completeCampaign,
@@ -54,7 +53,10 @@ export default function CampaignDetailPage() {
   useEffect(() => {
     Promise.all([
       getCampaign(clientId, campaignId),
-      listAssets(clientId, { campaign_id: campaignId, limit: 100 }),
+      // Assets are not ported yet, so this endpoint still proxies to the old
+      // backend. Its own catch keeps one dead call from failing the whole
+      // Promise.all and blanking a campaign that loaded fine.
+      listAssets(clientId, { campaign_id: campaignId, limit: 100 }).catch(() => []),
       getStrategy(clientId).catch(() => null),
     ])
       .then(([camp, assets, strategy]) => {
@@ -198,22 +200,12 @@ export default function CampaignDetailPage() {
         <div className="flex gap-2">
           {campaign.status === "active" && (
             <>
-              <Button
-                onClick={async () => {
-                  setActionLoading(true);
-                  try {
-                    const { run_id } = await triggerRun(clientId, "daily", campaignId);
-                    router.push(`/clients/${clientId}/runs/${run_id}`);
-                  } catch (e) {
-                    console.error("Failed to trigger run:", e);
-                  } finally {
-                    setActionLoading(false);
-                  }
-                }}
-                disabled={actionLoading}
-              >
-                Generate Content
-              </Button>
+              {/* Replaces the old "Generate Content" run trigger. An active
+                  campaign is scheduled by the planner, which draws from it to
+                  fill the weekly quota — there is no per-campaign generate. */}
+              <Link href={`/clients/${clientId}/plan`}>
+                <Button>Plan content</Button>
+              </Link>
               <Button variant="outline" onClick={handleComplete} disabled={actionLoading}>
                 Mark Complete
               </Button>
