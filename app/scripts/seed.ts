@@ -27,22 +27,29 @@ async function main() {
   // Imported after dotenv so the Admin SDK sees the credentials.
   const { db, COLLECTIONS, FieldValue } = await import("../lib/firestore");
 
+  // Attach to the agency that already exists rather than refusing. The common
+  // case is seeding AFTER signing in, when sign-in has already created the
+  // agency and made you its admin — refusing there would mean the seed could
+  // never add test data.
   const existing = await db().collection(COLLECTIONS.agencies).limit(1).get();
-  if (!existing.empty) {
-    console.log(`Agency already exists (${existing.docs[0].id}). Nothing to do.`);
-    return;
-  }
+  let agencyId: string;
 
-  const agencyRef = db().collection(COLLECTIONS.agencies).doc();
-  await agencyRef.set({
-    name: email ? `${email.split("@")[0]}'s agency` : "My agency",
-    createdAt: FieldValue.serverTimestamp(),
-  });
-  console.log(`Agency:  ${agencyRef.id}`);
+  if (!existing.empty) {
+    agencyId = existing.docs[0].id;
+    console.log(`Agency:  ${agencyId} (existing)`);
+  } else {
+    const agencyRef = db().collection(COLLECTIONS.agencies).doc();
+    await agencyRef.set({
+      name: email ? `${email.split("@")[0]}'s agency` : "My agency",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    agencyId = agencyRef.id;
+    console.log(`Agency:  ${agencyId} (created)`);
+  }
 
   if (uid) {
     await db().collection(COLLECTIONS.members).doc(uid).set({
-      agencyId: agencyRef.id,
+      agencyId,
       email: email ?? null,
       name: null,
       role: "admin",
@@ -50,12 +57,17 @@ async function main() {
     });
     console.log(`Member:  ${uid} (admin)`);
   } else {
-    console.log("Member:  none — the first user to sign in claims this agency.");
+    const members = await db().collection(COLLECTIONS.members).limit(1).get();
+    console.log(
+      members.empty
+        ? "Member:  none yet — the first user to sign in claims this agency as admin."
+        : "Member:  left as is."
+    );
   }
 
   const clientRef = db().collection(COLLECTIONS.clients).doc();
   await clientRef.set({
-    agencyId: agencyRef.id,
+    agencyId,
     name: "Example Client",
     websiteUrl: null,
     logoUrl: null,

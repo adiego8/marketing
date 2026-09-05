@@ -103,16 +103,34 @@ export async function ensureMember(decoded: DecodedIdToken): Promise<Session | n
     };
   }
 
-  const agencies = await db().collection(COLLECTIONS.agencies).limit(1).get();
-  if (!agencies.empty) return null; // an agency exists: membership is by invitation
+  // Bootstrap is gated on there being no MEMBERS, not no agencies.
+  //
+  // Gating on agencies locks everyone out permanently the moment an agency
+  // document exists without a member to go with it — which the seed script
+  // does, and which any half-finished setup would too. Nobody could then sign
+  // in to claim it, and nobody could be invited, because inviting requires an
+  // admin who cannot exist.
+  const members = await db().collection(COLLECTIONS.members).limit(1).get();
+  if (!members.empty) return null; // someone is already here: membership is by invitation
 
-  const agencyRef = db().collection(COLLECTIONS.agencies).doc();
-  await agencyRef.set({
-    name: decoded.email ? `${decoded.email.split("@")[0]}'s agency` : "My agency",
-    createdAt: FieldValue.serverTimestamp(),
-  });
+  // Adopt an ownerless agency if one is sitting there, rather than creating a
+  // second one beside it.
+  const agencies = await db().collection(COLLECTIONS.agencies).limit(1).get();
+  let agencyId: string;
+
+  if (!agencies.empty) {
+    agencyId = agencies.docs[0].id;
+  } else {
+    const agencyRef = db().collection(COLLECTIONS.agencies).doc();
+    await agencyRef.set({
+      name: decoded.email ? `${decoded.email.split("@")[0]}'s agency` : "My agency",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    agencyId = agencyRef.id;
+  }
+
   await memberRef.set({
-    agencyId: agencyRef.id,
+    agencyId,
     email: decoded.email ?? null,
     name: decoded.name ?? null,
     role: "admin",
@@ -122,7 +140,7 @@ export async function ensureMember(decoded: DecodedIdToken): Promise<Session | n
   return {
     uid: decoded.uid,
     email: decoded.email ?? null,
-    agencyId: agencyRef.id,
+    agencyId,
     role: "admin",
   };
 }
