@@ -2,20 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { listClients, createClient, deleteClient } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { NumericoLockup } from "@/components/brand/numerico-mark";
+import { banner, btn, field, surface, table, text } from "@/lib/ui";
+import { statusPill } from "@/lib/ui-status";
 import type { ClientListItem } from "@/lib/types";
-
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-green-100 text-green-800",
-  paused: "bg-yellow-100 text-yellow-800",
-  archived: "bg-zinc-100 text-zinc-800",
-};
 
 export default function ClientListPage() {
   const router = useRouter();
@@ -27,6 +20,7 @@ export default function ClientListPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Create form
   const [newName, setNewName] = useState("");
@@ -51,7 +45,6 @@ export default function ClientListPage() {
     } catch (e) {
       // Rendered, not just logged: an empty list and a failed request look
       // identical otherwise, which is exactly when you need to tell them apart.
-      console.error("Failed to fetch clients:", e);
       setError(e instanceof Error ? e.message : "Could not load clients");
     } finally {
       setLoading(false);
@@ -70,6 +63,7 @@ export default function ClientListPage() {
   const handleCreate = async () => {
     if (!newName.trim()) return;
     setCreating(true);
+    setCreateError(null);
     try {
       const client = await createClient({
         name: newName,
@@ -87,144 +81,188 @@ export default function ClientListPage() {
       setNewDescription("");
       router.push(`/clients/${client.id}`);
     } catch (e) {
-      console.error("Failed to create client:", e);
+      setCreateError(e instanceof Error ? e.message : "Could not create client");
     } finally {
       setCreating(false);
     }
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-8">
-      {/* User header */}
-      {user && (
-        <div className="flex justify-end items-center gap-3 mb-4">
-          <span className="text-xs text-zinc-500">{user.email}</span>
-          <button
-            onClick={signOut}
-            className="text-xs text-zinc-400 hover:text-zinc-600 underline"
-          >
-            Sign out
+    <div className="min-h-screen bg-stone-50">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+          <NumericoLockup />
+          {user && (
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-slate-500 truncate max-w-[16rem]">
+                {user.email}
+              </span>
+              <button
+                onClick={signOut}
+                className="text-xs text-slate-400 hover:text-teal-700 transition-colors"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <div className="max-w-5xl mx-auto px-6 py-10">
+        <div className="flex items-end justify-between gap-4 mb-8">
+          <div>
+            <p className={text.eyebrow}>Workspace</p>
+            <h1 className={`${text.h1} mt-1`}>Clients</h1>
+          </div>
+          <button onClick={() => setShowCreate(true)} className={btn.primary}>
+            Add client
           </button>
         </div>
-      )}
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Clients</h1>
-          <p className="text-zinc-500 text-sm">Manage your marketing clients</p>
-        </div>
         <Dialog open={showCreate} onOpenChange={setShowCreate}>
-          <Button onClick={() => setShowCreate(true)}>Add Client</Button>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>New Client</DialogTitle>
+              <DialogTitle>New client</DialogTitle>
             </DialogHeader>
-            <div className="space-y-3 pt-2">
+            <div className="space-y-4 pt-2">
               <div>
-                <label className="text-xs text-zinc-500">Name *</label>
-                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Company name" />
+                <label className={field.micro}>Name *</label>
+                <input
+                  className={field.inputSm}
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Company name"
+                />
               </div>
               <div>
-                <label className="text-xs text-zinc-500">Website</label>
-                <Input value={newWebsite} onChange={(e) => setNewWebsite(e.target.value)} placeholder="https://..." />
+                <label className={field.micro}>Website</label>
+                <input
+                  className={field.inputSm}
+                  value={newWebsite}
+                  onChange={(e) => setNewWebsite(e.target.value)}
+                  placeholder="https://…"
+                />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-zinc-500">Email</label>
-                  <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="contact@..." />
+                  <label className={field.micro}>Email</label>
+                  <input
+                    className={field.inputSm}
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="contact@…"
+                  />
                 </div>
                 <div>
-                  <label className="text-xs text-zinc-500">Phone</label>
-                  <Input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="+1..." />
+                  <label className={field.micro}>Phone</label>
+                  <input
+                    className={field.inputSm}
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    placeholder="+1…"
+                  />
                 </div>
               </div>
               <div>
-                <label className="text-xs text-zinc-500">Notes</label>
-                <Input value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="Internal notes..." />
+                <label className={field.micro}>Notes</label>
+                <input
+                  className={field.inputSm}
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  placeholder="Internal notes…"
+                />
               </div>
               <div>
-                <label className="text-xs text-zinc-500">Timezone</label>
-                <Input
+                <label className={field.micro}>Timezone</label>
+                <input
+                  className={field.inputSm}
                   value={newTimezone}
                   onChange={(e) => setNewTimezone(e.target.value)}
                   placeholder="America/New_York"
                 />
-                <p className="text-xs text-zinc-400 mt-1">
-                  IANA zone. Posting times are scheduled in this client&apos;s local time.
+                <p className="text-xs text-slate-400 mt-1.5">
+                  IANA zone. Posting times are scheduled in this client&apos;s
+                  local time.
                 </p>
               </div>
-              <Button onClick={handleCreate} disabled={!newName.trim() || creating} className="w-full">
-                {creating ? "Creating..." : "Create Client"}
-              </Button>
+              {createError && <p className={banner.error}>{createError}</p>}
+              <button
+                onClick={handleCreate}
+                disabled={!newName.trim() || creating}
+                className={`${btn.primary} w-full`}
+              >
+                {creating ? "Creating…" : "Create client"}
+              </button>
             </div>
           </DialogContent>
         </Dialog>
-      </div>
 
-      {/* Filters */}
-      <div className="flex gap-3 mb-4">
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name..."
-          className="max-w-xs"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="border rounded px-3 py-2 text-sm bg-white"
-        >
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="paused">Paused</option>
-          <option value="archived">Archived</option>
-        </select>
-      </div>
+        <div className="flex flex-wrap gap-3 mb-4">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name…"
+            className={`${field.inputSm} max-w-xs`}
+          />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className={field.select}
+          >
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="paused">Paused</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
 
-      {error && (
-        <p className="text-sm text-red-700 bg-red-50 border border-red-200 p-3 rounded mb-4">
-          {error}
-        </p>
-      )}
+        {error && <p className={`${banner.error} mb-4`}>{error}</p>}
 
-      {/* Client table */}
-      <Card>
-        <CardContent className="pt-6">
-          {loading ? (
-            <p className="text-zinc-500 text-sm">Loading...</p>
-          ) : clients.length === 0 ? (
-            <p className="text-zinc-500 text-sm">No clients found. Add your first client to get started.</p>
-          ) : (
-            <table className="w-full text-sm">
+        {loading ? (
+          <p className={text.muted}>Loading…</p>
+        ) : clients.length === 0 ? (
+          <div className={surface.empty}>
+            <p className="text-slate-700 text-lg">No clients yet.</p>
+            <p className="text-slate-500 text-sm mt-1">
+              Add one to start planning content.
+            </p>
+            <button
+              onClick={() => setShowCreate(true)}
+              className={`${btn.primary} mt-6`}
+            >
+              Add client
+            </button>
+          </div>
+        ) : (
+          <div className={`${surface.table} overflow-x-auto`}>
+            <table className="w-full">
               <thead>
-                <tr className="border-b text-left text-zinc-500">
-                  <th className="pb-2 font-medium">Name</th>
-                  <th className="pb-2 font-medium">Status</th>
-                  <th className="pb-2 font-medium">Website</th>
-                  <th className="pb-2 font-medium">Contact</th>
-                  <th className="pb-2 font-medium">Created</th>
-                  <th className="pb-2 font-medium"></th>
+                <tr className="bg-stone-50">
+                  <th className={table.head}>Name</th>
+                  <th className={table.head}>Status</th>
+                  <th className={table.head}>Website</th>
+                  <th className={table.head}>Contact</th>
+                  <th className={table.head}>Created</th>
+                  <th className={table.head}></th>
                 </tr>
               </thead>
               <tbody>
                 {clients.map((c) => (
                   <tr
                     key={c.id}
-                    className="border-b last:border-0 cursor-pointer hover:bg-zinc-50 transition-colors"
+                    className={`${table.row} cursor-pointer`}
                     onClick={() => router.push(`/clients/${c.id}`)}
                   >
-                    <td className="py-3 font-medium">{c.name}</td>
-                    <td className="py-3">
-                      <Badge className={STATUS_COLORS[c.status] || "bg-zinc-100"}>
-                        {c.status}
-                      </Badge>
+                    <td className={`${table.cell} font-medium`}>{c.name}</td>
+                    <td className={table.cell}>
+                      <span className={statusPill(c.status)}>{c.status}</span>
                     </td>
-                    <td className="py-3 text-zinc-500">{c.website_url || "—"}</td>
-                    <td className="py-3 text-zinc-500">{c.contact_email || "—"}</td>
-                    <td className="py-3 text-zinc-500">
+                    <td className={table.cellMuted}>{c.website_url || "—"}</td>
+                    <td className={table.cellMuted}>{c.contact_email || "—"}</td>
+                    <td className={table.cellMuted}>
                       {new Date(c.created_at).toLocaleDateString()}
                     </td>
-                    <td className="py-3 text-right">
+                    <td className={`${table.cell} text-right`}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -232,7 +270,7 @@ export default function ClientListPage() {
                             deleteClient(c.id).then(() => fetchClients());
                           }
                         }}
-                        className="text-xs text-zinc-400 hover:text-red-600"
+                        className="text-xs text-slate-400 hover:text-red-600 transition-colors"
                       >
                         Delete
                       </button>
@@ -241,9 +279,9 @@ export default function ClientListPage() {
                 ))}
               </tbody>
             </table>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

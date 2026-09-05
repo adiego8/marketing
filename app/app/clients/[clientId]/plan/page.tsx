@@ -2,28 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { previewPlan, listPlanRuns } from "@/lib/api";
+import { banner, btn, surface, table, toggle, text } from "@/lib/ui";
+import { channelPill, PILL } from "@/lib/ui-status";
 import type { PlanRun, ProposedSlot } from "@/lib/types";
 
 const HORIZONS = [1, 2, 4];
-
-const CHANNEL_COLORS: Record<string, string> = {
-  linkedin: "bg-blue-100 text-blue-800",
-  instagram: "bg-pink-100 text-pink-800",
-  twitter: "bg-sky-100 text-sky-800",
-  email: "bg-amber-100 text-amber-800",
-};
 
 function dayLabel(date: string) {
   // The date is already local to the client; parse as UTC so the browser's own
@@ -45,12 +29,24 @@ export default function PlanPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     listPlanRuns(clientId, 1)
-      .then((runs) => setRun(runs[0] ?? null))
-      .catch((e) =>
-        setError(e instanceof Error ? e.message : "Failed to load plan runs")
-      )
-      .finally(() => setLoading(false));
+      .then((runs) => {
+        if (!cancelled) setRun(runs[0] ?? null);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Failed to load plan runs");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [clientId]);
 
   const handlePreview = async () => {
@@ -74,214 +70,221 @@ export default function PlanPage() {
   );
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-5xl">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold">Plan</h1>
-          <p className="text-zinc-500 text-sm">
+          <p className={text.eyebrow}>Schedule</p>
+          <h1 className={`${text.h1} mt-1`}>Plan</h1>
+          <p className="text-sm text-slate-500 mt-1">
             {run
-              ? `${run.proposed_slots.length} slot${run.proposed_slots.length === 1 ? "" : "s"} proposed for ${run.horizon.startDate} to ${run.horizon.endDate}`
+              ? `${run.proposed_slots.length} slot${
+                  run.proposed_slots.length === 1 ? "" : "s"
+                } proposed for ${run.horizon.startDate} to ${run.horizon.endDate}`
               : "Propose a content schedule from the weekly quota"}
           </p>
         </div>
         <div className="flex gap-2 items-center">
-          <div className="flex gap-1">
+          <div className="flex gap-1" role="group" aria-label="Planning horizon">
             {HORIZONS.map((w) => (
-              <Button
+              <button
                 key={w}
-                variant={weeks === w ? "default" : "outline"}
-                size="sm"
                 onClick={() => setWeeks(w)}
+                aria-pressed={weeks === w}
+                className={toggle(weeks === w)}
               >
                 {w}w
-              </Button>
+              </button>
             ))}
           </div>
-          <Button onClick={handlePreview} disabled={planning}>
+          <button
+            onClick={handlePreview}
+            disabled={planning}
+            className={btn.primarySm}
+          >
             {planning ? "Planning… (20-40s)" : "Generate preview"}
-          </Button>
+          </button>
         </div>
       </div>
 
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 p-3 rounded mb-4">{error}</p>
-      )}
+      {error && <p className={`${banner.error} mb-4`}>{error}</p>}
 
       {run?.status === "degraded" && (
-        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 p-3 rounded mb-4">
+        <p className={`${banner.warn} mb-4`}>
           The theme model was unavailable. Dates and channels are correct; themes
           are missing and marked below.
         </p>
       )}
 
       {loading ? (
-        <p className="text-zinc-500 text-sm">Loading...</p>
+        <p className={text.muted}>Loading…</p>
       ) : !run ? (
-        <Card>
-          <CardContent className="pt-6 text-center">
-            <p className="text-zinc-500 text-sm mb-4">
-              No plan yet. Generate a preview to see what the next {weeks} week
-              {weeks === 1 ? "" : "s"} would look like.
-            </p>
-            <Button onClick={handlePreview} disabled={planning}>
-              Generate preview
-            </Button>
-          </CardContent>
-        </Card>
+        <div className={surface.empty}>
+          <p className="text-slate-700 text-lg">No plan yet.</p>
+          <p className="text-slate-500 text-sm mt-1">
+            Generate a preview to see what the next {weeks} week
+            {weeks === 1 ? "" : "s"} would look like.
+          </p>
+          <button
+            onClick={handlePreview}
+            disabled={planning}
+            className={`${btn.primary} mt-6`}
+          >
+            {planning ? "Planning…" : "Generate preview"}
+          </button>
+        </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {/* Coverage — the number a human actually judges the plan by. */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Coverage</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-32">Week</TableHead>
-                      <TableHead className="w-24">Type</TableHead>
-                      <TableHead className="w-20">Quota</TableHead>
-                      <TableHead className="w-24">Scheduled</TableHead>
-                      <TableHead className="w-24">Proposed</TableHead>
-                      <TableHead>Notes</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {run.observation.gaps.map((gap, i) => {
-                      const proposed = run.proposed_slots.filter(
-                        (s) => s.weekKey === gap.weekKey && s.type === gap.type
-                      ).length;
-                      return (
-                        <TableRow key={i}>
-                          <TableCell className="font-medium">
-                            {gap.weekKey}
-                            {gap.partialWeek && (
-                              <Badge variant="outline" className="ml-2 text-xs">
-                                partial
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="capitalize">
-                            {gap.type.replace(/_/g, " ")}
-                          </TableCell>
-                          <TableCell>{gap.quotaCount}</TableCell>
-                          <TableCell>{gap.existing}</TableCell>
-                          <TableCell
-                            className={proposed < gap.deficit ? "text-amber-700" : ""}
-                          >
-                            +{proposed}
-                          </TableCell>
-                          <TableCell className="text-xs text-zinc-500">
-                            {gap.surplus > 0 && `${gap.surplus} over quota. `}
-                            {gap.notes.join(" ")}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+          <section>
+            <h2 className={`${text.cardTitle} mb-3`}>Coverage</h2>
+            <div className={`${surface.table} overflow-x-auto`}>
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-stone-50">
+                    <th className={`${table.head} w-32`}>Week</th>
+                    <th className={`${table.head} w-24`}>Type</th>
+                    <th className={`${table.head} w-20`}>Quota</th>
+                    <th className={`${table.head} w-24`}>Scheduled</th>
+                    <th className={`${table.head} w-24`}>Proposed</th>
+                    <th className={table.head}>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {run.observation.gaps.map((gap, i) => {
+                    const proposed = run.proposed_slots.filter(
+                      (s) => s.weekKey === gap.weekKey && s.type === gap.type
+                    ).length;
+                    return (
+                      <tr key={i} className={table.row}>
+                        <td className={`${table.cell} font-medium`}>
+                          {gap.weekKey}
+                          {gap.partialWeek && (
+                            <span
+                              className={`${PILL} ml-2 bg-slate-100 text-slate-500`}
+                            >
+                              partial
+                            </span>
+                          )}
+                        </td>
+                        <td className={`${table.cell} capitalize`}>
+                          {gap.type.replace(/_/g, " ")}
+                        </td>
+                        <td className={table.cell}>{gap.quotaCount}</td>
+                        <td className={table.cell}>{gap.existing}</td>
+                        <td
+                          className={`${table.cell} ${
+                            proposed < gap.deficit
+                              ? "text-amber-700 font-medium"
+                              : ""
+                          }`}
+                        >
+                          +{proposed}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-500">
+                          {gap.surplus > 0 && `${gap.surplus} over quota. `}
+                          {gap.notes.join(" ")}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
           {/* Proposed slots, grouped by week. */}
           {Object.entries(byWeek).map(([weekKey, slots]) => (
-            <div key={weekKey}>
-              <div className="flex items-center gap-2 mb-2">
-                <h3 className="text-sm font-semibold">{weekKey}</h3>
-                <Badge variant="outline" className="text-xs">
+            <section key={weekKey}>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className={text.cardTitle}>{weekKey}</h2>
+                <span className={`${PILL} bg-slate-100 text-slate-500`}>
                   {slots.length}
-                </Badge>
+                </span>
               </div>
-              <div className="border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-36">Date</TableHead>
-                      <TableHead className="w-20">Time</TableHead>
-                      <TableHead className="w-28">Channel</TableHead>
-                      <TableHead className="w-24">Type</TableHead>
-                      <TableHead>Theme</TableHead>
-                      <TableHead className="w-40">Campaign</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+              <div className={`${surface.table} overflow-x-auto`}>
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-stone-50">
+                      <th className={`${table.head} w-36`}>Date</th>
+                      <th className={`${table.head} w-20`}>Time</th>
+                      <th className={`${table.head} w-28`}>Channel</th>
+                      <th className={`${table.head} w-24`}>Type</th>
+                      <th className={table.head}>Theme</th>
+                      <th className={`${table.head} w-40`}>Campaign</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {slots.map((slot) => (
-                      <TableRow key={slot.slotId}>
-                        <TableCell className="font-medium">
+                      <tr key={slot.slotId} className={table.row}>
+                        <td className={`${table.cell} font-medium whitespace-nowrap`}>
                           {dayLabel(slot.date)}
-                        </TableCell>
-                        <TableCell>{slot.timeLocal}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={CHANNEL_COLORS[slot.channel] || ""}
-                          >
+                        </td>
+                        <td className={table.cell}>{slot.timeLocal}</td>
+                        <td className={table.cell}>
+                          <span className={channelPill(slot.channel)}>
                             {slot.channel}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="capitalize">
+                          </span>
+                        </td>
+                        <td className={`${table.cell} capitalize`}>
                           {slot.type.replace(/_/g, " ")}
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td className={table.cell}>
                           {slot.needsTheme ? (
-                            <Badge variant="outline" className="bg-red-50 text-red-700">
+                            <span className={`${PILL} bg-red-100 text-red-600`}>
                               needs theme
-                            </Badge>
+                            </span>
                           ) : (
                             <>
                               <p>{slot.theme}</p>
                               {slot.rationale && (
-                                <p className="text-xs text-zinc-500 mt-0.5">
+                                <p className="text-xs text-slate-500 mt-0.5">
                                   {slot.rationale}
                                 </p>
                               )}
                             </>
                           )}
-                        </TableCell>
-                        <TableCell className="text-sm text-zinc-500">
+                        </td>
+                        <td className={table.cellMuted}>
                           {slot.campaignTitle ?? "—"}
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     ))}
-                  </TableBody>
-                </Table>
+                  </tbody>
+                </table>
               </div>
-            </div>
+            </section>
           ))}
 
           {/* Why the plan is thinner than the quota. The most useful panel here:
               it turns "I asked for 9 and got 6" into an understood constraint. */}
           {(run.deferred.length > 0 || run.warnings.length > 0) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Not planned, and why</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
+            <section className={`${surface.card} ${surface.pad}`}>
+              <h2 className={`${text.cardTitle} mb-3`}>Not planned, and why</h2>
+              <div className="space-y-2">
                 {run.deferred.map((d, i) => (
-                  <p key={i} className="text-sm text-zinc-600">
-                    <span className="capitalize font-medium">{d.type}</span> in{" "}
-                    {d.weekKey}: {d.reason}
+                  <p key={i} className="text-sm text-slate-600">
+                    <span className="capitalize font-medium text-slate-800">
+                      {d.type}
+                    </span>{" "}
+                    in {d.weekKey}: {d.reason}
                   </p>
                 ))}
                 {run.warnings.map((w, i) => (
-                  <p key={`w${i}`} className="text-sm text-zinc-500">
+                  <p key={`w${i}`} className="text-sm text-slate-500">
                     {w}
                   </p>
                 ))}
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           )}
 
-          <div className="flex items-center justify-between border rounded-lg p-4 bg-zinc-50">
-            <p className="text-sm text-zinc-600">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-sm text-slate-500">
               Preview only. Nothing has been written to the calendar.
             </p>
-            <Button variant="outline" disabled>
+            <button className={btn.outline} disabled>
               Commit (Phase 3)
-            </Button>
+            </button>
           </div>
         </div>
       )}

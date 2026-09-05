@@ -3,11 +3,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -15,18 +10,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { listCampaigns, generateCampaigns, createCampaign } from "@/lib/api";
+import { banner, btn, field, surface, text } from "@/lib/ui";
+import { PILL, PILL_SM, statusColor, statusLabel } from "@/lib/ui-status";
 import type { CampaignListItem } from "@/lib/types";
 
 const STATUS_COLUMNS = ["proposal", "in_review", "active", "completed", "rejected"] as const;
-
-const STATUS_COLORS: Record<string, string> = {
-  idea: "bg-zinc-100 text-zinc-800",
-  proposal: "bg-blue-100 text-blue-800",
-  in_review: "bg-yellow-100 text-yellow-800",
-  active: "bg-green-100 text-green-800",
-  completed: "bg-purple-100 text-purple-800",
-  rejected: "bg-red-100 text-red-800",
-};
 
 export default function CampaignsPage() {
   const { clientId } = useParams() as { clientId: string };
@@ -38,13 +26,14 @@ export default function CampaignsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const fetchCampaigns = async () => {
     try {
-      const data = await listCampaigns(clientId);
-      setCampaigns(data);
+      setCampaigns(await listCampaigns(clientId));
+      setError(null);
     } catch (e) {
-      console.error("Failed to fetch campaigns:", e);
+      setError(e instanceof Error ? e.message : "Could not load campaigns");
     } finally {
       setLoading(false);
     }
@@ -56,13 +45,17 @@ export default function CampaignsPage() {
 
   const handleGenerate = async () => {
     setGenerating(true);
+    setError(null);
     try {
-      await generateCampaigns(clientId, { prompt: generatePrompt || undefined, count: 3 });
+      await generateCampaigns(clientId, {
+        prompt: generatePrompt || undefined,
+        count: 3,
+      });
       setShowGenerate(false);
       setGeneratePrompt("");
       await fetchCampaigns();
     } catch (e) {
-      console.error("Failed to generate:", e);
+      setError(e instanceof Error ? e.message : "Could not generate campaigns");
     } finally {
       setGenerating(false);
     }
@@ -70,14 +63,18 @@ export default function CampaignsPage() {
 
   const handleCreate = async () => {
     if (!newTitle.trim()) return;
+    setError(null);
     try {
-      await createCampaign(clientId, { title: newTitle, description: newDescription || undefined });
+      await createCampaign(clientId, {
+        title: newTitle,
+        description: newDescription || undefined,
+      });
       setShowCreate(false);
       setNewTitle("");
       setNewDescription("");
       await fetchCampaigns();
     } catch (e) {
-      console.error("Failed to create:", e);
+      setError(e instanceof Error ? e.message : "Could not create campaign");
     }
   };
 
@@ -90,65 +87,77 @@ export default function CampaignsPage() {
   );
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-6xl">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold">Campaigns</h1>
-          <p className="text-zinc-500 text-sm">{campaigns.length} campaigns</p>
+          <p className={text.eyebrow}>Themes</p>
+          <h1 className={`${text.h1} mt-1`}>Campaigns</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            {campaigns.length} campaign{campaigns.length === 1 ? "" : "s"}
+          </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => setShowGenerate(true)}>Generate Ideas</Button>
-          <Button variant="outline" onClick={() => setShowCreate(true)}>
-            Create Manual
-          </Button>
+          <button onClick={() => setShowCreate(true)} className={btn.outline}>
+            Create manual
+          </button>
+          <button onClick={() => setShowGenerate(true)} className={btn.primarySm}>
+            Generate ideas
+          </button>
         </div>
       </div>
 
+      {error && <p className={`${banner.error} mb-4`}>{error}</p>}
+
       {loading ? (
-        <p className="text-zinc-500 text-sm">Loading...</p>
+        <p className={text.muted}>Loading…</p>
       ) : campaigns.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6 text-center">
-            <p className="text-zinc-500 text-sm mb-4">
-              No campaigns yet. Generate ideas or create one manually.
-            </p>
-            <Button onClick={() => setShowGenerate(true)}>Generate Campaign Ideas</Button>
-          </CardContent>
-        </Card>
+        <div className={surface.empty}>
+          <p className="text-slate-700 text-lg">No campaigns yet.</p>
+          <p className="text-slate-500 text-sm mt-1">
+            Campaigns supply the themes the planner schedules against.
+          </p>
+          <button
+            onClick={() => setShowGenerate(true)}
+            className={`${btn.primary} mt-6`}
+          >
+            Generate campaign ideas
+          </button>
+        </div>
       ) : (
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {STATUS_COLUMNS.map((status) => (
             <div key={status}>
               <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-sm font-semibold capitalize">
-                  {status.replace(/_/g, " ")}
-                </h3>
-                <Badge variant="outline" className="text-xs">
+                <h2 className="text-xs uppercase tracking-widest text-slate-400">
+                  {statusLabel(status)}
+                </h2>
+                <span className={`${PILL_SM} bg-slate-100 text-slate-500`}>
                   {grouped[status]?.length || 0}
-                </Badge>
+                </span>
               </div>
               <div className="space-y-3">
                 {grouped[status]?.map((campaign) => (
-                  <Link key={campaign.id} href={`/clients/${clientId}/campaigns/${campaign.id}`}>
-                    <Card className="cursor-pointer hover:border-zinc-400 transition-colors mb-3">
-                      <CardContent className="pt-4 pb-3">
-                        <Badge
-                          variant="outline"
-                          className={`text-xs mb-2 ${STATUS_COLORS[campaign.status] || ""}`}
-                        >
-                          {campaign.status.replace(/_/g, " ")}
-                        </Badge>
-                        <p className="text-sm font-medium">{campaign.title}</p>
-                        {campaign.description && (
-                          <p className="text-xs text-zinc-500 mt-1 line-clamp-2">
-                            {campaign.description}
-                          </p>
-                        )}
-                        <p className="text-xs text-zinc-400 mt-2">
-                          {new Date(campaign.created_at).toLocaleDateString()}
-                        </p>
-                      </CardContent>
-                    </Card>
+                  <Link
+                    key={campaign.id}
+                    href={`/clients/${clientId}/campaigns/${campaign.id}`}
+                    className={`group block ${surface.cardHover} p-4`}
+                  >
+                    <span
+                      className={`${PILL_SM} ${statusColor(campaign.status)} mb-2`}
+                    >
+                      {statusLabel(campaign.status)}
+                    </span>
+                    <p className="text-sm font-medium text-slate-800 group-hover:text-teal-700 transition-colors">
+                      {campaign.title}
+                    </p>
+                    {campaign.description && (
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                        {campaign.description}
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-400 mt-2">
+                      {new Date(campaign.created_at).toLocaleDateString()}
+                    </p>
                   </Link>
                 ))}
               </div>
@@ -157,56 +166,65 @@ export default function CampaignsPage() {
         </div>
       )}
 
-      {/* Generate Ideas Dialog */}
       <Dialog open={showGenerate} onOpenChange={setShowGenerate}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Generate Campaign Ideas</DialogTitle>
+            <DialogTitle>Generate campaign ideas</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 pt-2">
             <div>
-              <label className="text-xs text-zinc-500">Prompt (optional)</label>
-              <Textarea
+              <label className={field.micro}>Prompt (optional)</label>
+              <textarea
                 value={generatePrompt}
                 onChange={(e) => setGeneratePrompt(e.target.value)}
-                placeholder="e.g., 'Campaigns for Q2 product launch' or leave empty for general ideas"
-                className="h-24"
+                placeholder="e.g. 'Campaigns for Q2 product launch', or leave empty for general ideas"
+                className={`${field.textarea} h-24`}
               />
             </div>
-            <Button onClick={handleGenerate} disabled={generating} className="w-full">
-              {generating ? "Generating ideas... (30-60s)" : "Generate 3 Campaign Proposals"}
-            </Button>
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className={`${btn.primary} w-full`}
+            >
+              {generating
+                ? "Generating ideas… (30-60s)"
+                : "Generate 3 campaign proposals"}
+            </button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Create Manual Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create Campaign</DialogTitle>
+            <DialogTitle>Create campaign</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 pt-2">
             <div>
-              <label className="text-xs text-zinc-500">Title</label>
-              <Input
+              <label className={field.micro}>Title</label>
+              <input
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 placeholder="Campaign name"
+                className={field.inputSm}
               />
             </div>
             <div>
-              <label className="text-xs text-zinc-500">Description</label>
-              <Textarea
+              <label className={field.micro}>Description</label>
+              <textarea
                 value={newDescription}
                 onChange={(e) => setNewDescription(e.target.value)}
                 placeholder="What is this campaign about?"
-                className="h-20"
+                className={`${field.textarea} h-20`}
               />
             </div>
-            <Button onClick={handleCreate} disabled={!newTitle.trim()} className="w-full">
+            <button
+              onClick={handleCreate}
+              disabled={!newTitle.trim()}
+              className={`${btn.primary} w-full`}
+            >
               Create
-            </Button>
+            </button>
           </div>
         </DialogContent>
       </Dialog>

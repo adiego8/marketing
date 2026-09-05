@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { btn, field } from "@/lib/ui";
 
 interface EditableListProps {
   items: string[];
@@ -10,7 +9,7 @@ interface EditableListProps {
   placeholder?: string;
 }
 
-export function EditableList({ items, onChange, placeholder = "Add item..." }: EditableListProps) {
+export function EditableList({ items, onChange, placeholder = "Add item…" }: EditableListProps) {
   const [newItem, setNewItem] = useState("");
 
   const handleAdd = () => {
@@ -32,34 +31,37 @@ export function EditableList({ items, onChange, placeholder = "Add item..." }: E
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
-        {items.map((item, i) => (
-          <span
-            key={i}
-            className="inline-flex items-center gap-1 bg-zinc-100 text-sm px-2 py-1 rounded"
-          >
-            {item}
-            <button
-              type="button"
-              onClick={() => handleRemove(i)}
-              className="text-zinc-400 hover:text-red-500 ml-1"
+      {items.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {items.map((item, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 text-slate-700 text-xs font-medium pl-3 pr-2 py-1"
             >
-              x
-            </button>
-          </span>
-        ))}
-      </div>
+              {item}
+              <button
+                type="button"
+                onClick={() => handleRemove(i)}
+                aria-label={`Remove ${item}`}
+                className="text-slate-400 hover:text-red-600 transition-colors leading-none"
+              >
+                &#215;
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex gap-2">
-        <Input
+        <input
           value={newItem}
           onChange={(e) => setNewItem(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="text-sm"
+          className={field.inputSm}
         />
-        <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
+        <button type="button" onClick={handleAdd} className={`${btn.outlineSm} shrink-0`}>
           Add
-        </Button>
+        </button>
       </div>
     </div>
   );

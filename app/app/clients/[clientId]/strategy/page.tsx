@@ -2,12 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabPanel } from "@/components/shared/tabs";
 import { EditableList } from "@/components/shared/editable-list";
+import { banner, btn, field, surface, toggle, text } from "@/lib/ui";
 import { getClient, getStrategy, updateStrategy } from "@/lib/api";
 import type { Strategy } from "@/lib/types";
 import { CONTENT_TYPES } from "@/lib/constants";
@@ -23,6 +20,36 @@ type NestedField =
   | "goals"
   | "content_quota";
 
+const STRATEGY_TABS = [
+  { value: "icp", label: "ICP" },
+  { value: "voice", label: "Voice" },
+  { value: "positioning", label: "Positioning" },
+  { value: "messaging", label: "Messaging" },
+  { value: "goals", label: "Goals" },
+  { value: "quota", label: "Content quota" },
+];
+
+/**
+ * One labelled card. This page is ~29 of them, so the recipe lives here rather
+ * than being pasted 29 times.
+ */
+function Field({
+  label,
+  className = "",
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={`${surface.card} ${surface.pad}`}>
+      <h2 className={`${text.cardTitle} mb-3`}>{label}</h2>
+      <div className={className}>{children}</div>
+    </section>
+  );
+}
+
 export default function StrategyPage() {
   const { clientId } = useParams() as { clientId: string };
   const [strategy, setStrategy] = useState<Strategy | null>(null);
@@ -30,6 +57,7 @@ export default function StrategyPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [isNew, setIsNew] = useState(false);
+  const [tab, setTab] = useState("icp");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -110,12 +138,10 @@ export default function StrategyPage() {
     }
   };
 
-  if (loading) return <p className="text-zinc-500">Loading...</p>;
+  if (loading) return <p className="text-slate-500">Loading...</p>;
   if (!strategy)
     return (
-      <p className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-        {error ?? "Could not load the strategy."}
-      </p>
+      <p className={banner.error}>{error ?? "Could not load the strategy."}</p>
     );
 
   const icp = (strategy.icp || {}) as Record<string, unknown>;
@@ -148,25 +174,30 @@ export default function StrategyPage() {
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-4xl">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold">Strategy Editor</h1>
-          <p className="text-zinc-500 text-sm">{strategy.business_name}</p>
+          <p className={text.eyebrow}>Foundation</p>
+          <h1 className={`${text.h1} mt-1`}>Strategy</h1>
+          <p className="text-sm text-slate-500 mt-1">{strategy.business_name}</p>
         </div>
-        <Button onClick={handleSave} disabled={saving || saved}>
+        <button
+          onClick={handleSave}
+          disabled={saving || saved}
+          className={btn.primarySm}
+        >
           {saving
-            ? "Saving..."
+            ? "Saving…"
             : saved
               ? "Saved"
               : isNew
-                ? "Create Strategy"
-                : "Save Changes"}
-        </Button>
+                ? "Create strategy"
+                : "Save changes"}
+        </button>
       </div>
 
       {isNew && (
-        <p className="mb-6 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <p className={`${banner.warn} mb-6`}>
           No strategy saved for this client yet. Fill in what you have — the
           planner only needs a <strong>weekly quota</strong> under Content to
           produce a schedule — then save to create it.
@@ -174,50 +205,38 @@ export default function StrategyPage() {
       )}
 
       {error && (
-        <p className="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </p>
+        <p className={`${banner.error} mb-6`}>{error}</p>
       )}
 
-      <Tabs defaultValue="icp">
-        <TabsList className="mb-4">
-          <TabsTrigger value="icp">ICP</TabsTrigger>
-          <TabsTrigger value="voice">Voice</TabsTrigger>
-          <TabsTrigger value="positioning">Positioning</TabsTrigger>
-          <TabsTrigger value="messaging">Messaging</TabsTrigger>
-          <TabsTrigger value="goals">Goals</TabsTrigger>
-          <TabsTrigger value="quota">Content Quota</TabsTrigger>
-        </TabsList>
+      <Tabs
+        tabs={STRATEGY_TABS}
+        value={tab}
+        onChange={setTab}
+        label="Strategy sections"
+        className="mb-4"
+      />
 
         {/* ICP */}
-        <TabsContent value="icp">
+        <TabPanel value="icp" active={tab === "icp"}>
           <div className="grid gap-4">
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Business Name</CardTitle></CardHeader>
-              <CardContent>
-                <Input
+            <Field label="Business Name">
+                <input className={field.inputSm}
                   value={strategy.business_name}
                   onChange={(e) => update("business_name", e.target.value)}
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Description</CardTitle></CardHeader>
-              <CardContent>
-                <Textarea
+              </Field>
+            <Field label="Description">
+                <textarea
                   value={(icp.description as string) || ""}
                   onChange={(e) => updateNested("icp", "description", e.target.value)}
-                  className="h-20"
+                  className={`${field.textarea} h-20`}
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Demographics</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-2 gap-3">
+              </Field>
+            <Field label="Demographics" className="grid grid-cols-2 gap-3">
                 {["industry", "company_size", "role", "revenue_range"].map((key) => (
                   <div key={key}>
-                    <label className="text-xs text-zinc-500 capitalize">{key.replace(/_/g, " ")}</label>
-                    <Input
+                    <label className={`${field.micro} capitalize`}>{key.replace(/_/g, " ")}</label>
+                    <input className={field.inputSm}
                       value={demographics[key] || ""}
                       onChange={(e) =>
                         updateNested("icp", "demographics", { ...demographics, [key]: e.target.value })
@@ -225,124 +244,91 @@ export default function StrategyPage() {
                     />
                   </div>
                 ))}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Pain Points</CardTitle></CardHeader>
-              <CardContent>
+              </Field>
+            <Field label="Pain Points">
                 <EditableList
                   items={(icp.pain_points as string[]) || []}
                   onChange={(items) => updateNested("icp", "pain_points", items)}
                   placeholder="Add pain point..."
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Goals</CardTitle></CardHeader>
-              <CardContent>
+              </Field>
+            <Field label="Goals">
                 <EditableList
                   items={(icp.goals as string[]) || []}
                   onChange={(items) => updateNested("icp", "goals", items)}
                   placeholder="Add goal..."
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Objections</CardTitle></CardHeader>
-              <CardContent>
+              </Field>
+            <Field label="Objections">
                 <EditableList
                   items={(icp.objections as string[]) || []}
                   onChange={(items) => updateNested("icp", "objections", items)}
                   placeholder="Add objection..."
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Trigger Events</CardTitle></CardHeader>
-              <CardContent>
+              </Field>
+            <Field label="Trigger Events">
                 <EditableList
                   items={(icp.trigger_events as string[]) || []}
                   onChange={(items) => updateNested("icp", "trigger_events", items)}
                   placeholder="Add trigger event..."
                 />
-              </CardContent>
-            </Card>
+              </Field>
           </div>
-        </TabsContent>
+        </TabPanel>
 
         {/* Voice */}
-        <TabsContent value="voice">
+        <TabPanel value="voice" active={tab === "voice"}>
           <div className="grid gap-4">
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Personality</CardTitle></CardHeader>
-              <CardContent>
-                <Textarea
+            <Field label="Personality">
+                <textarea
                   value={(voice.personality as string) || ""}
                   onChange={(e) => updateNested("voice", "personality", e.target.value)}
-                  className="h-20"
+                  className={`${field.textarea} h-20`}
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Traits</CardTitle></CardHeader>
-              <CardContent>
+              </Field>
+            <Field label="Traits">
                 <EditableList
                   items={(voice.traits as string[]) || []}
                   onChange={(items) => updateNested("voice", "traits", items)}
                   placeholder="Add trait..."
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Tone</CardTitle></CardHeader>
-              <CardContent>
-                <Input
+              </Field>
+            <Field label="Tone">
+                <input className={field.inputSm}
                   value={(voice.tone as string) || ""}
                   onChange={(e) => updateNested("voice", "tone", e.target.value)}
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Communication Style</CardTitle></CardHeader>
-              <CardContent>
-                <Input
+              </Field>
+            <Field label="Communication Style">
+                <input className={field.inputSm}
                   value={(voice.communication_style as string) || ""}
                   onChange={(e) => updateNested("voice", "communication_style", e.target.value)}
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Words to Use</CardTitle></CardHeader>
-              <CardContent>
+              </Field>
+            <Field label="Words to Use">
                 <EditableList
                   items={(voice.words_to_use as string[]) || []}
                   onChange={(items) => updateNested("voice", "words_to_use", items)}
                   placeholder="Add word..."
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Words to Avoid</CardTitle></CardHeader>
-              <CardContent>
+              </Field>
+            <Field label="Words to Avoid">
                 <EditableList
                   items={(voice.words_to_avoid as string[]) || []}
                   onChange={(items) => updateNested("voice", "words_to_avoid", items)}
                   placeholder="Add word..."
                 />
-              </CardContent>
-            </Card>
+              </Field>
           </div>
-        </TabsContent>
+        </TabPanel>
 
         {/* Positioning */}
-        <TabsContent value="positioning">
+        <TabPanel value="positioning" active={tab === "positioning"}>
           <div className="grid gap-4">
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Primary Angle</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
+            <Field label="Primary Angle" className="space-y-3">
                 <div>
-                  <label className="text-xs text-zinc-500">Type</label>
-                  <Input
+                  <label className={field.micro}>Type</label>
+                  <input className={field.inputSm}
                     value={primaryAngle.type || ""}
                     onChange={(e) =>
                       updateNested("positioning", "primary_angle", { ...primaryAngle, type: e.target.value })
@@ -350,46 +336,42 @@ export default function StrategyPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-zinc-500">Statement</label>
-                  <Textarea
+                  <label className={field.micro}>Statement</label>
+                  <textarea
                     value={primaryAngle.statement || ""}
                     onChange={(e) =>
                       updateNested("positioning", "primary_angle", { ...primaryAngle, statement: e.target.value })
                     }
-                    className="h-16"
+                    className={`${field.textarea} h-16`}
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-zinc-500">Why this works</label>
-                  <Textarea
+                  <label className={field.micro}>Why this works</label>
+                  <textarea
                     value={primaryAngle.why || ""}
                     onChange={(e) =>
                       updateNested("positioning", "primary_angle", { ...primaryAngle, why: e.target.value })
                     }
-                    className="h-16"
+                    className={`${field.textarea} h-16`}
                   />
                 </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Secondary Angles</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
+              </Field>
+            <Field label="Secondary Angles" className="space-y-4">
                 {secondaryAngles.map((angle, i) => (
-                  <div key={i} className="border rounded p-3 space-y-2">
+                  <div key={i} className="rounded-lg border border-slate-200 p-3 space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-medium">Angle {i + 1}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Angle {i + 1}</span>
+                      <button
+                        className={btn.ghost}
                         onClick={() => {
                           const updated = secondaryAngles.filter((_, j) => j !== i);
                           updateNested("positioning", "secondary_angles", updated);
                         }}
                       >
                         Remove
-                      </Button>
+                      </button>
                     </div>
-                    <Input
+                    <input className={field.inputSm}
                       placeholder="Type"
                       value={angle.type || ""}
                       onChange={(e) => {
@@ -398,7 +380,7 @@ export default function StrategyPage() {
                         updateNested("positioning", "secondary_angles", updated);
                       }}
                     />
-                    <Input
+                    <input className={field.inputSm}
                       placeholder="Statement"
                       value={angle.statement || ""}
                       onChange={(e) => {
@@ -409,9 +391,8 @@ export default function StrategyPage() {
                     />
                   </div>
                 ))}
-                <Button
-                  variant="outline"
-                  size="sm"
+                <button
+                  className={btn.outlineSm}
                   onClick={() =>
                     updateNested("positioning", "secondary_angles", [
                       ...secondaryAngles,
@@ -420,121 +401,88 @@ export default function StrategyPage() {
                   }
                 >
                   Add Angle
-                </Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Anti-Positioning</CardTitle></CardHeader>
-              <CardContent>
-                <Textarea
+                </button>
+              </Field>
+            <Field label="Anti-Positioning">
+                <textarea
                   value={(positioning.anti_positioning as string) || ""}
                   onChange={(e) => updateNested("positioning", "anti_positioning", e.target.value)}
-                  className="h-16"
+                  className={`${field.textarea} h-16`}
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Differentiation</CardTitle></CardHeader>
-              <CardContent>
-                <Textarea
+              </Field>
+            <Field label="Differentiation">
+                <textarea
                   value={(positioning.differentiation as string) || ""}
                   onChange={(e) => updateNested("positioning", "differentiation", e.target.value)}
-                  className="h-16"
+                  className={`${field.textarea} h-16`}
                 />
-              </CardContent>
-            </Card>
+              </Field>
           </div>
-        </TabsContent>
+        </TabPanel>
 
         {/* Messaging */}
-        <TabsContent value="messaging">
+        <TabPanel value="messaging" active={tab === "messaging"}>
           <div className="grid gap-4">
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Tagline</CardTitle></CardHeader>
-              <CardContent>
-                <Input
+            <Field label="Tagline">
+                <input className={field.inputSm}
                   value={(messaging.tagline as string) || ""}
                   onChange={(e) => updateNested("messaging", "tagline", e.target.value)}
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Value Props</CardTitle></CardHeader>
-              <CardContent>
+              </Field>
+            <Field label="Value Props">
                 <EditableList
                   items={(messaging.value_props as string[]) || []}
                   onChange={(items) => updateNested("messaging", "value_props", items)}
                   placeholder="Add value prop..."
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Key Messages</CardTitle></CardHeader>
-              <CardContent>
+              </Field>
+            <Field label="Key Messages">
                 <EditableList
                   items={(messaging.key_messages as string[]) || []}
                   onChange={(items) => updateNested("messaging", "key_messages", items)}
                   placeholder="Add key message..."
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Proof Points</CardTitle></CardHeader>
-              <CardContent>
+              </Field>
+            <Field label="Proof Points">
                 <EditableList
                   items={(messaging.proof_points as string[]) || []}
                   onChange={(items) => updateNested("messaging", "proof_points", items)}
                   placeholder="Add proof point..."
                 />
-              </CardContent>
-            </Card>
+              </Field>
           </div>
-        </TabsContent>
+        </TabPanel>
 
         {/* Goals */}
-        <TabsContent value="goals">
+        <TabPanel value="goals" active={tab === "goals"}>
           <div className="grid gap-4">
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Primary Goal</CardTitle></CardHeader>
-              <CardContent>
-                <Input
+            <Field label="Primary Goal">
+                <input className={field.inputSm}
                   value={(goals.primary as string) || ""}
                   onChange={(e) => updateNested("goals", "primary", e.target.value)}
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Secondary Goal</CardTitle></CardHeader>
-              <CardContent>
-                <Input
+              </Field>
+            <Field label="Secondary Goal">
+                <input className={field.inputSm}
                   value={(goals.secondary as string) || ""}
                   onChange={(e) => updateNested("goals", "secondary", e.target.value)}
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">90-Day Focus</CardTitle></CardHeader>
-              <CardContent>
-                <Textarea
+              </Field>
+            <Field label="90-Day Focus">
+                <textarea
                   value={(goals["90_day_focus"] as string) || ""}
                   onChange={(e) => updateNested("goals", "90_day_focus", e.target.value)}
-                  className="h-16"
+                  className={`${field.textarea} h-16`}
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Metrics</CardTitle></CardHeader>
-              <CardContent>
+              </Field>
+            <Field label="Metrics">
                 <EditableList
                   items={(goals.metrics as string[]) || []}
                   onChange={(items) => updateNested("goals", "metrics", items)}
                   placeholder="Add metric..."
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Content Platforms</CardTitle></CardHeader>
-              <CardContent>
+              </Field>
+            <Field label="Content Platforms">
                 <EditableList
                   items={(contentStrategy.platforms as string[]) || []}
                   onChange={(items) =>
@@ -542,11 +490,8 @@ export default function StrategyPage() {
                   }
                   placeholder="Add platform..."
                 />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Content Pillars</CardTitle></CardHeader>
-              <CardContent>
+              </Field>
+            <Field label="Content Pillars">
                 <EditableList
                   items={(contentStrategy.content_pillars as string[]) || []}
                   onChange={(items) =>
@@ -554,36 +499,28 @@ export default function StrategyPage() {
                   }
                   placeholder="Add pillar..."
                 />
-              </CardContent>
-            </Card>
+              </Field>
           </div>
-        </TabsContent>
+        </TabPanel>
         {/* Content Quota */}
-        <TabsContent value="quota">
+        <TabPanel value="quota" active={tab === "quota"}>
           <div className="grid gap-4">
             {quotaRationale && (
-              <Card>
-                <CardHeader><CardTitle className="text-sm">Recommendation</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-sm text-zinc-600">{quotaRationale}</p>
-                </CardContent>
-              </Card>
+              <Field label="Recommendation">
+                  <p className="text-sm text-slate-600">{quotaRationale}</p>
+                </Field>
             )}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Weekly Content Budget</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-xs text-zinc-500">
+            <Field label="Weekly Content Budget" className="space-y-4">
+                <p className={field.micro}>
                   How much of each content type to publish per week, and which
                   channels it may go out on. The planner uses this to find gaps
                   in the calendar and decide where each piece belongs.
                 </p>
                 {quotaRows.map((row, i) => (
-                  <div key={row.type} className="border rounded-md p-3 space-y-2">
+                  <div key={row.type} className="rounded-lg border border-slate-200 p-3 space-y-2">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-medium w-24 capitalize">{row.type.replace(/_/g, " ")}</span>
-                      <Input
+                      <input
                         type="number"
                         min={0}
                         value={row.count}
@@ -592,27 +529,24 @@ export default function StrategyPage() {
                           updated[i] = { ...updated[i], count: parseInt(e.target.value) || 0 };
                           saveQuotaRows(updated);
                         }}
-                        className="w-20"
+                        className={`${field.inputSm} w-20`}
                       />
-                      <span className="text-sm text-zinc-500">/ week</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="ml-auto"
+                      <span className="text-sm text-slate-500">/ week</span>
+                      <button
+                        className={`${btn.ghost} ml-auto`}
                         onClick={() => saveQuotaRows(quotaRows.filter((_, j) => j !== i))}
                       >
                         Remove
-                      </Button>
+                      </button>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-zinc-500">Channels:</span>
+                      <span className={field.micro}>Channels:</span>
                       {CHANNELS.map((channel) => {
                         const selected = row.channels.includes(channel);
                         return (
-                          <Button
+                          <button
                             key={channel}
-                            variant={selected ? "default" : "outline"}
-                            size="sm"
+                            className={toggle(selected)}
                             onClick={() => {
                               const channels = selected
                                 ? row.channels.filter((ch) => ch !== channel)
@@ -623,11 +557,11 @@ export default function StrategyPage() {
                             }}
                           >
                             {channel}
-                          </Button>
+                          </button>
                         );
                       })}
                       {row.channels.length === 0 && (
-                        <span className="text-xs text-amber-600">
+                        <span className="text-xs text-amber-700">
                           Pick at least one, or the planner cannot place these.
                         </span>
                       )}
@@ -640,27 +574,24 @@ export default function StrategyPage() {
                   if (availableTypes.length === 0) return null;
                   return (
                     <div className="flex gap-2 pt-2">
-                      <span className="text-sm text-zinc-500 self-center">Add:</span>
+                      <span className="text-sm text-slate-500 self-center">Add:</span>
                       {availableTypes.map((type) => (
-                        <Button
+                        <button
                           key={type}
-                          variant="outline"
-                          size="sm"
+                          className={btn.outlineSm}
                           onClick={() =>
                             saveQuotaRows([...quotaRows, { type, count: 1, channels: [] }])
                           }
                         >
                           + {type.replace(/_/g, " ")}
-                        </Button>
+                        </button>
                       ))}
                     </div>
                   );
                 })()}
-              </CardContent>
-            </Card>
+              </Field>
           </div>
-        </TabsContent>
-      </Tabs>
+        </TabPanel>
     </div>
   );
 }

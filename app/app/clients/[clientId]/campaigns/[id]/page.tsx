@@ -3,12 +3,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabPanel } from "@/components/shared/tabs";
+import { banner, btn, field, surface, table, text } from "@/lib/ui";
+import { PILL, statusColor, statusLabel } from "@/lib/ui-status";
 import {
   getCampaign,
   improveCampaign,
@@ -24,14 +21,11 @@ import {
 import type { Campaign, SavedAsset, QuotaEntry } from "@/lib/types";
 import { CONTENT_TYPES } from "@/lib/constants";
 
-const STATUS_COLORS: Record<string, string> = {
-  idea: "bg-zinc-100 text-zinc-800",
-  proposal: "bg-blue-100 text-blue-800",
-  in_review: "bg-yellow-100 text-yellow-800",
-  active: "bg-green-100 text-green-800",
-  completed: "bg-purple-100 text-purple-800",
-  rejected: "bg-red-100 text-red-800",
-};
+const CAMPAIGN_TABS = [
+  { value: "strategy", label: "Strategy" },
+  { value: "content", label: "Content plan" },
+  { value: "review", label: "Review & improve" },
+];
 
 export default function CampaignDetailPage() {
   const params = useParams();
@@ -49,6 +43,7 @@ export default function CampaignDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [planSaving, setPlanSaving] = useState(false);
   const [planSaved, setPlanSaved] = useState(false);
+  const [tab, setTab] = useState("strategy");
 
   useEffect(() => {
     Promise.all([
@@ -166,8 +161,8 @@ export default function CampaignDetailPage() {
     }
   };
 
-  if (loading) return <p className="text-zinc-500">Loading...</p>;
-  if (!campaign) return <p className="text-red-500">Campaign not found</p>;
+  if (loading) return <p className={text.muted}>Loading…</p>;
+  if (!campaign) return <p className={banner.error}>Campaign not found.</p>;
 
   const strategy = campaign.strategy || {};
   const contentPlan = campaign.content_plan || {};
@@ -175,26 +170,28 @@ export default function CampaignDetailPage() {
 
   return (
     <div className="max-w-4xl">
-      <Link href={`/clients/${clientId}/campaigns`} className="text-sm text-zinc-500 hover:text-zinc-800 mb-2 inline-block">
-        ← Back to Campaigns
+      <Link
+        href={`/clients/${clientId}/campaigns`}
+        className="text-sm text-slate-500 hover:text-teal-700 transition-colors mb-3 inline-block"
+      >
+        ← Back to campaigns
       </Link>
 
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-2xl font-bold">{campaign.title}</h1>
-            <Badge className={STATUS_COLORS[campaign.status]}>
-              {campaign.status.replace(/_/g, " ")}
-            </Badge>
+            <h1 className={text.h1}>{campaign.title}</h1>
+            <span className={`${PILL} ${statusColor(campaign.status)}`}>
+              {statusLabel(campaign.status)}
+            </span>
           </div>
           {campaign.description && (
-            <p className="text-zinc-600">{campaign.description}</p>
+            <p className="text-slate-600">{campaign.description}</p>
           )}
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-xs text-slate-400 mt-1">
             Created {new Date(campaign.created_at).toLocaleDateString()}
-            {campaign.start_date && ` | Starts ${campaign.start_date}`}
-            {campaign.end_date && ` | Ends ${campaign.end_date}`}
+            {campaign.start_date && ` · Starts ${campaign.start_date}`}
+            {campaign.end_date && ` · Ends ${campaign.end_date}`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -203,312 +200,339 @@ export default function CampaignDetailPage() {
               {/* Replaces the old "Generate Content" run trigger. An active
                   campaign is scheduled by the planner, which draws from it to
                   fill the weekly quota — there is no per-campaign generate. */}
-              <Link href={`/clients/${clientId}/plan`}>
-                <Button>Plan content</Button>
+              <button
+                onClick={handleComplete}
+                disabled={actionLoading}
+                className={btn.outline}
+              >
+                Mark complete
+              </button>
+              <Link href={`/clients/${clientId}/plan`} className={btn.primarySm}>
+                Plan content
               </Link>
-              <Button variant="outline" onClick={handleComplete} disabled={actionLoading}>
-                Mark Complete
-              </Button>
             </>
           )}
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
+          <button onClick={handleDelete} className={btn.danger}>
             Delete
-          </Button>
+          </button>
         </div>
       </div>
 
-      <Tabs defaultValue="strategy">
-        <TabsList className="mb-4">
-          <TabsTrigger value="strategy">Strategy</TabsTrigger>
-          <TabsTrigger value="content">Content Plan</TabsTrigger>
-          <TabsTrigger value="review">Review & Improve</TabsTrigger>
-        </TabsList>
+      <Tabs
+        tabs={CAMPAIGN_TABS}
+        value={tab}
+        onChange={setTab}
+        label="Campaign sections"
+        className="mb-4"
+      />
 
-        {/* Strategy Tab */}
-        <TabsContent value="strategy">
-          <div className="grid gap-4">
-            {Object.entries(strategy).map(([key, value]) => (
-              <Card key={key}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm capitalize">{key.replace(/_/g, " ")}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {Array.isArray(value) ? (
+      <TabPanel value="strategy" active={tab === "strategy"}>
+        <div className="grid gap-4">
+          {Object.entries(strategy).map(([key, value]) => (
+            <section key={key} className={`${surface.card} ${surface.pad}`}>
+              <h2 className={`${text.cardTitle} mb-3 capitalize`}>
+                {key.replace(/_/g, " ")}
+              </h2>
+              {Array.isArray(value) ? (
+                <div className="flex flex-wrap gap-2">
+                  {value.map((v, i) => (
+                    <span
+                      key={i}
+                      className={`${PILL} bg-slate-100 text-slate-600`}
+                    >
+                      {String(v)}
+                    </span>
+                  ))}
+                </div>
+              ) : typeof value === "object" ? (
+                <pre className={`${surface.inset} text-xs whitespace-pre-wrap font-mono`}>
+                  {JSON.stringify(value, null, 2)}
+                </pre>
+              ) : (
+                <p className="text-sm text-slate-700">{String(value)}</p>
+              )}
+            </section>
+          ))}
+          {Object.keys(strategy).length === 0 && (
+            <div className={surface.empty}>
+              <p className="text-slate-700 text-lg">No strategy details yet.</p>
+            </div>
+          )}
+        </div>
+      </TabPanel>
+
+      <TabPanel value="content" active={tab === "content"}>
+        <div className="grid gap-4">
+          <section className={`${surface.card} ${surface.pad}`}>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h2 className={text.cardTitle}>Content plan</h2>
+              <button
+                onClick={saveContentPlan}
+                disabled={planSaving || planSaved}
+                className={btn.outlineSm}
+              >
+                {planSaving ? "Saving…" : planSaved ? "Saved" : "Save changes"}
+              </button>
+            </div>
+            {(() => {
+              const breakdown = (contentPlan.breakdown || []) as Array<
+                Record<string, unknown>
+              >;
+              const assetsByType: Record<string, number> = {};
+              campaignAssets.forEach((a) => {
+                assetsByType[a.type] = (assetsByType[a.type] || 0) + 1;
+              });
+              const usedTypes = breakdown.map((item) => String(item.type));
+              const availableTypes = CONTENT_TYPES.filter(
+                (t) => !usedTypes.includes(t)
+              );
+
+              return (
+                <div className="space-y-4">
+                  {breakdown.length > 0 && (
+                    <div className={`${surface.table} overflow-x-auto`}>
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-stone-50">
+                            <th className={table.head}>Type</th>
+                            <th className={table.head}>Planned</th>
+                            <th className={table.head}>Produced</th>
+                            <th className={table.head}>Remaining</th>
+                            <th className={table.head}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {breakdown.map((item, i) => {
+                            const planned = Number(item.count) || 0;
+                            const produced = assetsByType[String(item.type)] || 0;
+                            const remaining = Math.max(0, planned - produced);
+                            return (
+                              <tr key={i} className={table.row}>
+                                <td className={`${table.cell} font-medium capitalize`}>
+                                  {String(item.type).replace(/_/g, " ")}
+                                </td>
+                                <td className={table.cell}>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={planned}
+                                    onChange={(e) => {
+                                      const updated = [...breakdown];
+                                      updated[i] = {
+                                        ...updated[i],
+                                        count: parseInt(e.target.value) || 0,
+                                      };
+                                      updateBreakdown(updated);
+                                    }}
+                                    className={`${field.inputSm} w-20`}
+                                  />
+                                </td>
+                                <td className={table.cell}>{produced}</td>
+                                <td className={table.cell}>
+                                  {remaining === 0 ? (
+                                    <span className="text-green-700 font-medium">
+                                      0 ✓
+                                    </span>
+                                  ) : (
+                                    <span className="text-amber-700">{remaining}</span>
+                                  )}
+                                </td>
+                                <td className={`${table.cell} text-right`}>
+                                  <button
+                                    className={btn.ghost}
+                                    onClick={() =>
+                                      updateBreakdown(
+                                        breakdown.filter((_, j) => j !== i)
+                                      )
+                                    }
+                                  >
+                                    Remove
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {breakdown.length === 0 && (
+                    <p className={text.muted}>
+                      No content types selected. Add types below.
+                    </p>
+                  )}
+                  {availableTypes.length > 0 && (
                     <div className="flex flex-wrap gap-2">
-                      {value.map((v, i) => (
-                        <Badge key={i} variant="outline">{String(v)}</Badge>
+                      <span className="text-sm text-slate-500 self-center">
+                        Add:
+                      </span>
+                      {availableTypes.map((contentType) => (
+                        <button
+                          key={contentType}
+                          className={btn.outlineSm}
+                          onClick={() =>
+                            updateBreakdown([
+                              ...breakdown,
+                              { type: contentType, count: 1 },
+                            ])
+                          }
+                        >
+                          + {contentType.replace(/_/g, " ")}
+                        </button>
                       ))}
                     </div>
-                  ) : typeof value === "object" ? (
-                    <pre className="text-xs bg-zinc-50 p-2 rounded whitespace-pre-wrap">
-                      {JSON.stringify(value, null, 2)}
-                    </pre>
-                  ) : (
-                    <p className="text-sm">{String(value)}</p>
                   )}
-                </CardContent>
-              </Card>
-            ))}
-            {Object.keys(strategy).length === 0 && (
-              <p className="text-zinc-500 text-sm">No strategy details yet.</p>
-            )}
-          </div>
-        </TabsContent>
+                </div>
+              );
+            })()}
+          </section>
 
-        {/* Content Plan Tab */}
-        <TabsContent value="content">
-          <div className="grid gap-4">
-            {/* Editable Content Plan */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-sm">Content Plan</CardTitle>
-                <Button
-                  size="sm"
-                  onClick={saveContentPlan}
-                  disabled={planSaving || planSaved}
-                >
-                  {planSaving ? "Saving..." : planSaved ? "Saved" : "Save Changes"}
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {(() => {
-                  const breakdown = (contentPlan.breakdown || []) as Array<Record<string, unknown>>;
-                  const assetsByType: Record<string, number> = {};
-                  campaignAssets.forEach((a) => {
-                    assetsByType[a.type] = (assetsByType[a.type] || 0) + 1;
-                  });
-                  const usedTypes = breakdown.map((item) => String(item.type));
-                  const availableTypes = CONTENT_TYPES.filter((t) => !usedTypes.includes(t));
-
-                  return (
-                    <div className="space-y-4">
-                      {breakdown.length > 0 && (
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b text-left text-zinc-500">
-                              <th className="pb-2 font-medium">Type</th>
-                              <th className="pb-2 font-medium">Planned</th>
-                              <th className="pb-2 font-medium">Produced</th>
-                              <th className="pb-2 font-medium">Remaining</th>
-                              <th className="pb-2 font-medium"></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {breakdown.map((item, i) => {
-                              const planned = Number(item.count) || 0;
-                              const produced = assetsByType[String(item.type)] || 0;
-                              const remaining = Math.max(0, planned - produced);
-                              return (
-                                <tr key={i} className="border-b last:border-0">
-                                  <td className="py-2">
-                                    <span className="font-medium capitalize">{String(item.type).replace(/_/g, " ")}</span>
-                                  </td>
-                                  <td className="py-2">
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      value={planned}
-                                      onChange={(e) => {
-                                        const updated = [...breakdown];
-                                        updated[i] = { ...updated[i], count: parseInt(e.target.value) || 0 };
-                                        updateBreakdown(updated);
-                                      }}
-                                      className="w-20 h-8"
-                                    />
-                                  </td>
-                                  <td className="py-2">{produced}</td>
-                                  <td className="py-2">
-                                    {remaining === 0 ? (
-                                      <span className="text-green-600 font-medium">0 ✓</span>
-                                    ) : (
-                                      <span className="text-amber-600">{remaining}</span>
-                                    )}
-                                  </td>
-                                  <td className="py-2">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        updateBreakdown(breakdown.filter((_, j) => j !== i));
-                                      }}
-                                    >
-                                      Remove
-                                    </Button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      )}
-                      {breakdown.length === 0 && (
-                        <p className="text-zinc-500 text-sm">No content types selected. Add types below.</p>
-                      )}
-                      {availableTypes.length > 0 && (
-                        <div className="flex gap-2">
-                          <span className="text-sm text-zinc-500 self-center">Add:</span>
-                          {availableTypes.map((type) => (
-                            <Button
-                              key={type}
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                updateBreakdown([...breakdown, { type, count: 1 }]);
-                              }}
-                            >
-                              + {type.replace(/_/g, " ")}
-                            </Button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-              </CardContent>
-            </Card>
-
-            {/* Account Quota Reference */}
-            {Object.keys(accountQuota).length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Account Weekly Quota</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-3">
-                    {Object.entries(accountQuota).map(([type, entry]) => (
-                      <div key={type} className="bg-zinc-50 px-3 py-1 rounded text-sm">
-                        <span className="font-semibold">{entry.count}</span>{" "}
-                        <span className="text-zinc-500">
-                          {type}{entry.count !== 1 ? "s" : ""}/week
-                        </span>
-                        {entry.channels.length > 0 && (
-                          <span className="text-zinc-400 text-xs">
-                            {" "}· {entry.channels.join(", ")}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {Array.isArray(contentPlan.timeline) && contentPlan.timeline.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Timeline</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {(contentPlan.timeline as Array<Record<string, unknown>>).map(
-                      (item, i) => (
-                        <div key={i} className="text-sm">
-                          <span className="font-semibold">Week {String(item.week)}:</span>{" "}
-                          {String(item.focus)}
-                        </div>
-                      )
+          {Object.keys(accountQuota).length > 0 && (
+            <section className={`${surface.card} ${surface.pad}`}>
+              <h2 className={`${text.cardTitle} mb-3`}>Account weekly quota</h2>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(accountQuota).map(([quotaType, entry]) => (
+                  <div
+                    key={quotaType}
+                    className="rounded-lg bg-stone-50 border border-slate-200 px-3 py-1.5 text-sm"
+                  >
+                    <span className="font-semibold text-slate-800">
+                      {entry.count}
+                    </span>{" "}
+                    <span className="text-slate-500">
+                      {quotaType}
+                      {entry.count !== 1 ? "s" : ""}/week
+                    </span>
+                    {entry.channels.length > 0 && (
+                      <span className="text-slate-400 text-xs">
+                        {" "}
+                        · {entry.channels.join(", ")}
+                      </span>
                     )}
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
+                ))}
+              </div>
+            </section>
+          )}
 
-        {/* Review Tab */}
-        <TabsContent value="review">
-          <div className="grid gap-4">
-            {/* Feedback History */}
-            {campaign.feedback_history.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Feedback History</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {campaign.feedback_history.map((entry, i) => (
-                    <div key={i} className="border-l-2 border-zinc-200 pl-3 text-sm">
-                      <p className="text-zinc-600">{entry.feedback}</p>
-                      {entry.changes && (
-                        <p className="text-xs text-green-600 mt-1">
-                          Changes: {entry.changes}
-                        </p>
-                      )}
-                      <p className="text-xs text-zinc-400 mt-1">
-                        {entry.improved_at
-                          ? `Improved ${new Date(entry.improved_at).toLocaleString()}`
-                          : entry.submitted_at
+          {Array.isArray(contentPlan.timeline) &&
+            contentPlan.timeline.length > 0 && (
+              <section className={`${surface.card} ${surface.pad}`}>
+                <h2 className={`${text.cardTitle} mb-3`}>Timeline</h2>
+                <div className="space-y-2">
+                  {(contentPlan.timeline as Array<Record<string, unknown>>).map(
+                    (item, i) => (
+                      <div key={i} className="text-sm text-slate-700">
+                        <span className="font-semibold">
+                          Week {String(item.week)}:
+                        </span>{" "}
+                        {String(item.focus)}
+                      </div>
+                    )
+                  )}
+                </div>
+              </section>
+            )}
+        </div>
+      </TabPanel>
+
+      <TabPanel value="review" active={tab === "review"}>
+        <div className="grid gap-4">
+          {campaign.feedback_history.length > 0 && (
+            <section className={`${surface.card} ${surface.pad}`}>
+              <h2 className={`${text.cardTitle} mb-3`}>Feedback history</h2>
+              <div className="space-y-3">
+                {campaign.feedback_history.map((entry, i) => (
+                  <div
+                    key={i}
+                    className="border-l-2 border-slate-200 pl-3 text-sm"
+                  >
+                    <p className="text-slate-600">{entry.feedback}</p>
+                    {entry.changes && (
+                      <p className="text-xs text-green-700 mt-1">
+                        Changes: {entry.changes}
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-400 mt-1">
+                      {entry.improved_at
+                        ? `Improved ${new Date(entry.improved_at).toLocaleString()}`
+                        : entry.submitted_at
                           ? `Submitted ${new Date(entry.submitted_at).toLocaleString()}`
                           : ""}
-                      </p>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
-            {/* Rejection Reason */}
-            {campaign.status === "rejected" && campaign.rejection_reason && (
-              <Card className="border-red-200">
-                <CardHeader>
-                  <CardTitle className="text-sm text-red-700">Rejection Reason</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-red-600">{campaign.rejection_reason}</p>
-                </CardContent>
-              </Card>
-            )}
+          {campaign.status === "rejected" && campaign.rejection_reason && (
+            <section className="rounded-xl border border-red-200 bg-red-50 p-5 sm:p-6">
+              <h2 className="text-sm font-semibold text-red-700 mb-2">
+                Rejection reason
+              </h2>
+              <p className="text-sm text-red-600">{campaign.rejection_reason}</p>
+            </section>
+          )}
 
-            {/* Actions */}
-            {isActionable && (
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Feedback</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <Textarea
-                      value={feedback}
-                      onChange={(e) => setFeedback(e.target.value)}
-                      placeholder="What should be improved? Be specific..."
-                      className="h-24"
-                    />
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={handleReview} disabled={!feedback.trim()}>
-                        Submit Feedback
-                      </Button>
-                      <Button onClick={handleImprove} disabled={!feedback.trim() || improving}>
-                        {improving ? "Improving with AI..." : "Improve with AI"}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <div className="flex gap-3">
-                  <Button onClick={handleAccept} disabled={actionLoading} className="flex-1">
-                    Accept Campaign
-                  </Button>
-                  <div className="flex-1 space-y-2">
-                    <Textarea
-                      value={rejectReason}
-                      onChange={(e) => setRejectReason(e.target.value)}
-                      placeholder="Reason for rejection..."
-                      className="h-16"
-                    />
-                    <Button
-                      variant="destructive"
-                      onClick={handleReject}
-                      disabled={!rejectReason.trim() || actionLoading}
-                      className="w-full"
+          {isActionable && (
+            <>
+              <section className={`${surface.card} ${surface.pad}`}>
+                <h2 className={`${text.cardTitle} mb-3`}>Feedback</h2>
+                <div className="space-y-3">
+                  <textarea
+                    value={feedback}
+                    onChange={(e) => setFeedback(e.target.value)}
+                    placeholder="What should be improved? Be specific…"
+                    className={`${field.textarea} h-24`}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={handleReview}
+                      disabled={!feedback.trim()}
+                      className={btn.outline}
                     >
-                      Reject
-                    </Button>
+                      Submit feedback
+                    </button>
+                    <button
+                      onClick={handleImprove}
+                      disabled={!feedback.trim() || improving}
+                      className={btn.primarySm}
+                    >
+                      {improving ? "Improving with AI…" : "Improve with AI"}
+                    </button>
                   </div>
                 </div>
-              </>
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
+              </section>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={handleAccept}
+                  disabled={actionLoading}
+                  className={`${btn.primary} flex-1`}
+                >
+                  Accept campaign
+                </button>
+                <div className="flex-1 space-y-2">
+                  <textarea
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Reason for rejection…"
+                    className={`${field.textarea} h-16`}
+                  />
+                  <button
+                    onClick={handleReject}
+                    disabled={!rejectReason.trim() || actionLoading}
+                    className={`${btn.danger} w-full`}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </TabPanel>
     </div>
   );
 }

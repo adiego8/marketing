@@ -2,12 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { getClient, updateClient } from "@/lib/api";
-import type { Branding, Client } from "@/lib/types";
+import { banner, btn, field, surface, text } from "@/lib/ui";
+import type { Branding } from "@/lib/types";
 
 const DEFAULT_BRANDING: Branding = {
   colors: { primary: "#1a1a1a", secondary: "#f5f5f5", accent: "#ff6b35" },
@@ -18,9 +15,32 @@ const DEFAULT_BRANDING: Branding = {
   donts: "",
 };
 
+const GUIDELINES = [
+  {
+    key: "visual_style" as const,
+    label: "Visual style",
+    placeholder:
+      "Clean, minimal, geometric shapes. Bold typography. Plenty of negative space.",
+  },
+  {
+    key: "mood" as const,
+    label: "Mood",
+    placeholder: "Professional but approachable. Confident, not arrogant.",
+  },
+  {
+    key: "dos" as const,
+    label: "Do's",
+    placeholder: "Use negative space. Bold headlines. Brand colours prominent.",
+  },
+  {
+    key: "donts" as const,
+    label: "Don'ts",
+    placeholder: "No stock photos. No gradients. No clichés.",
+  },
+];
+
 export default function BrandingPage() {
   const { clientId } = useParams() as { clientId: string };
-  const [client, setClient] = useState<Client | null>(null);
   const [branding, setBranding] = useState<Branding>(DEFAULT_BRANDING);
   const [logoUrl, setLogoUrl] = useState("");
   const [saving, setSaving] = useState(false);
@@ -28,20 +48,23 @@ export default function BrandingPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getClient(clientId).then((c) => {
-      setClient(c);
-      setLogoUrl(c.logo_url || "");
-      if (c.branding) {
-        setBranding({
-          colors: { ...DEFAULT_BRANDING.colors, ...c.branding.colors },
-          fonts: { ...DEFAULT_BRANDING.fonts, ...c.branding.fonts },
-          visual_style: c.branding.visual_style || "",
-          mood: c.branding.mood || "",
-          dos: c.branding.dos || "",
-          donts: c.branding.donts || "",
-        });
-      }
-    });
+    getClient(clientId)
+      .then((c) => {
+        setLogoUrl(c.logo_url || "");
+        if (c.branding) {
+          setBranding({
+            colors: { ...DEFAULT_BRANDING.colors, ...c.branding.colors },
+            fonts: { ...DEFAULT_BRANDING.fonts, ...c.branding.fonts },
+            visual_style: c.branding.visual_style || "",
+            mood: c.branding.mood || "",
+            dos: c.branding.dos || "",
+            donts: c.branding.donts || "",
+          });
+        }
+      })
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : "Could not load branding")
+      );
   }, [clientId]);
 
   const handleSave = async () => {
@@ -69,150 +92,117 @@ export default function BrandingPage() {
 
   return (
     <div className="max-w-3xl">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold">Branding</h1>
-          <p className="text-zinc-500 text-sm">
-            Brand kit used in Canva prompts and calendar event briefs
+          <p className={text.eyebrow}>Client</p>
+          <h1 className={`${text.h1} mt-1`}>Branding</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            The brand kit used in Canva prompts and calendar event briefs.
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {saved && <span className="text-xs text-green-600">Saved</span>}
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
-          </Button>
+          {saved && (
+            <span className="text-xs font-semibold text-green-700">Saved</span>
+          )}
+          <button onClick={handleSave} disabled={saving} className={btn.primarySm}>
+            {saving ? "Saving…" : "Save"}
+          </button>
         </div>
       </div>
 
-      {error && (
-        <Card className="mb-4 border-red-200">
-          <CardContent className="pt-4">
-            <p className="text-sm text-red-600">{error}</p>
-          </CardContent>
-        </Card>
-      )}
+      {error && <p className={`${banner.error} mb-4`}>{error}</p>}
 
       <div className="space-y-4">
-        {/* Logo */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Logo</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <label className="text-xs text-zinc-500">Logo URL</label>
-              <Input
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                placeholder="https://example.com/logo.png"
+        <section className={`${surface.card} ${surface.pad}`}>
+          <h2 className={`${text.cardTitle} mb-4`}>Logo</h2>
+          <label className={field.micro}>Logo URL</label>
+          <input
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            placeholder="https://example.com/logo.png"
+            className={field.inputSm}
+          />
+          {logoUrl && (
+            <div className={`${surface.inset} mt-3 flex items-center gap-3`}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logoUrl}
+                alt="Logo preview"
+                className="w-16 h-16 object-contain"
               />
+              <span className="text-xs text-slate-500">Preview</span>
             </div>
-            {logoUrl && (
-              <div className="flex items-center gap-3 p-3 bg-zinc-50 rounded">
-                <img src={logoUrl} alt="Logo preview" className="w-16 h-16 object-contain" />
-                <span className="text-xs text-zinc-500">Preview</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          )}
+        </section>
 
-        {/* Colors */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Color Palette</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-3 gap-4">
+        <section className={`${surface.card} ${surface.pad}`}>
+          <h2 className={`${text.cardTitle} mb-4`}>Colour palette</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {(["primary", "secondary", "accent"] as const).map((key) => (
               <div key={key}>
-                <label className="text-xs text-zinc-500 capitalize">{key}</label>
+                <label className={`${field.micro} capitalize`}>{key}</label>
                 <div className="flex gap-2 items-center">
                   <input
                     type="color"
                     value={branding.colors?.[key] || "#000000"}
                     onChange={(e) => updateColor(key, e.target.value)}
-                    className="w-10 h-10 rounded border cursor-pointer"
+                    className="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer shrink-0"
+                    aria-label={`${key} colour`}
                   />
-                  <Input
+                  <input
                     value={branding.colors?.[key] || ""}
                     onChange={(e) => updateColor(key, e.target.value)}
                     placeholder="#000000"
-                    className="font-mono text-sm"
+                    className={`${field.inputSm} font-mono`}
                   />
                 </div>
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        {/* Fonts */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Typography</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
+        <section className={`${surface.card} ${surface.pad}`}>
+          <h2 className={`${text.cardTitle} mb-4`}>Typography</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-zinc-500">Headline Font</label>
-              <Input
+              <label className={field.micro}>Headline font</label>
+              <input
                 value={branding.fonts?.headline || ""}
                 onChange={(e) => updateFont("headline", e.target.value)}
                 placeholder="Inter"
+                className={field.inputSm}
               />
             </div>
             <div>
-              <label className="text-xs text-zinc-500">Body Font</label>
-              <Input
+              <label className={field.micro}>Body font</label>
+              <input
                 value={branding.fonts?.body || ""}
                 onChange={(e) => updateFont("body", e.target.value)}
                 placeholder="Inter"
+                className={field.inputSm}
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        {/* Guidelines */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Brand Guidelines</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-xs text-zinc-500">Visual Style</label>
-              <Textarea
-                value={branding.visual_style || ""}
-                onChange={(e) => setBranding({ ...branding, visual_style: e.target.value })}
-                placeholder="Clean, minimal, geometric shapes. Bold typography. Plenty of negative space."
-                className="h-20"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-zinc-500">Mood</label>
-              <Textarea
-                value={branding.mood || ""}
-                onChange={(e) => setBranding({ ...branding, mood: e.target.value })}
-                placeholder="Professional but approachable. Confident, not arrogant."
-                className="h-20"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-zinc-500">Do's</label>
-              <Textarea
-                value={branding.dos || ""}
-                onChange={(e) => setBranding({ ...branding, dos: e.target.value })}
-                placeholder="Use negative space. Bold headlines. Brand colors prominent."
-                className="h-20"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-zinc-500">Don'ts</label>
-              <Textarea
-                value={branding.donts || ""}
-                onChange={(e) => setBranding({ ...branding, donts: e.target.value })}
-                placeholder="No stock photos. No gradients. No cliches."
-                className="h-20"
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <section className={`${surface.card} ${surface.pad}`}>
+          <h2 className={`${text.cardTitle} mb-4`}>Brand guidelines</h2>
+          <div className="space-y-4">
+            {GUIDELINES.map(({ key, label, placeholder }) => (
+              <div key={key}>
+                <label className={field.micro}>{label}</label>
+                <textarea
+                  value={branding[key] || ""}
+                  onChange={(e) =>
+                    setBranding({ ...branding, [key]: e.target.value })
+                  }
+                  placeholder={placeholder}
+                  className={`${field.textarea} h-20`}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

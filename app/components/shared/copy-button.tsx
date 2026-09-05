@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { btn } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 
 interface CopyButtonProps {
   text: string;
   label?: string;
-  size?: "sm" | "default";
+  /** "secondary" is retained for the orphaned pages; it renders as outline. */
   variant?: "outline" | "ghost" | "secondary";
   className?: string;
 }
@@ -15,7 +15,6 @@ interface CopyButtonProps {
 export function CopyButton({
   text,
   label = "Copy",
-  size = "sm",
   variant = "ghost",
   className,
 }: CopyButtonProps) {
@@ -33,13 +32,16 @@ export function CopyButton({
   };
 
   return (
-    <Button
-      size={size}
-      variant={variant}
+    <button
       onClick={handleCopy}
-      className={cn("text-xs", className)}
+      className={cn(
+        variant === "ghost" ? btn.ghost : btn.outlineSm,
+        "text-xs",
+        copied && "text-teal-700",
+        className
+      )}
     >
       {copied ? "Copied!" : label}
-    </Button>
+    </button>
   );
 }

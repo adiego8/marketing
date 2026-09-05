@@ -1,20 +1,9 @@
-import { Badge } from "@/components/ui/badge";
+import { statusPill, statusLabel } from "@/lib/ui-status";
 
-const STATUS_STYLES: Record<string, string> = {
-  running: "bg-blue-100 text-blue-800",
-  completed: "bg-green-100 text-green-800",
-  failed: "bg-red-100 text-red-800",
-  // Plan run statuses.
-  proposed: "bg-blue-100 text-blue-800",
-  committed: "bg-green-100 text-green-800",
-  degraded: "bg-amber-100 text-amber-800",
-  noop: "bg-zinc-100 text-zinc-700",
-};
-
+/**
+ * Thin wrapper over the shared status vocabulary in lib/ui-status.ts, kept
+ * because several pages render a status without caring how it is coloured.
+ */
 export function StatusBadge({ status }: { status: string }) {
-  return (
-    <Badge variant="outline" className={STATUS_STYLES[status] || ""}>
-      {status}
-    </Badge>
-  );
+  return <span className={statusPill(status)}>{statusLabel(status)}</span>;
 }

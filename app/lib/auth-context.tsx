@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { NumericoMark } from "@/components/brand/numerico-mark";
 import {
   GoogleAuthProvider,
   onIdTokenChanged,
@@ -122,8 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const authResolved = user !== null || pathname === "/login";
   if (loading || !authResolved) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-zinc-500">Loading...</p>
+      <div className="flex flex-col items-center justify-center min-h-screen gap-3 bg-stone-50">
+        <NumericoMark className="h-10 w-10 animate-pulse" />
+        <p className="text-sm text-slate-400">Loading…</p>
       </div>
     );
   }

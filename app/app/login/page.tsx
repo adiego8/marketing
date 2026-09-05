@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
+import { NumericoMark } from "@/components/brand/numerico-mark";
+import { banner, btn, surface } from "@/lib/ui";
 
 export default function LoginPage() {
   const { user, loading, accessError, signIn } = useAuth();
@@ -35,28 +35,35 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-zinc-50">
-      <Card className="w-full max-w-sm">
-        <CardContent className="pt-8 pb-8 text-center space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold">Marketing Agent</h1>
-            <p className="text-sm text-zinc-500 mt-1">
-              Sign in to manage your clients
-            </p>
-          </div>
-          {(error || accessError) && (
-            <p className="text-sm text-red-600 bg-red-50 p-2 rounded">
-              {error || accessError}
-            </p>
-          )}
-          <Button onClick={handleSignIn} className="w-full" disabled={signingIn}>
-            {signingIn ? "Signing in..." : "Sign in with Google"}
-          </Button>
-          <p className="text-xs text-zinc-400">
-            Google Calendar can be connected later, from Settings
+    <div className="flex items-center justify-center min-h-screen bg-stone-50 px-4">
+      <div className={`w-full max-w-sm ${surface.card} p-8 text-center`}>
+        <NumericoMark className="h-12 w-12 mx-auto mb-5" />
+
+        <h1 className="text-2xl text-slate-900">
+          <span className="font-mono">Numerico</span> Marketing
+        </h1>
+        <p className="text-sm text-slate-500 mt-1.5">
+          Sign in to plan and schedule client content.
+        </p>
+
+        {(error || accessError) && (
+          <p className={`${banner.error} mt-6 text-left`}>
+            {error || accessError}
           </p>
-        </CardContent>
-      </Card>
+        )}
+
+        <button
+          onClick={handleSignIn}
+          className={`${btn.primary} w-full mt-6`}
+          disabled={signingIn}
+        >
+          {signingIn ? "Signing in…" : "Sign in with Google"}
+        </button>
+
+        <p className="text-xs text-slate-400 mt-5">
+          Google Calendar can be connected later, from Settings.
+        </p>
+      </div>
     </div>
   );
 }
