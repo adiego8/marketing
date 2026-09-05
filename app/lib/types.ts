@@ -51,6 +51,45 @@ export interface Asset {
   goal?: string;
   priority?: string;
   effort?: string;
+  suggested_scheduled_for?: string;
+  schedule_reason?: string;
+}
+
+export interface ScheduledAsset {
+  id: string;
+  run_id?: string;
+  campaign_id?: string;
+  asset_index?: number;
+  type: string;
+  content: Record<string, unknown>;
+  status: "draft" | "scheduled" | "posted";
+  scheduled_for?: string;
+  suggested_scheduled_for?: string;
+  posted_at?: string;
+  google_event_id?: string;
+  saved_at: string;
+}
+
+export interface CalendarItem {
+  id: string;
+  run_id?: string;
+  campaign_id?: string;
+  campaign_title?: string;
+  type: string;
+  content: Record<string, unknown>;
+  status: "draft" | "scheduled" | "posted";
+  scheduled_for?: string;
+  suggested_scheduled_for?: string;
+  posted_at?: string;
+  google_event_id?: string;
+}
+
+export interface Agency {
+  id: string;
+  name: string;
+  google_connected_email?: string;
+  google_connected: boolean;
+  created_at: string;
 }
 
 export interface Slide {
@@ -160,4 +199,47 @@ export interface ResearchRequest {
   description?: string;
   competitors?: string[];
   research_focus?: string[];
+}
+
+export interface Branding {
+  colors?: {
+    primary?: string;
+    secondary?: string;
+    accent?: string;
+  };
+  fonts?: {
+    headline?: string;
+    body?: string;
+  };
+  visual_style?: string;
+  mood?: string;
+  dos?: string;
+  donts?: string;
+}
+
+export interface Client {
+  id: string;
+  agency_id: string;
+  name: string;
+  website_url?: string;
+  logo_url?: string;
+  description?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  status: "active" | "paused" | "archived";
+  research?: Record<string, unknown>;
+  research_status?: "researching" | "completed" | "failed";
+  branding?: Branding;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClientListItem {
+  id: string;
+  name: string;
+  status: string;
+  website_url?: string;
+  logo_url?: string;
+  contact_email?: string;
+  created_at: string;
 }

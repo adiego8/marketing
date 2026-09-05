@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,17 +13,18 @@ import type { Strategy } from "@/lib/types";
 import { CONTENT_TYPES } from "@/lib/constants";
 
 export default function StrategyPage() {
+  const { clientId } = useParams() as { clientId: string };
   const [strategy, setStrategy] = useState<Strategy | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    getStrategy()
+    getStrategy(clientId)
       .then(setStrategy)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [clientId]);
 
   const update = (field: string, value: unknown) => {
     if (!strategy) return;
@@ -42,7 +44,7 @@ export default function StrategyPage() {
     setSaving(true);
     try {
       const { id, created_at, updated_at, ...data } = strategy;
-      await updateStrategy(data);
+      await updateStrategy(clientId, data);
       setSaved(true);
     } catch (e) {
       console.error("Failed to save:", e);

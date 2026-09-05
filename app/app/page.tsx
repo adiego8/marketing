@@ -1,142 +1,213 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/shared/status-badge";
-import { listRuns, triggerRun } from "@/lib/api";
-import type { RunListItem } from "@/lib/types";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { listClients, createClient, deleteClient } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import type { ClientListItem } from "@/lib/types";
 
-export default function Dashboard() {
-  const [runs, setRuns] = useState<RunListItem[]>([]);
+const STATUS_COLORS: Record<string, string> = {
+  active: "bg-green-100 text-green-800",
+  paused: "bg-yellow-100 text-yellow-800",
+  archived: "bg-zinc-100 text-zinc-800",
+};
+
+export default function ClientListPage() {
+  const router = useRouter();
+  const { user, signOut } = useAuth();
+  const [clients, setClients] = useState<ClientListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [triggering, setTriggering] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("active");
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
 
-  const fetchRuns = async () => {
+  // Create form
+  const [newName, setNewName] = useState("");
+  const [newWebsite, setNewWebsite] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+
+  const fetchClients = async () => {
     try {
-      const data = await listRuns({ limit: 10 });
-      setRuns(data);
+      const params: Record<string, string> = {};
+      if (statusFilter) params.status = statusFilter;
+      if (search) params.search = search;
+      const data = await listClients(params);
+      setClients(data);
     } catch (e) {
-      console.error("Failed to fetch runs:", e);
+      console.error("Failed to fetch clients:", e);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchRuns();
-  }, []);
+    fetchClients();
+  }, [statusFilter]);
 
-  const handleTrigger = async () => {
-    setTriggering(true);
+  useEffect(() => {
+    const timeout = setTimeout(fetchClients, 300);
+    return () => clearTimeout(timeout);
+  }, [search]);
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    setCreating(true);
     try {
-      await triggerRun("daily");
-      setTimeout(fetchRuns, 1000);
+      const client = await createClient({
+        name: newName,
+        website_url: newWebsite || undefined,
+        contact_email: newEmail || undefined,
+        contact_phone: newPhone || undefined,
+        description: newDescription || undefined,
+      });
+      setShowCreate(false);
+      setNewName("");
+      setNewWebsite("");
+      setNewEmail("");
+      setNewPhone("");
+      setNewDescription("");
+      router.push(`/clients/${client.id}`);
     } catch (e) {
-      console.error("Failed to trigger run:", e);
+      console.error("Failed to create client:", e);
     } finally {
-      setTriggering(false);
+      setCreating(false);
     }
   };
 
-  const completed = runs.filter((r) => r.status === "completed").length;
-  const failed = runs.filter((r) => r.status === "failed").length;
-  const running = runs.filter((r) => r.status === "running").length;
-
   return (
-    <div>
-      <div className="flex items-center justify-between mb-8">
+    <div className="max-w-5xl mx-auto p-8">
+      {/* User header */}
+      {user && (
+        <div className="flex justify-end items-center gap-3 mb-4">
+          <span className="text-xs text-zinc-500">{user.email}</span>
+          <button
+            onClick={signOut}
+            className="text-xs text-zinc-400 hover:text-zinc-600 underline"
+          >
+            Sign out
+          </button>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-zinc-500 text-sm">Marketing Agent Overview</p>
+          <h1 className="text-2xl font-bold">Clients</h1>
+          <p className="text-zinc-500 text-sm">Manage your marketing clients</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={handleTrigger} disabled={triggering}>
-            {triggering ? "Triggering..." : "Trigger Daily Run"}
-          </Button>
-          <Link href="/onboarding">
-            <Button variant="outline">New Research</Button>
-          </Link>
-        </div>
+        <Dialog open={showCreate} onOpenChange={setShowCreate}>
+          <Button onClick={() => setShowCreate(true)}>Add Client</Button>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>New Client</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 pt-2">
+              <div>
+                <label className="text-xs text-zinc-500">Name *</label>
+                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Company name" />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500">Website</label>
+                <Input value={newWebsite} onChange={(e) => setNewWebsite(e.target.value)} placeholder="https://..." />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-zinc-500">Email</label>
+                  <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="contact@..." />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-500">Phone</label>
+                  <Input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="+1..." />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500">Notes</label>
+                <Input value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="Internal notes..." />
+              </div>
+              <Button onClick={handleCreate} disabled={!newName.trim() || creating} className="w-full">
+                {creating ? "Creating..." : "Create Client"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-8">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-zinc-500">Total Runs</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{runs.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-zinc-500">Completed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-green-600">{completed}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-zinc-500">Failed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-red-600">{failed}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-zinc-500">Running</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-blue-600">{running}</p>
-          </CardContent>
-        </Card>
+      {/* Filters */}
+      <div className="flex gap-3 mb-4">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name..."
+          className="max-w-xs"
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="border rounded px-3 py-2 text-sm bg-white"
+        >
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="paused">Paused</option>
+          <option value="archived">Archived</option>
+        </select>
       </div>
 
+      {/* Client table */}
       <Card>
-        <CardHeader>
-          <CardTitle>Recent Runs</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {loading ? (
             <p className="text-zinc-500 text-sm">Loading...</p>
-          ) : runs.length === 0 ? (
-            <p className="text-zinc-500 text-sm">
-              No runs yet. Trigger your first daily run!
-            </p>
+          ) : clients.length === 0 ? (
+            <p className="text-zinc-500 text-sm">No clients found. Add your first client to get started.</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-zinc-500">
-                  <th className="pb-2 font-medium">Run ID</th>
-                  <th className="pb-2 font-medium">Task</th>
+                  <th className="pb-2 font-medium">Name</th>
                   <th className="pb-2 font-medium">Status</th>
+                  <th className="pb-2 font-medium">Website</th>
+                  <th className="pb-2 font-medium">Contact</th>
                   <th className="pb-2 font-medium">Created</th>
                   <th className="pb-2 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
-                {runs.map((run) => (
-                  <tr key={run.id} className="border-b last:border-0">
-                    <td className="py-3 font-mono text-xs">
-                      {run.id.slice(0, 8)}...
-                    </td>
-                    <td className="py-3">{run.task_type}</td>
+                {clients.map((c) => (
+                  <tr
+                    key={c.id}
+                    className="border-b last:border-0 cursor-pointer hover:bg-zinc-50 transition-colors"
+                    onClick={() => router.push(`/clients/${c.id}`)}
+                  >
+                    <td className="py-3 font-medium">{c.name}</td>
                     <td className="py-3">
-                      <StatusBadge status={run.status} />
+                      <Badge className={STATUS_COLORS[c.status] || "bg-zinc-100"}>
+                        {c.status}
+                      </Badge>
                     </td>
+                    <td className="py-3 text-zinc-500">{c.website_url || "—"}</td>
+                    <td className="py-3 text-zinc-500">{c.contact_email || "—"}</td>
                     <td className="py-3 text-zinc-500">
-                      {new Date(run.created_at).toLocaleString()}
+                      {new Date(c.created_at).toLocaleDateString()}
                     </td>
-                    <td className="py-3">
-                      <Link href={`/runs/${run.id}`}>
-                        <Button variant="ghost" size="sm">
-                          View
-                        </Button>
-                      </Link>
+                    <td className="py-3 text-right">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(`Delete "${c.name}" and all its data?`)) {
+                            deleteClient(c.id).then(() => fetchClients());
+                          }
+                        }}
+                        className="text-xs text-zinc-400 hover:text-red-600"
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))}

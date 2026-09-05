@@ -1,4 +1,4 @@
-import type { Asset } from "./types";
+import type { Asset, Branding } from "./types";
 
 /**
  * Extracts the raw text content from an asset.
@@ -133,9 +133,135 @@ export function formatCreativeBrief(asset: Asset): string {
   return brief;
 }
 
+/**
+ * Generate a Canva AI design prompt from asset content.
+ * Includes design type, copy, visual direction, layout, and brand kit —
+ * ready to paste into Canva's Magic Design or text-to-design.
+ */
+export function formatCanvaPrompt(asset: Asset, branding?: Branding, logoUrl?: string): string {
+  const text = getAssetText(asset);
+  const rationale = asset.rationale;
+  const format = asset.format || "static_graphic";
+
+  // Map asset format to Canva design type + dimensions
+  const designMap: Record<string, { type: string; size: string }> = {
+    static_graphic: { type: "Instagram Post", size: "1080x1080" },
+    carousel: { type: "Instagram Carousel", size: "1080x1080 per slide" },
+    story: { type: "Instagram Story", size: "1080x1920" },
+    reel_script: { type: "Instagram Reel Cover", size: "1080x1920" },
+    linkedin_post: { type: "LinkedIn Post", size: "1200x627" },
+    twitter_post: { type: "Twitter/X Post", size: "1600x900" },
+    infographic: { type: "Infographic", size: "800x2000" },
+  };
+
+  const design = designMap[format] || { type: "Social Media Post", size: "1080x1080" };
+
+  let prompt = `=== CANVA AI DESIGN PROMPT ===\n\n`;
+  prompt += `DESIGN TYPE: ${design.type}\n`;
+  prompt += `DIMENSIONS: ${design.size}\n\n`;
+
+  prompt += `--- TEXT TO INCLUDE ---\n`;
+  if (typeof asset.content === "string") {
+    // For short-form: split into headline vs body
+    const lines = text.split("\n").filter(Boolean);
+    if (lines.length > 1) {
+      prompt += `Headline: ${lines[0]}\n`;
+      prompt += `Body: ${lines.slice(1).join(" ")}\n`;
+    } else {
+      prompt += `Main text: ${text}\n`;
+    }
+  } else if (Array.isArray(asset.content)) {
+    asset.content.forEach((slide, i) => {
+      const slideText = typeof slide === "object" && "text" in slide ? slide.text : String(slide);
+      prompt += `Slide ${i + 1}: ${slideText}\n`;
+    });
+  }
+
+  // Brand kit section
+  const hasBrandKit =
+    logoUrl ||
+    branding?.colors?.primary ||
+    branding?.fonts?.headline ||
+    branding?.visual_style ||
+    branding?.mood ||
+    branding?.dos ||
+    branding?.donts;
+
+  if (hasBrandKit) {
+    prompt += `\n--- BRAND KIT ---\n`;
+    if (logoUrl) prompt += `Logo: ${logoUrl}\n`;
+    if (branding?.colors) {
+      const c = branding.colors;
+      const parts = [];
+      if (c.primary) parts.push(`Primary ${c.primary}`);
+      if (c.secondary) parts.push(`Secondary ${c.secondary}`);
+      if (c.accent) parts.push(`Accent ${c.accent}`);
+      if (parts.length) prompt += `Colors: ${parts.join(" · ")}\n`;
+    }
+    if (branding?.fonts) {
+      const parts = [];
+      if (branding.fonts.headline) parts.push(`${branding.fonts.headline} (headline)`);
+      if (branding.fonts.body) parts.push(`${branding.fonts.body} (body)`);
+      if (parts.length) prompt += `Fonts: ${parts.join(", ")}\n`;
+    }
+  }
+
+  prompt += `\n--- VISUAL DIRECTION ---\n`;
+  if (branding?.visual_style) {
+    prompt += `Style: ${branding.visual_style}\n`;
+  } else {
+    prompt += `Style: Clean, modern, professional. Minimal and bold.\n`;
+  }
+  if (branding?.mood) {
+    prompt += `Mood: ${branding.mood}\n`;
+  }
+  if (branding?.fonts?.headline || branding?.fonts?.body) {
+    prompt += `Typography: Use brand fonts specified above.\n`;
+  } else {
+    prompt += `Typography: Strong headline font, clean sans-serif body text.\n`;
+  }
+  if (branding?.colors?.primary) {
+    prompt += `Colors: Use the brand palette above (primary for dominant elements, accent for emphasis).\n`;
+  } else {
+    prompt += `Colors: Use brand colors if available, otherwise modern muted palette.\n`;
+  }
+  prompt += `Imagery: Subtle background graphics or abstract shapes. No stock photo cliches.\n`;
+
+  if (branding?.dos || branding?.donts) {
+    prompt += `\n--- BRAND GUIDELINES ---\n`;
+    if (branding.dos) prompt += `DO: ${branding.dos}\n`;
+    if (branding.donts) prompt += `DON'T: ${branding.donts}\n`;
+  }
+
+  if (rationale?.why_this_post) {
+    prompt += `\n--- CONTEXT ---\n`;
+    prompt += `Purpose: ${rationale.why_this_post}\n`;
+  }
+  if (rationale?.expected_outcome) {
+    prompt += `Goal: ${rationale.expected_outcome}\n`;
+  }
+
+  if (asset.image_prompt) {
+    prompt += `\n--- BACKGROUND IMAGE IDEA ---\n${asset.image_prompt}\n`;
+  }
+
+  prompt += `\n--- LAYOUT NOTES ---\n`;
+  prompt += `- Text should be readable and prominent\n`;
+  prompt += `- Leave breathing room around text elements\n`;
+  prompt += `- Include a clear visual hierarchy (headline > body > CTA)\n`;
+  if (logoUrl) {
+    prompt += `- Place the logo in a corner or as a subtle watermark\n`;
+  }
+  if (format === "carousel") {
+    prompt += `- First slide should hook attention, last slide should have a CTA\n`;
+  }
+
+  return prompt;
+}
+
 export type PlatformFormat = {
   label: string;
-  format: (asset: Asset) => string;
+  format: (asset: Asset, branding?: Branding, logoUrl?: string) => string;
 };
 
 export const PLATFORM_FORMATS: PlatformFormat[] = [
@@ -144,5 +270,6 @@ export const PLATFORM_FORMATS: PlatformFormat[] = [
   { label: "LinkedIn", format: (a) => formatLinkedIn(getAssetText(a)) },
   { label: "Twitter/X", format: (a) => formatTwitter(getAssetText(a)) },
   { label: "Image Prompt", format: (a) => formatImagePrompt(a) },
+  { label: "Canva AI", format: (a, b, l) => formatCanvaPrompt(a, b, l) },
   { label: "Creative Brief", format: (a) => formatCreativeBrief(a) },
 ];

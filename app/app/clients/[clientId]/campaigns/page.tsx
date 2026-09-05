@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function CampaignsPage() {
+  const { clientId } = useParams() as { clientId: string };
   const [campaigns, setCampaigns] = useState<CampaignListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -39,7 +41,7 @@ export default function CampaignsPage() {
 
   const fetchCampaigns = async () => {
     try {
-      const data = await listCampaigns();
+      const data = await listCampaigns(clientId);
       setCampaigns(data);
     } catch (e) {
       console.error("Failed to fetch campaigns:", e);
@@ -55,7 +57,7 @@ export default function CampaignsPage() {
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      await generateCampaigns({ prompt: generatePrompt || undefined, count: 3 });
+      await generateCampaigns(clientId, { prompt: generatePrompt || undefined, count: 3 });
       setShowGenerate(false);
       setGeneratePrompt("");
       await fetchCampaigns();
@@ -69,7 +71,7 @@ export default function CampaignsPage() {
   const handleCreate = async () => {
     if (!newTitle.trim()) return;
     try {
-      await createCampaign({ title: newTitle, description: newDescription || undefined });
+      await createCampaign(clientId, { title: newTitle, description: newDescription || undefined });
       setShowCreate(false);
       setNewTitle("");
       setNewDescription("");
@@ -127,7 +129,7 @@ export default function CampaignsPage() {
               </div>
               <div className="space-y-3">
                 {grouped[status]?.map((campaign) => (
-                  <Link key={campaign.id} href={`/campaigns/${campaign.id}`}>
+                  <Link key={campaign.id} href={`/clients/${clientId}/campaigns/${campaign.id}`}>
                     <Card className="cursor-pointer hover:border-zinc-400 transition-colors mb-3">
                       <CardContent className="pt-4 pb-3">
                         <Badge

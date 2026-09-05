@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +46,7 @@ const TYPE_BADGE_COLORS: Record<string, string> = {
 };
 
 export default function AssetsPage() {
+  const { clientId } = useParams() as { clientId: string };
   const [assets, setAssets] = useState<SavedAsset[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,8 +76,8 @@ export default function AssetsPage() {
   const fetchData = async () => {
     try {
       const [assetsData, campaignsData] = await Promise.all([
-        listAssets({ limit: 100 }),
-        listCampaigns(),
+        listAssets(clientId, { limit: 100 }),
+        listCampaigns(clientId),
       ]);
       setAssets(assetsData);
       setCampaigns(campaignsData);
@@ -135,7 +137,7 @@ export default function AssetsPage() {
       } catch {
         contentObj = { ...selected.content, content: editContent };
       }
-      const updated = await updateAsset(selected.id, {
+      const updated = await updateAsset(clientId, selected.id, {
         type: editType !== selected.type ? editType : undefined,
         content: contentObj,
         rating: editRating || undefined,
@@ -152,7 +154,7 @@ export default function AssetsPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteAsset(id);
+      await deleteAsset(clientId, id);
       setAssets(assets.filter((a) => a.id !== id));
       setSelected(null);
     } catch (e) {
@@ -164,7 +166,7 @@ export default function AssetsPage() {
     if (!newBrief.trim()) return;
     setGenerating(true);
     try {
-      const result = await generateAsset({
+      const result = await generateAsset(clientId, {
         type: newType,
         brief: newBrief,
         campaign_id: newCampaignId !== "none" ? newCampaignId : undefined,
@@ -182,7 +184,7 @@ export default function AssetsPage() {
     if (!newContent.trim()) return;
     setSaving(true);
     try {
-      const asset = await createAsset({
+      const asset = await createAsset(clientId, {
         type: newType,
         content: { content: newContent },
         campaign_id: newCampaignId !== "none" ? newCampaignId : undefined,
@@ -301,7 +303,7 @@ export default function AssetsPage() {
                   <TableCell>
                     {asset.campaign_id ? (
                       <Link
-                        href={`/campaigns/${asset.campaign_id}`}
+                        href={`/clients/${clientId}/campaigns/${asset.campaign_id}`}
                         className="text-xs text-blue-600 hover:underline"
                         onClick={(e) => e.stopPropagation()}
                       >

@@ -8,19 +8,23 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { AssetCard } from "@/components/runs/asset-card";
-import { getRun, triggerDebrief } from "@/lib/api";
-import type { Run, Asset } from "@/lib/types";
+import { getAgency, getClient, getRun, listAssets, submitFeedback, triggerDebrief } from "@/lib/api";
+import type { Run, Asset, Client, ScheduledAsset } from "@/lib/types";
 
 export default function RunDetailPage() {
   const params = useParams();
+  const clientId = params.clientId as string;
   const runId = params.runId as string;
   const [run, setRun] = useState<Run | null>(null);
+  const [client, setClient] = useState<Client | null>(null);
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [scheduledByIndex, setScheduledByIndex] = useState<Record<number, ScheduledAsset>>({});
   const [loading, setLoading] = useState(true);
   const [debriefing, setDebriefing] = useState(false);
 
   const fetchRun = async () => {
     try {
-      const data = await getRun(runId);
+      const data = await getRun(clientId, runId);
       setRun(data);
     } catch (e) {
       console.error("Failed to fetch run:", e);
@@ -31,19 +35,35 @@ export default function RunDetailPage() {
 
   useEffect(() => {
     fetchRun();
+    getClient(clientId).then(setClient).catch(() => {});
+    getAgency().then((a) => setGoogleConnected(a.google_connected)).catch(() => {});
+
+    // Fetch any already-scheduled assets for this run
+    listAssets(clientId)
+      .then((assets) => {
+        const map: Record<number, ScheduledAsset> = {};
+        for (const a of assets as unknown as ScheduledAsset[]) {
+          if (a.run_id === runId && a.asset_index != null) {
+            map[a.asset_index] = a;
+          }
+        }
+        setScheduledByIndex(map);
+      })
+      .catch(() => {});
+
     // Poll if running
     const interval = setInterval(async () => {
-      const data = await getRun(runId);
+      const data = await getRun(clientId, runId);
       setRun(data);
       if (data.status !== "running") clearInterval(interval);
     }, 5000);
     return () => clearInterval(interval);
-  }, [runId]);
+  }, [clientId, runId]);
 
   const handleDebrief = async () => {
     setDebriefing(true);
     try {
-      await triggerDebrief(runId);
+      await triggerDebrief(clientId, runId);
       await fetchRun();
     } catch (e) {
       console.error("Failed to generate debrief:", e);
@@ -71,7 +91,7 @@ export default function RunDetailPage() {
     <div>
       {/* Header */}
       <div className="mb-6">
-        <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-800 mb-2 inline-block">
+        <Link href={`/clients/${clientId}`} className="text-sm text-zinc-500 hover:text-zinc-800 mb-2 inline-block">
           ← Back to Dashboard
         </Link>
         <div className="flex items-center gap-3 mb-2">
@@ -134,7 +154,17 @@ export default function RunDetailPage() {
           <h2 className="text-lg font-semibold mb-3">Assets ({assets.length})</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {assets.map((asset, i) => (
-              <AssetCard key={i} asset={asset} index={i} runId={runId} />
+              <AssetCard
+                key={i}
+                asset={asset}
+                index={i}
+                runId={runId}
+                clientId={clientId}
+                branding={client?.branding}
+                logoUrl={client?.logo_url}
+                scheduledAsset={scheduledByIndex[i]}
+                googleConnected={googleConnected}
+              />
             ))}
           </div>
         </div>

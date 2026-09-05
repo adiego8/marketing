@@ -1,20 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { EditableList } from "@/components/shared/editable-list";
-import { runResearch, createProfile } from "@/lib/api";
+import { runResearch, createProfile, getClient } from "@/lib/api";
+import type { Client } from "@/lib/types";
 
 type Step = "info" | "researching" | "review" | "generating" | "done";
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { clientId } = useParams() as { clientId: string };
   const [step, setStep] = useState<Step>("info");
+  const [client, setClient] = useState<Client | null>(null);
 
   // Step 1: Company info
   const [companyName, setCompanyName] = useState("");
@@ -27,20 +30,74 @@ export default function OnboardingPage() {
 
   // Step 3: Profile
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Load client on mount — if research exists, skip to review
+  useEffect(() => {
+    getClient(clientId).then((c) => {
+      setClient(c);
+      // Pre-fill form from client record
+      if (c.name && c.name !== "Default Client") setCompanyName(c.name);
+      if (c.website_url) setWebsiteUrl(c.website_url);
+
+      if (c.research_status === "completed" && c.research) {
+        setResearch(c.research);
+        setStep("review");
+      } else if (c.research_status === "researching") {
+        setStep("researching");
+        startPolling();
+      } else if (c.research_status === "failed" && c.research) {
+        setError((c.research as Record<string, string>).error || "Research failed");
+      }
+    });
+
+    return () => stopPolling();
+  }, [clientId]);
+
+  const startPolling = () => {
+    stopPolling();
+    pollRef.current = setInterval(async () => {
+      try {
+        const c = await getClient(clientId);
+        setClient(c);
+        if (c.research_status === "completed" && c.research) {
+          setResearch(c.research);
+          setStep("review");
+          stopPolling();
+        } else if (c.research_status === "failed") {
+          setError((c.research as Record<string, string>)?.error || "Research failed");
+          setStep("info");
+          stopPolling();
+        }
+      } catch (e) {
+        console.error("Polling failed:", e);
+      }
+    }, 3000);
+  };
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
 
   const handleResearch = async () => {
     setStep("researching");
+    setError(null);
     try {
-      const result = await runResearch({
+      await runResearch(clientId, {
         company_name: companyName,
         website_url: websiteUrl || undefined,
         description: description || undefined,
         competitors: competitors.length > 0 ? competitors : undefined,
       });
-      setResearch(result);
-      setStep("review");
+      startPolling();
     } catch (e) {
-      console.error("Research failed:", e);
+      const msg = e instanceof Error ? e.message : "Failed to start research";
+      setError(msg);
       setStep("info");
     }
   };
@@ -48,12 +105,14 @@ export default function OnboardingPage() {
   const handleGenerateProfile = async () => {
     if (!research) return;
     setStep("generating");
+    setError(null);
     try {
-      const result = await createProfile({ research });
+      const result = await createProfile(clientId, { research });
       setProfile(result);
       setStep("done");
     } catch (e) {
-      console.error("Profile generation failed:", e);
+      const msg = e instanceof Error ? e.message : "Profile generation failed";
+      setError(msg);
       setStep("review");
     }
   };
@@ -82,7 +141,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Step 1: Company Info */}
-      {(step === "info" || step === "researching") && (
+      {step === "info" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
@@ -124,14 +183,34 @@ export default function OnboardingPage() {
               </div>
             </CardContent>
           </Card>
+          {error && (
+            <Card className="border-red-200">
+              <CardContent className="pt-4">
+                <p className="text-sm text-red-600">{error}</p>
+              </CardContent>
+            </Card>
+          )}
           <Button
             onClick={handleResearch}
-            disabled={!companyName.trim() || step === "researching"}
+            disabled={!companyName.trim()}
             className="w-full"
           >
-            {step === "researching" ? "Researching... (this takes 1-2 minutes)" : "Run Research"}
+            Run Research
           </Button>
         </div>
+      )}
+
+      {/* Researching state */}
+      {step === "researching" && (
+        <Card>
+          <CardContent className="pt-6 text-center space-y-3">
+            <div className="animate-pulse text-4xl">🔍</div>
+            <p className="text-lg font-semibold">Researching...</p>
+            <p className="text-sm text-zinc-500">
+              Analyzing company, competitors, and market gaps. This takes 1-2 minutes.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       {/* Step 2: Review Research */}
@@ -144,6 +223,13 @@ export default function OnboardingPage() {
           <ResearchSection title="Product-Market Fit" data={research.product_market_fit} />
           <ResearchSection title="Recommended Positioning" data={research.recommended_positioning_angles} />
 
+          {error && (
+            <Card className="border-red-200">
+              <CardContent className="pt-4">
+                <p className="text-sm text-red-600">{error}</p>
+              </CardContent>
+            </Card>
+          )}
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setStep("info")}>
               Back
@@ -208,10 +294,10 @@ export default function OnboardingPage() {
           })()}
 
           <div className="flex gap-2 justify-center">
-            <Button onClick={() => router.push("/strategy")}>
+            <Button onClick={() => router.push(`/clients/${clientId}/strategy`)}>
               View & Edit Strategy
             </Button>
-            <Button variant="outline" onClick={() => router.push("/")}>
+            <Button variant="outline" onClick={() => router.push(`/clients/${clientId}`)}>
               Go to Dashboard
             </Button>
           </div>

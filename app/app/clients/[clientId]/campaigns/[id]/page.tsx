@@ -37,6 +37,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function CampaignDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const clientId = params.clientId as string;
   const campaignId = params.id as string;
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
@@ -52,9 +53,9 @@ export default function CampaignDetailPage() {
 
   useEffect(() => {
     Promise.all([
-      getCampaign(campaignId),
-      listAssets({ campaign_id: campaignId, limit: 100 }),
-      getStrategy().catch(() => null),
+      getCampaign(clientId, campaignId),
+      listAssets(clientId, { campaign_id: campaignId, limit: 100 }),
+      getStrategy(clientId).catch(() => null),
     ])
       .then(([camp, assets, strategy]) => {
         setCampaign(camp);
@@ -66,7 +67,7 @@ export default function CampaignDetailPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [campaignId]);
+  }, [clientId, campaignId]);
 
   const updateBreakdown = (newBreakdown: Array<Record<string, unknown>>) => {
     if (!campaign) return;
@@ -83,7 +84,7 @@ export default function CampaignDetailPage() {
     if (!campaign) return;
     setPlanSaving(true);
     try {
-      const updated = await updateCampaign(campaignId, { content_plan: campaign.content_plan });
+      const updated = await updateCampaign(clientId, campaignId, { content_plan: campaign.content_plan });
       setCampaign(updated);
       setPlanSaved(true);
     } catch (e) {
@@ -96,7 +97,7 @@ export default function CampaignDetailPage() {
   const handleReview = async () => {
     if (!feedback.trim()) return;
     try {
-      const updated = await reviewCampaign(campaignId, feedback);
+      const updated = await reviewCampaign(clientId, campaignId, feedback);
       setCampaign(updated);
       setFeedback("");
     } catch (e) {
@@ -108,7 +109,7 @@ export default function CampaignDetailPage() {
     if (!feedback.trim()) return;
     setImproving(true);
     try {
-      const updated = await improveCampaign(campaignId, feedback);
+      const updated = await improveCampaign(clientId, campaignId, feedback);
       setCampaign(updated);
       setFeedback("");
     } catch (e) {
@@ -121,7 +122,7 @@ export default function CampaignDetailPage() {
   const handleAccept = async () => {
     setActionLoading(true);
     try {
-      const updated = await acceptCampaign(campaignId);
+      const updated = await acceptCampaign(clientId, campaignId);
       setCampaign(updated);
     } catch (e) {
       console.error("Failed to accept:", e);
@@ -134,7 +135,7 @@ export default function CampaignDetailPage() {
     if (!rejectReason.trim()) return;
     setActionLoading(true);
     try {
-      const updated = await rejectCampaign(campaignId, rejectReason);
+      const updated = await rejectCampaign(clientId, campaignId, rejectReason);
       setCampaign(updated);
     } catch (e) {
       console.error("Failed to reject:", e);
@@ -146,7 +147,7 @@ export default function CampaignDetailPage() {
   const handleComplete = async () => {
     setActionLoading(true);
     try {
-      const updated = await completeCampaign(campaignId);
+      const updated = await completeCampaign(clientId, campaignId);
       setCampaign(updated);
     } catch (e) {
       console.error("Failed to complete:", e);
@@ -157,8 +158,8 @@ export default function CampaignDetailPage() {
 
   const handleDelete = async () => {
     try {
-      await deleteCampaign(campaignId);
-      router.push("/campaigns");
+      await deleteCampaign(clientId, campaignId);
+      router.push(`/clients/${clientId}/campaigns`);
     } catch (e) {
       console.error("Failed to delete:", e);
     }
@@ -173,7 +174,7 @@ export default function CampaignDetailPage() {
 
   return (
     <div className="max-w-4xl">
-      <Link href="/campaigns" className="text-sm text-zinc-500 hover:text-zinc-800 mb-2 inline-block">
+      <Link href={`/clients/${clientId}/campaigns`} className="text-sm text-zinc-500 hover:text-zinc-800 mb-2 inline-block">
         ← Back to Campaigns
       </Link>
 
@@ -202,8 +203,8 @@ export default function CampaignDetailPage() {
                 onClick={async () => {
                   setActionLoading(true);
                   try {
-                    const { run_id } = await triggerRun("daily", campaignId);
-                    router.push(`/runs/${run_id}`);
+                    const { run_id } = await triggerRun(clientId, "daily", campaignId);
+                    router.push(`/clients/${clientId}/runs/${run_id}`);
                   } catch (e) {
                     console.error("Failed to trigger run:", e);
                   } finally {
