@@ -47,7 +47,9 @@ export default function PlanPage() {
   useEffect(() => {
     listPlanRuns(clientId, 1)
       .then((runs) => setRun(runs[0] ?? null))
-      .catch((e) => console.error("Failed to load plan runs:", e))
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : "Failed to load plan runs")
+      )
       .finally(() => setLoading(false));
   }, [clientId]);
 
