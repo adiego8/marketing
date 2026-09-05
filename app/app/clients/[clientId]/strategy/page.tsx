@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EditableList } from "@/components/shared/editable-list";
-import { getStrategy, updateStrategy } from "@/lib/api";
+import { getClient, getStrategy, updateStrategy } from "@/lib/api";
 import type { Strategy } from "@/lib/types";
 import { CONTENT_TYPES } from "@/lib/constants";
 import { CHANNELS } from "@/lib/marketing/posting-windows";
@@ -29,12 +29,54 @@ export default function StrategyPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isNew, setIsNew] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
+    // A client with no strategy yet is the normal starting state, not a
+    // failure: GET answers 404 until the first save. Onboarding used to fill
+    // this in and was never ported, so the editor scaffolds a blank strategy
+    // and PUT (an upsert) creates it on first save. Any other error is real
+    // and gets shown.
     getStrategy(clientId)
-      .then(setStrategy)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .then((s) => {
+        if (!cancelled) setStrategy(s);
+      })
+      .catch(async (e: unknown) => {
+        if (cancelled) return;
+        const message = e instanceof Error ? e.message : String(e);
+        if (!message.includes("404")) {
+          setError(message);
+          return;
+        }
+        // business_name is the one field the API requires to create.
+        const name = await getClient(clientId)
+          .then((c) => c.name)
+          .catch(() => "");
+        if (cancelled) return;
+        setIsNew(true);
+        setStrategy({
+          client_id: clientId,
+          business_name: name,
+          icp: {},
+          voice: {},
+          positioning: {},
+          messaging: {},
+          goals: {},
+          content_strategy: {},
+          content_quota: { weekly: {}, rationale: "" },
+          updated_at: "",
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [clientId]);
 
   const update = (field: string, value: unknown) => {
@@ -53,21 +95,28 @@ export default function StrategyPage() {
   const handleSave = async () => {
     if (!strategy) return;
     setSaving(true);
+    setError(null);
     try {
       const { client_id, updated_at, ...data } = strategy;
       void client_id;
       void updated_at;
-      await updateStrategy(clientId, data);
+      setStrategy(await updateStrategy(clientId, data));
+      setIsNew(false);
       setSaved(true);
     } catch (e) {
-      console.error("Failed to save:", e);
+      setError(e instanceof Error ? e.message : "Failed to save strategy");
     } finally {
       setSaving(false);
     }
   };
 
   if (loading) return <p className="text-zinc-500">Loading...</p>;
-  if (!strategy) return <p className="text-red-500">No strategy found. Run onboarding first.</p>;
+  if (!strategy)
+    return (
+      <p className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {error ?? "Could not load the strategy."}
+      </p>
+    );
 
   const icp = (strategy.icp || {}) as Record<string, unknown>;
   const voice = (strategy.voice || {}) as Record<string, unknown>;
@@ -106,9 +155,29 @@ export default function StrategyPage() {
           <p className="text-zinc-500 text-sm">{strategy.business_name}</p>
         </div>
         <Button onClick={handleSave} disabled={saving || saved}>
-          {saving ? "Saving..." : saved ? "Saved" : "Save Changes"}
+          {saving
+            ? "Saving..."
+            : saved
+              ? "Saved"
+              : isNew
+                ? "Create Strategy"
+                : "Save Changes"}
         </Button>
       </div>
+
+      {isNew && (
+        <p className="mb-6 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          No strategy saved for this client yet. Fill in what you have — the
+          planner only needs a <strong>weekly quota</strong> under Content to
+          produce a schedule — then save to create it.
+        </p>
+      )}
+
+      {error && (
+        <p className="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </p>
+      )}
 
       <Tabs defaultValue="icp">
         <TabsList className="mb-4">
