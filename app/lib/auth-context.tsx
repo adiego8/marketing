@@ -113,10 +113,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.replace("/login");
   };
 
-  // Gate children on the auth check. Rendering them earlier let every page fire
-  // its own API calls in parallel with the check, racing the redirect and
-  // producing spurious 401s on load.
-  if (loading) {
+  // Gate children on BEING SIGNED IN, not merely on the check having finished.
+  //
+  // Gating on `loading` alone still rendered the page for a signed-out user,
+  // because the redirect above runs in an effect: the dashboard mounted, fired
+  // its own fetches, and collected 401s before the navigation landed. /login is
+  // the one route that must render without a user.
+  const authResolved = user !== null || pathname === "/login";
+  if (loading || !authResolved) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p className="text-zinc-500">Loading...</p>

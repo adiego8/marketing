@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { verifyToken, ensureMember } from "@/lib/auth";
+import {
+  verifyToken,
+  ensureMember,
+  isAuthConfigured,
+  AUTH_NOT_CONFIGURED,
+} from "@/lib/auth";
 import { jsonError, serverError } from "@/lib/marketing/route-helpers";
 
 // POST /api/v1/auth/session
@@ -12,6 +17,11 @@ import { jsonError, serverError } from "@/lib/marketing/route-helpers";
 // no membership here.
 export async function POST() {
   try {
+    // This is the route the login screen surfaces errors from, so it is the
+    // one place a missing service account most needs to name itself rather
+    // than read as "your sign-in was rejected".
+    if (!isAuthConfigured()) return jsonError(AUTH_NOT_CONFIGURED, 503);
+
     const headersList = await headers();
     const decoded = await verifyToken(headersList.get("authorization"));
     if (!decoded) return jsonError("Unauthorized", 401);

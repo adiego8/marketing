@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { getSession, getClientForSession, type Session } from "../auth";
+import {
+  getSession,
+  getClientForSession,
+  isAuthConfigured,
+  AUTH_NOT_CONFIGURED,
+  type Session,
+} from "../auth";
 
 // Shared plumbing for the /api/v1 handlers. Response shapes follow the house
 // convention: { resource } for reads, { error } for failures.
@@ -22,6 +28,12 @@ export function serverError(context: string, error: unknown) {
 export async function requireSession(): Promise<
   { session: Session } | { response: NextResponse }
 > {
+  // Answered before the 401 so a server with no credentials reports its own
+  // misconfiguration instead of blaming the caller's token.
+  if (!isAuthConfigured()) {
+    return { response: jsonError(AUTH_NOT_CONFIGURED, 503) };
+  }
+
   const headersList = await headers();
   const session = await getSession(headersList.get("authorization"));
   if (!session) return { response: jsonError("Unauthorized", 401) };

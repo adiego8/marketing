@@ -24,6 +24,22 @@ export interface Session {
   role: string;
 }
 
+/**
+ * Whether the server can verify tokens at all.
+ *
+ * Without this, a missing service account is indistinguishable from a bad
+ * token: verifyToken returns null either way and every route answers 401,
+ * which reads as "you are signed out" when the truth is "this server was never
+ * given credentials". Callers use it to say which.
+ */
+export function isAuthConfigured(): boolean {
+  return Boolean(adminAuth);
+}
+
+export const AUTH_NOT_CONFIGURED =
+  "Firebase Admin credentials are missing. Set FIREBASE_PROJECT_ID, " +
+  "FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in .env.local (see .env.example).";
+
 export async function verifyToken(authHeader: string | null): Promise<DecodedIdToken | null> {
   if (!adminAuth || !authHeader?.startsWith("Bearer ")) return null;
   try {
