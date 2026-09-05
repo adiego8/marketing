@@ -14,8 +14,15 @@ async function main() {
   console.log("adminAuth  :", adminAuth ? "initialised" : "UNDEFINED");
   console.log("adminDb    :", adminDb ? "initialised" : "UNDEFINED");
   console.log("numericoDb :", numericoDb ? "initialised" : "UNDEFINED");
-  console.log("database   :", process.env.FIREBASE_DATABASE_ID || "(default)");
   if (!adminDb || !numericoDb) return;
+
+  // The instance's own databaseId, not the env var it was built from: this is
+  // the only thing that distinguishes "reading the marketing database" from
+  // "silently fell back to (default)".
+  console.log("wanted     :", process.env.FIREBASE_DATABASE_ID || "(default)");
+  console.log("adminDb  ->:", adminDb.databaseId);
+  console.log("numericoDb>:", numericoDb.databaseId);
+  console.log("separated  :", adminDb !== numericoDb ? "yes" : "NO - same instance");
 
   const { COLLECTIONS } = await import("../lib/firestore");
   for (const name of [COLLECTIONS.agencies, COLLECTIONS.members, COLLECTIONS.clients]) {

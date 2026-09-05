@@ -23,7 +23,32 @@ The client and Admin values must name the **same** Firebase project. Without the
 Admin ones every API route answers `503` naming what is missing, rather than a
 misleading `401`.
 
-`FIREBASE_DATABASE_ID` is optional; see `.env.example`.
+## Two databases, one project
+
+Firebase Auth is project-scoped, so this app shares the `numerico-app` project
+with numerico-website — one account per customer, not two. Its **data** is
+separate:
+
+| Handle | Database | Holds |
+|---|---|---|
+| `adminDb` | `marketing` (`FIREBASE_DATABASE_ID`) | everything this app writes |
+| `numericoDb` | `(default)` | `customers` and entitlements, read-only |
+
+Leave `FIREBASE_DATABASE_ID` unset and both collapse onto `(default)`; the
+`marketing_*` collection prefixes keep the two apart either way, so a first run
+is never blocked on the database existing. `npx tsx scripts/probe.ts` prints the
+`databaseId` each handle actually resolved to — the only way to tell a working
+split from a silent fallback.
+
+`firebase.json` deliberately lists **only** the `marketing` database, so a
+deploy from this repo cannot touch the website's `(default)`. The rules there
+deny everything: no browser code reads Firestore (`lib/firebase.ts` initialises
+Auth alone), and the Admin SDK bypasses rules, so the strictest ruleset costs
+nothing.
+
+```bash
+firebase deploy --only firestore:rules
+```
 
 ## Running
 
@@ -56,6 +81,8 @@ volume, worth deploying at a few hundred runs per client:
 ```bash
 firebase deploy --only firestore:indexes
 ```
+
+Both commands target the `marketing` database, per `firebase.json`.
 
 Then move the sort and limit back into the query in
 `lib/marketing/planner/plan-runs.ts`.
