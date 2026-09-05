@@ -1,26 +1,16 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 
-function LoadingScreen() {
-  return (
-    <div className="flex items-center justify-center min-h-screen">
-      <p className="text-zinc-500">Loading...</p>
-    </div>
-  );
-}
-
-// useSearchParams() opts a component into client-side rendering, so it must sit
-// inside a Suspense boundary or the static prerender of /login fails at build.
-function LoginContent() {
-  const { user, loading } = useAuth();
+export default function LoginPage() {
+  const { user, loading, accessError, signIn } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const error = searchParams.get("error");
+  const [signingIn, setSigningIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && user) {
@@ -28,14 +18,20 @@ function LoginContent() {
     }
   }, [user, loading, router]);
 
-  if (loading) {
-    return <LoadingScreen />;
-  }
-
   if (user) return null;
 
-  const handleSignIn = () => {
-    window.location.href = "/api/v1/auth/signin";
+  const handleSignIn = async () => {
+    setSigningIn(true);
+    setError(null);
+    try {
+      await signIn();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Sign-in failed";
+      // A popup the user dismissed is not worth showing as an error.
+      setError(message.includes("popup-closed-by-user") ? null : message);
+    } finally {
+      setSigningIn(false);
+    }
   };
 
   return (
@@ -48,25 +44,19 @@ function LoginContent() {
               Sign in to manage your clients
             </p>
           </div>
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>
+          {(error || accessError) && (
+            <p className="text-sm text-red-600 bg-red-50 p-2 rounded">
+              {error || accessError}
+            </p>
           )}
-          <Button onClick={handleSignIn} className="w-full">
-            Sign in with Google
+          <Button onClick={handleSignIn} className="w-full" disabled={signingIn}>
+            {signingIn ? "Signing in..." : "Sign in with Google"}
           </Button>
           <p className="text-xs text-zinc-400">
-            Calendar permissions will be requested for scheduling
+            Google Calendar can be connected later, from Settings
           </p>
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<LoadingScreen />}>
-      <LoginContent />
-    </Suspense>
   );
 }

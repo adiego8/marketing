@@ -265,8 +265,8 @@ export default function OnboardingPage() {
           {/* Recommended Content Quota */}
           {(() => {
             const quota = profile.content_quota;
-            const weekly = (quota?.weekly || {}) as Record<string, number>;
-            const rationale = quota?.rationale as string;
+            const weekly = quota?.weekly || {};
+            const rationale = quota?.rationale;
             if (Object.keys(weekly).length === 0) return null;
             return (
               <Card>
@@ -275,10 +275,10 @@ export default function OnboardingPage() {
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="flex flex-wrap gap-3">
-                    {Object.entries(weekly).map(([type, count]) => (
+                    {Object.entries(weekly).map(([type, entry]) => (
                       <div key={type} className="bg-zinc-50 px-3 py-2 rounded text-sm">
-                        <span className="font-semibold">{count}</span>{" "}
-                        <span className="text-zinc-600">{type}{count !== 1 ? "s" : ""}/week</span>
+                        <span className="font-semibold">{entry.count}</span>{" "}
+                        <span className="text-zinc-600">{type}{entry.count !== 1 ? "s" : ""}/week</span>
                       </div>
                     ))}
                   </div>

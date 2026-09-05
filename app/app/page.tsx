@@ -33,6 +33,11 @@ export default function ClientListPage() {
   const [newEmail, setNewEmail] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  // Defaults to the browser's zone: whoever creates the client is usually in,
+  // or near, the market it posts to. Every scheduling decision uses this.
+  const [newTimezone, setNewTimezone] = useState(
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+  );
 
   const fetchClients = async () => {
     try {
@@ -67,6 +72,7 @@ export default function ClientListPage() {
         contact_email: newEmail || undefined,
         contact_phone: newPhone || undefined,
         description: newDescription || undefined,
+        timezone: newTimezone || undefined,
       });
       setShowCreate(false);
       setNewName("");
@@ -130,6 +136,17 @@ export default function ClientListPage() {
               <div>
                 <label className="text-xs text-zinc-500">Notes</label>
                 <Input value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="Internal notes..." />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500">Timezone</label>
+                <Input
+                  value={newTimezone}
+                  onChange={(e) => setNewTimezone(e.target.value)}
+                  placeholder="America/New_York"
+                />
+                <p className="text-xs text-zinc-400 mt-1">
+                  IANA zone. Posting times are scheduled in this client&apos;s local time.
+                </p>
               </div>
               <Button onClick={handleCreate} disabled={!newName.trim() || creating} className="w-full">
                 {creating ? "Creating..." : "Create Client"}

@@ -1,17 +1,21 @@
 import { adminAuth } from "./firebase-admin";
-import { db, COLLECTIONS } from "./firestore";
+import { db, COLLECTIONS, FieldValue } from "./firestore";
 import type { DecodedIdToken } from "firebase-admin/auth";
 
 // Two distinct concerns, deliberately kept apart:
 //
 //   1. WHO ARE YOU     -> Firebase Auth ID token, verified here.
 //   2. MAY I USE YOUR  -> a separate Google OAuth grant with the calendar
-//      GOOGLE CALENDAR     scope, stored encrypted in google_credentials/{uid}.
+//      GOOGLE CALENDAR     scope, stored encrypted (Phase 4).
 //
 // The Python prototype fused them into one "Sign in with Google" and then
 // trusted a hardcoded DEFAULT_AGENCY_ID on every route (auth.py:28), which is
 // why its API had no request authentication at all. Splitting them means API
 // routes can be authenticated even when Calendar is not connected.
+//
+// Authorisation is marketing-specific. The Firebase project is shared with
+// numerico-website, so a valid ID token only proves the caller is a numerico
+// user; membership in marketing_members is what grants access here.
 
 export interface Session {
   uid: string;
@@ -29,14 +33,14 @@ export async function verifyToken(authHeader: string | null): Promise<DecodedIdT
   }
 }
 
-// Verify the caller and load their users/{uid} document, which carries the
-// agency binding. Returns null for an unknown or unprovisioned user rather
-// than throwing, so routes can answer 401 uniformly.
+// Verify the caller and load their marketing membership. Returns null for a
+// valid Firebase user who is not a marketing member, so routes answer 401
+// uniformly whether the token is bad or the person simply has no access here.
 export async function getSession(authHeader: string | null): Promise<Session | null> {
   const decoded = await verifyToken(authHeader);
   if (!decoded) return null;
   try {
-    const snap = await db().collection(COLLECTIONS.users).doc(decoded.uid).get();
+    const snap = await db().collection(COLLECTIONS.members).doc(decoded.uid).get();
     if (!snap.exists) return null;
     const data = snap.data() ?? {};
     if (!data.agencyId) return null;
@@ -58,7 +62,8 @@ export async function requireAdmin(authHeader: string | null): Promise<Session |
 
 // Load a client and confirm it belongs to the caller's agency. Returns null for
 // both "missing" and "not yours" so a caller cannot probe for the existence of
-// another agency's clients.
+// another agency's clients. Archived clients are excluded — matching the
+// soft-delete used by DELETE /clients/{id}.
 export async function getClientForSession(
   session: Session,
   clientId: string
@@ -73,4 +78,51 @@ export async function getClientForSession(
   } catch {
     return null;
   }
+}
+
+// Called on every token change from the browser. Creates the membership record
+// on first sign-in: the very first user to arrive bootstraps an agency and
+// becomes its admin; anyone after that is refused until an admin invites them,
+// so a numerico-website user cannot self-serve into this app.
+export async function ensureMember(decoded: DecodedIdToken): Promise<Session | null> {
+  const memberRef = db().collection(COLLECTIONS.members).doc(decoded.uid);
+  const existing = await memberRef.get();
+
+  if (existing.exists) {
+    const data = existing.data() ?? {};
+    if (!data.agencyId) return null;
+    // Keep the denormalised email fresh; it is what the members list displays.
+    if (decoded.email && data.email !== decoded.email) {
+      await memberRef.update({ email: decoded.email });
+    }
+    return {
+      uid: decoded.uid,
+      email: decoded.email ?? null,
+      agencyId: String(data.agencyId),
+      role: String(data.role ?? "member"),
+    };
+  }
+
+  const agencies = await db().collection(COLLECTIONS.agencies).limit(1).get();
+  if (!agencies.empty) return null; // an agency exists: membership is by invitation
+
+  const agencyRef = db().collection(COLLECTIONS.agencies).doc();
+  await agencyRef.set({
+    name: decoded.email ? `${decoded.email.split("@")[0]}'s agency` : "My agency",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  await memberRef.set({
+    agencyId: agencyRef.id,
+    email: decoded.email ?? null,
+    name: decoded.name ?? null,
+    role: "admin",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    uid: decoded.uid,
+    email: decoded.email ?? null,
+    agencyId: agencyRef.id,
+    role: "admin",
+  };
 }

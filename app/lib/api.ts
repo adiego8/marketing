@@ -16,12 +16,33 @@ import type {
   Agency,
 } from "./types";
 
+import { auth } from "./firebase";
+
 const API = "/api/v1";
+
+// API routes authenticate with a Firebase ID token. getIdToken() returns the
+// cached token and refreshes it only when close to expiry, so calling it per
+// request is cheap.
+async function authHeader(): Promise<Record<string, string>> {
+  const user = auth?.currentUser;
+  if (!user) return {};
+  try {
+    return { Authorization: `Bearer ${await user.getIdToken()}` };
+  } catch {
+    return {};
+  }
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...options,
+    // Merged after the spread: spreading options last would drop Content-Type
+    // whenever a caller passed headers of its own.
+    headers: {
+      "Content-Type": "application/json",
+      ...(await authHeader()),
+      ...(options?.headers as Record<string, string> | undefined),
+    },
   });
   if (!res.ok) {
     const error = await res.text();
@@ -44,7 +65,7 @@ export const listClients = (params?: { status?: string; search?: string }) => {
 
 export const getClient = (id: string) => request<Client>(`/clients/${id}`);
 
-export const createClient = (data: { name: string; website_url?: string; logo_url?: string; description?: string; contact_email?: string; contact_phone?: string }) =>
+export const createClient = (data: { name: string; website_url?: string; logo_url?: string; description?: string; contact_email?: string; contact_phone?: string; timezone?: string }) =>
   request<Client>("/clients", { method: "POST", body: JSON.stringify(data) });
 
 export const updateClient = (id: string, data: Record<string, unknown>) =>

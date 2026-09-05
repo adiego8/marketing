@@ -112,16 +112,29 @@ export interface Debrief {
   what_id_do_differently: string;
 }
 
+/** One entry in content_quota.weekly: how many per week, and on which channels. */
+export interface QuotaEntry {
+  count: number;
+  channels: string[];
+}
+
+export interface ContentQuota {
+  weekly: Record<string, QuotaEntry>;
+  rationale?: string;
+}
+
 export interface Strategy {
-  id: string;
+  // No `id`: the strategy document is keyed by client_id, one per client.
+  client_id: string;
   business_name: string;
   icp: Record<string, unknown>;
   voice: Record<string, unknown>;
   positioning: Record<string, unknown>;
   messaging: Record<string, unknown>;
   goals: Record<string, unknown>;
-  content_quota: Record<string, unknown>;
-  created_at: string;
+  // Top-level, not nested under goals as the Python onboarding flow stored it.
+  content_strategy: Record<string, unknown>;
+  content_quota: ContentQuota;
   updated_at: string;
 }
 
@@ -157,10 +170,13 @@ export interface Campaign {
   status: "idea" | "proposal" | "in_review" | "active" | "completed" | "rejected";
   strategy: Record<string, unknown>;
   content_plan: Record<string, unknown>;
+  /** Heterogeneous: review writes submitted_at, improve writes improved_at + changes. */
   feedback_history: Array<{ feedback: string; improved_at?: string; submitted_at?: string; changes?: string }>;
   rejection_reason?: string;
   start_date?: string;
   end_date?: string;
+  /** How the planner distributes this campaign's content across its window. */
+  pacing?: "even" | "front_loaded" | "back_loaded";
   created_at: string;
   updated_at: string;
 }
@@ -227,9 +243,12 @@ export interface Client {
   contact_email?: string;
   contact_phone?: string;
   status: "active" | "paused" | "archived";
+  /** IANA zone. Every scheduling decision is made in the client's local time. */
+  timezone: string;
   research?: Record<string, unknown>;
   research_status?: "researching" | "completed" | "failed";
   branding?: Branding;
+  google_calendar_id?: string;
   created_at: string;
   updated_at: string;
 }

@@ -11,6 +11,7 @@ import { EditableList } from "@/components/shared/editable-list";
 import { getStrategy, updateStrategy } from "@/lib/api";
 import type { Strategy } from "@/lib/types";
 import { CONTENT_TYPES } from "@/lib/constants";
+import { CHANNELS } from "@/lib/marketing/posting-windows";
 
 // The Strategy fields that hold a nested object. Naming them lets updateNested
 // index Strategy directly instead of casting it to a record it isn't.
@@ -53,7 +54,9 @@ export default function StrategyPage() {
     if (!strategy) return;
     setSaving(true);
     try {
-      const { id, created_at, updated_at, ...data } = strategy;
+      const { client_id, updated_at, ...data } = strategy;
+      void client_id;
+      void updated_at;
       await updateStrategy(clientId, data);
       setSaved(true);
     } catch (e) {
@@ -71,14 +74,29 @@ export default function StrategyPage() {
   const positioning = (strategy.positioning || {}) as Record<string, unknown>;
   const messaging = (strategy.messaging || {}) as Record<string, unknown>;
   const goals = (strategy.goals || {}) as Record<string, unknown>;
-  const contentQuota = (strategy.content_quota || {}) as Record<string, unknown>;
-  const quotaRationale = (contentQuota.rationale as string) || "";
-  const weeklyObj = (contentQuota.weekly || {}) as Record<string, number>;
-  const quotaRows = Object.entries(weeklyObj).map(([type, count]) => ({ type, count }));
+  const contentQuota = strategy.content_quota || { weekly: {} };
+  const quotaRationale = contentQuota.rationale || "";
+  const weeklyObj = contentQuota.weekly || {};
+  const quotaRows = Object.entries(weeklyObj).map(([type, entry]) => ({
+    type,
+    count: entry.count,
+    channels: entry.channels ?? [],
+  }));
   const demographics = (icp.demographics || {}) as Record<string, string>;
   const primaryAngle = (positioning.primary_angle || {}) as Record<string, string>;
   const secondaryAngles = (positioning.secondary_angles || []) as Record<string, string>[];
-  const contentStrategy = (goals.content_strategy || {}) as Record<string, unknown>;
+  const contentStrategy = (strategy.content_strategy || {}) as Record<string, unknown>;
+
+  // Rebuild the whole weekly map from the edited rows. Spreading contentQuota
+  // preserves `rationale`.
+  const saveQuotaRows = (rows: typeof quotaRows) => {
+    update("content_quota", {
+      ...contentQuota,
+      weekly: Object.fromEntries(
+        rows.map((r) => [r.type, { count: r.count, channels: r.channels }])
+      ),
+    });
+  };
 
   return (
     <div>
@@ -486,34 +504,65 @@ export default function StrategyPage() {
               <CardHeader>
                 <CardTitle className="text-sm">Weekly Content Budget</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
+                <p className="text-xs text-zinc-500">
+                  How much of each content type to publish per week, and which
+                  channels it may go out on. The planner uses this to find gaps
+                  in the calendar and decide where each piece belongs.
+                </p>
                 {quotaRows.map((row, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <span className="text-sm font-medium w-24 capitalize">{row.type.replace(/_/g, " ")}</span>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={row.count}
-                      onChange={(e) => {
-                        const updated = [...quotaRows];
-                        updated[i] = { ...updated[i], count: parseInt(e.target.value) || 0 };
-                        const weekly = Object.fromEntries(updated.map((r) => [r.type, r.count]));
-                        update("content_quota", { ...contentQuota, weekly });
-                      }}
-                      className="w-20"
-                    />
-                    <span className="text-sm text-zinc-500">/ week</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        const updated = quotaRows.filter((_, j) => j !== i);
-                        const weekly = Object.fromEntries(updated.map((r) => [r.type, r.count]));
-                        update("content_quota", { ...contentQuota, weekly });
-                      }}
-                    >
-                      Remove
-                    </Button>
+                  <div key={row.type} className="border rounded-md p-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium w-24 capitalize">{row.type.replace(/_/g, " ")}</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={row.count}
+                        onChange={(e) => {
+                          const updated = [...quotaRows];
+                          updated[i] = { ...updated[i], count: parseInt(e.target.value) || 0 };
+                          saveQuotaRows(updated);
+                        }}
+                        className="w-20"
+                      />
+                      <span className="text-sm text-zinc-500">/ week</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="ml-auto"
+                        onClick={() => saveQuotaRows(quotaRows.filter((_, j) => j !== i))}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-zinc-500">Channels:</span>
+                      {CHANNELS.map((channel) => {
+                        const selected = row.channels.includes(channel);
+                        return (
+                          <Button
+                            key={channel}
+                            variant={selected ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => {
+                              const channels = selected
+                                ? row.channels.filter((ch) => ch !== channel)
+                                : [...row.channels, channel];
+                              const updated = [...quotaRows];
+                              updated[i] = { ...updated[i], channels };
+                              saveQuotaRows(updated);
+                            }}
+                          >
+                            {channel}
+                          </Button>
+                        );
+                      })}
+                      {row.channels.length === 0 && (
+                        <span className="text-xs text-amber-600">
+                          Pick at least one, or the planner cannot place these.
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
                 {(() => {
@@ -528,11 +577,9 @@ export default function StrategyPage() {
                           key={type}
                           variant="outline"
                           size="sm"
-                          onClick={() => {
-                            const updated = [...quotaRows, { type, count: 1 }];
-                            const weekly = Object.fromEntries(updated.map((r) => [r.type, r.count]));
-                            update("content_quota", { ...contentQuota, weekly });
-                          }}
+                          onClick={() =>
+                            saveQuotaRows([...quotaRows, { type, count: 1, channels: [] }])
+                          }
                         >
                           + {type.replace(/_/g, " ")}
                         </Button>

@@ -22,7 +22,7 @@ import {
   listAssets,
   getStrategy,
 } from "@/lib/api";
-import type { Campaign, SavedAsset } from "@/lib/types";
+import type { Campaign, SavedAsset, QuotaEntry } from "@/lib/types";
 import { CONTENT_TYPES } from "@/lib/constants";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -42,7 +42,7 @@ export default function CampaignDetailPage() {
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [campaignAssets, setCampaignAssets] = useState<SavedAsset[]>([]);
-  const [accountQuota, setAccountQuota] = useState<Record<string, number>>({});
+  const [accountQuota, setAccountQuota] = useState<Record<string, QuotaEntry>>({});
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState("");
   const [rejectReason, setRejectReason] = useState("");
@@ -60,9 +60,8 @@ export default function CampaignDetailPage() {
       .then(([camp, assets, strategy]) => {
         setCampaign(camp);
         setCampaignAssets(assets);
-        if (strategy?.content_quota) {
-          const weekly = (strategy.content_quota as Record<string, Record<string, number>>).weekly || {};
-          setAccountQuota(weekly);
+        if (strategy?.content_quota?.weekly) {
+          setAccountQuota(strategy.content_quota.weekly);
         }
       })
       .catch(console.error)
@@ -384,10 +383,17 @@ export default function CampaignDetailPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-3">
-                    {Object.entries(accountQuota).map(([type, count]) => (
+                    {Object.entries(accountQuota).map(([type, entry]) => (
                       <div key={type} className="bg-zinc-50 px-3 py-1 rounded text-sm">
-                        <span className="font-semibold">{count}</span>{" "}
-                        <span className="text-zinc-500">{type}{count !== 1 ? "s" : ""}/week</span>
+                        <span className="font-semibold">{entry.count}</span>{" "}
+                        <span className="text-zinc-500">
+                          {type}{entry.count !== 1 ? "s" : ""}/week
+                        </span>
+                        {entry.channels.length > 0 && (
+                          <span className="text-zinc-400 text-xs">
+                            {" "}· {entry.channels.join(", ")}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>

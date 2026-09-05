@@ -12,17 +12,23 @@ export function db() {
 
 export { FieldValue, Timestamp };
 
-// Collection names (single source of truth). The marketing_* prefix keeps this
-// app's data distinct even if it ever shares a project with another service.
+// Collection names (single source of truth).
+//
+// Everything is marketing_* prefixed, including members and credentials. This
+// app shares the `numerico-app` Firebase project with numerico-website and
+// reminders-app, so reusing the bare `users` collection would mean any website
+// admin is implicitly a marketing admin, and reusing `google_credentials` would
+// collide with the website's own Gmail/Calendar grants. Sign-in is shared;
+// authorisation is not.
 export const COLLECTIONS = {
   agencies: "marketing_agencies",
+  members: "marketing_members",
   clients: "marketing_clients",
   strategies: "marketing_strategies",
   campaigns: "marketing_campaigns",
   slots: "marketing_slots",
   planRuns: "marketing_plan_runs",
-  users: "users",
-  googleCredentials: "google_credentials",
+  googleCredentials: "marketing_google_credentials",
 } as const;
 
 // Convert Firestore Timestamps to ISO strings for JSON responses.
@@ -56,6 +62,11 @@ export function serializeClient(id: string, d: FirebaseFirestore.DocumentData) {
     status: str(d.status, "active"),
     // IANA zone. Every week boundary and local->UTC conversion depends on it.
     timezone: str(d.timezone, "UTC"),
+    // Written by the onboarding/research flow, which is not ported yet. Kept in
+    // the contract because the branding page reads them.
+    research: d.research ?? null,
+    research_status: d.researchStatus ?? null,
+    branding: d.branding ?? null,
     google_calendar_id: d.googleCalendarId ?? null,
     google_synced_at: toISO(d.googleSyncedAt),
     created_at: toISO(d.createdAt),
