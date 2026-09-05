@@ -47,6 +47,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     { href: `${prefix}/strategy`, label: "Strategy", icon: "◎" },
     { href: `${prefix}/branding`, label: "Branding", icon: "◐" },
     { href: `${prefix}/campaigns`, label: "Campaigns", icon: "◈" },
+    { href: `${prefix}/plan`, label: "Plan", icon: "▥" },
     { href: `${prefix}/calendar`, label: "Calendar", icon: "▦" },
     { href: `${prefix}/runs`, label: "Runs", icon: "▶" },
     { href: `${prefix}/assets`, label: "Assets", icon: "▤" },

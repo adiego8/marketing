@@ -262,3 +262,85 @@ export interface ClientListItem {
   contact_email?: string;
   created_at: string;
 }
+
+// --- Planner (Phase 2) ---
+
+export interface ProposedSlot {
+  slotId: string;
+  gapId: string;
+  weekKey: string;
+  date: string;
+  timeLocal: string;
+  timezone: string;
+  scheduledAt: string;
+  type: string;
+  channel: string;
+  campaignId: string | null;
+  campaignTitle: string | null;
+  theme: string;
+  brief: string;
+  rationale: string;
+  /** The model gave no theme; the date and channel are still correct. */
+  needsTheme: boolean;
+}
+
+export interface DeferredGap {
+  gapId: string;
+  weekKey: string;
+  type: string;
+  channel: string | null;
+  reason: string;
+}
+
+export interface PlanGap {
+  weekKey: string;
+  type: string;
+  quotaCount: number;
+  wanted: number;
+  existing: number;
+  deficit: number;
+  surplus: number;
+  allowedChannels: string[];
+  partialWeek: boolean;
+  notes: string[];
+}
+
+export interface PlanObservation {
+  timezone: string;
+  today: string;
+  weeks: string[];
+  startDate: string;
+  endDate: string;
+  gaps: PlanGap[];
+  campaigns: {
+    campaignId: string;
+    title: string;
+    deficit: number;
+    urgency: number;
+  }[];
+  totalDeficit: number;
+  warnings: string[];
+}
+
+export interface PlanRun {
+  id: string;
+  client_id: string;
+  /** proposed = ready to commit · noop = quota already met · degraded = themes missing */
+  status: "proposed" | "noop" | "degraded" | "committed";
+  horizon: {
+    weeks: string[];
+    startDate: string;
+    endDate: string;
+    timezone: string;
+    horizonWeeks: number;
+  };
+  observation: PlanObservation;
+  proposed_slots: ProposedSlot[];
+  deferred: DeferredGap[];
+  warnings: string[];
+  created_slot_ids: string[];
+  inputs_fingerprint: string | null;
+  llm: { called: boolean; degraded: boolean; durationMs: number } | null;
+  committed_at: string | null;
+  created_at: string;
+}

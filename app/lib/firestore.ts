@@ -156,6 +156,11 @@ export function serializePlanRun(id: string, d: FirebaseFirestore.DocumentData) 
     deferred: Array.isArray(d.deferred) ? d.deferred : [],
     warnings: Array.isArray(d.warnings) ? d.warnings : [],
     created_slot_ids: Array.isArray(d.createdSlotIds) ? d.createdSlotIds : [],
+    // Hash of everything the plan was computed from. The commit step compares
+    // it against a freshly computed one and refuses a preview whose inputs have
+    // moved on, so a stale plan cannot overwrite a calendar that changed.
+    inputs_fingerprint: d.inputsFingerprint ?? null,
+    llm: d.llm ?? null,
     committed_at: toISO(d.committedAt),
     created_at: toISO(d.createdAt),
   };

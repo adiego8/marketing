@@ -14,6 +14,7 @@ import type {
   ScheduledAsset,
   CalendarItem,
   Agency,
+  PlanRun,
 } from "./types";
 
 import { auth } from "./firebase";
@@ -259,3 +260,16 @@ export const getCalendarUrls = (clientId: string) =>
   request<{ calendar_id: string | null; embed_url: string | null; open_url: string | null }>(
     `${c(clientId)}/calendar/urls`,
   );
+
+// Planner
+export const previewPlan = (clientId: string, weeks = 2) =>
+  request<PlanRun>(`${c(clientId)}/plan/preview`, {
+    method: "POST",
+    body: JSON.stringify({ weeks }),
+  });
+
+export const listPlanRuns = (clientId: string, limit = 20) =>
+  request<PlanRun[]>(`${c(clientId)}/plan/runs?limit=${limit}`);
+
+export const getPlanRun = (clientId: string, runId: string) =>
+  request<PlanRun>(`${c(clientId)}/plan/runs/${runId}`);
