@@ -37,22 +37,28 @@ seed **after** that, so it attaches to the agency your sign-in created.
 
 ## Firestore indexes
 
-Two composite indexes are required, declared in `firestore.indexes.json`:
+**None are required.** Both planner queries filter on `clientId` alone and
+apply their date range or ordering in memory, so the app runs against a fresh
+project with no Firestore setup.
 
-| Collection | Fields | Serves |
+`firestore.indexes.json` declares two composites as a later optimisation:
+
+| Collection | Fields | Would serve |
 |---|---|---|
-| `marketing_slots` | `clientId`, `date` | loading the slots in a planning horizon |
-| `marketing_plan_runs` | `clientId`, `createdAt desc` | listing past plan runs |
+| `marketing_slots` | `clientId`, `date` | the horizon range as a query |
+| `marketing_plan_runs` | `clientId`, `createdAt desc` | ordering and limiting in the query |
 
-Deploy them with:
+The slots one barely matters — a client's slots are bounded. The plan-runs one
+does eventually: runs accumulate without bound and each carries a full
+observation blob, so `listPlanRuns` currently pulls them all back. Fine at MVP
+volume, worth deploying at a few hundred runs per client:
 
 ```bash
 firebase deploy --only firestore:indexes
 ```
 
-If you skip this, the first query that needs one fails with an error containing
-a one-click console URL to create it. That is fine for local work; deploy the
-file for anything shared.
+Then move the sort and limit back into the query in
+`lib/marketing/planner/plan-runs.ts`.
 
 ## Checks
 

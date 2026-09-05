@@ -12,15 +12,23 @@ export async function loadPlannerSlots(
   start: IsoDate,
   end: IsoDate
 ): Promise<ExistingSlot[]> {
-  // Uses the (clientId, date) composite index declared in firestore.indexes.json.
+  // Filtered on clientId only, with the date range applied in memory. Adding
+  // the range to the query needs a (clientId, date) composite index, and a
+  // client's slots are bounded — a few hundred a year at any realistic quota —
+  // so this keeps the app working with zero Firestore setup. The index is still
+  // declared in firestore.indexes.json; deploy it and this can become a range
+  // query again if slot volume ever justifies it.
   const snap = await db()
     .collection(COLLECTIONS.slots)
     .where("clientId", "==", clientId)
-    .where("date", ">=", start)
-    .where("date", "<=", end)
     .get();
 
-  return snap.docs.map((doc) => {
+  return snap.docs
+    .filter((doc) => {
+      const date = String(doc.data().date ?? "");
+      return date >= start && date <= end;
+    })
+    .map((doc) => {
     const d = doc.data();
     return {
       id: doc.id,
@@ -156,20 +164,24 @@ export async function createPlanRun(clientId: string, doc: Record<string, unknow
 }
 
 /**
- * Plan runs are ordered in the query rather than in memory, unlike campaigns.
- * They accumulate without bound and each carries a full observation blob, so
- * pulling every one back to sort locally is the one place the house's
- * in-memory-sort habit actively hurts. Needs the (clientId, createdAt desc)
- * composite index.
+ * Sorted in memory so no composite index is needed to run the app.
+ *
+ * This is the one query where that habit has a real cost: plan runs accumulate
+ * without bound and each carries a full observation blob, so every call pulls
+ * them all back. Fine at MVP volume, wrong at a few hundred runs per client.
+ * The (clientId, createdAt desc) index is declared in firestore.indexes.json —
+ * once it is deployed, move the sort and limit back into the query.
  */
 export async function listPlanRuns(clientId: string, limit = 20) {
   const snap = await db()
     .collection(COLLECTIONS.planRuns)
     .where("clientId", "==", clientId)
-    .orderBy("createdAt", "desc")
-    .limit(limit)
     .get();
-  return snap.docs.map((doc) => serializePlanRun(doc.id, doc.data()));
+
+  return snap.docs
+    .map((doc) => serializePlanRun(doc.id, doc.data()))
+    .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
+    .slice(0, limit);
 }
 
 export async function getPlanRun(clientId: string, runId: string) {
