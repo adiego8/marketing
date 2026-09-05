@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+.venv/
+venv/
+*.db
+
+# Local secrets — Google OAuth client JSON, service account keys.
+# Values live in .env (GOOGLE_OAUTH_CLIENT_ID / _SECRET); these files are the
+# raw downloads from Google Cloud Console and must never be committed.
+config/secrets/*
+!config/secrets/.gitkeep
+client_secret_*.json
+*service-account*.json
+*.pem
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# The frontend is currently its own git repo with its own history.
+# It gets absorbed into this repo during the Next.js backend migration.
+frontend/
