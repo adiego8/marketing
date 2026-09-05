@@ -6,7 +6,23 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+// Base UI's Root emits `string | null` on clear, so passing a `useState<string>`
+// setter straight to `onValueChange` doesn't typecheck. Every select in this app
+// is a single select over strings, so pin the generic and normalise null to ""
+// here rather than wrapping the handler at each call site.
+function Select({
+  onValueChange,
+  ...props
+}: Omit<SelectPrimitive.Root.Props<string>, "onValueChange"> & {
+  onValueChange?: (value: string) => void
+}) {
+  return (
+    <SelectPrimitive.Root
+      {...props}
+      onValueChange={(value) => onValueChange?.(value ?? "")}
+    />
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (

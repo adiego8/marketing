@@ -12,6 +12,16 @@ import { getStrategy, updateStrategy } from "@/lib/api";
 import type { Strategy } from "@/lib/types";
 import { CONTENT_TYPES } from "@/lib/constants";
 
+// The Strategy fields that hold a nested object. Naming them lets updateNested
+// index Strategy directly instead of casting it to a record it isn't.
+type NestedField =
+  | "icp"
+  | "voice"
+  | "positioning"
+  | "messaging"
+  | "goals"
+  | "content_quota";
+
 export default function StrategyPage() {
   const { clientId } = useParams() as { clientId: string };
   const [strategy, setStrategy] = useState<Strategy | null>(null);
@@ -32,9 +42,9 @@ export default function StrategyPage() {
     setSaved(false);
   };
 
-  const updateNested = (field: string, key: string, value: unknown) => {
+  const updateNested = (field: NestedField, key: string, value: unknown) => {
     if (!strategy) return;
-    const current = (strategy as Record<string, Record<string, unknown>>)[field] || {};
+    const current = strategy[field] ?? {};
     setStrategy({ ...strategy, [field]: { ...current, [key]: value } });
     setSaved(false);
   };

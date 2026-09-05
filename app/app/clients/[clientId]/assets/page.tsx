@@ -375,7 +375,7 @@ export default function AssetsPage() {
                   </div>
                 )}
 
-                {!editing && selected.content?.rationale && (
+                {!editing && Boolean(selected.content?.rationale) && (
                   <div className="bg-zinc-50 p-3 rounded text-xs space-y-1">
                     {(selected.content.rationale as Record<string, string>)?.why_this_post && (
                       <p>

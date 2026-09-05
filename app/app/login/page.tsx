@@ -1,12 +1,22 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 
-export default function LoginPage() {
+function LoadingScreen() {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <p className="text-zinc-500">Loading...</p>
+    </div>
+  );
+}
+
+// useSearchParams() opts a component into client-side rendering, so it must sit
+// inside a Suspense boundary or the static prerender of /login fails at build.
+function LoginContent() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -19,11 +29,7 @@ export default function LoginPage() {
   }, [user, loading, router]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-zinc-500">Loading...</p>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (user) return null;
@@ -54,5 +60,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <LoginContent />
+    </Suspense>
   );
 }

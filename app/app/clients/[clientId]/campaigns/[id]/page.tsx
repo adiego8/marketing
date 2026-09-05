@@ -395,7 +395,7 @@ export default function CampaignDetailPage() {
               </Card>
             )}
 
-            {contentPlan.timeline && Array.isArray(contentPlan.timeline) && (
+            {Array.isArray(contentPlan.timeline) && contentPlan.timeline.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm">Timeline</CardTitle>

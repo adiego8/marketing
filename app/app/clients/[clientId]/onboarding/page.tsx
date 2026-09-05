@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { EditableList } from "@/components/shared/editable-list";
 import { runResearch, createProfile, getClient } from "@/lib/api";
-import type { Client } from "@/lib/types";
+import type { Client, Strategy } from "@/lib/types";
 
 type Step = "info" | "researching" | "review" | "generating" | "done";
 
@@ -29,7 +29,7 @@ export default function OnboardingPage() {
   const [research, setResearch] = useState<Record<string, unknown> | null>(null);
 
   // Step 3: Profile
-  const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
+  const [profile, setProfile] = useState<Strategy | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -253,7 +253,7 @@ export default function OnboardingPage() {
           <Card className="border-green-200">
             <CardContent className="pt-6 text-center space-y-3">
               <p className="text-lg font-semibold text-green-700">
-                Strategy saved for {(profile as Record<string, string>).business_name}
+                Strategy saved for {profile.business_name}
               </p>
               <p className="text-sm text-zinc-500">
                 The marketing profile has been generated and saved as the active strategy.
@@ -264,7 +264,7 @@ export default function OnboardingPage() {
 
           {/* Recommended Content Quota */}
           {(() => {
-            const quota = (profile as Record<string, Record<string, unknown>>).content_quota;
+            const quota = profile.content_quota;
             const weekly = (quota?.weekly || {}) as Record<string, number>;
             const rationale = quota?.rationale as string;
             if (Object.keys(weekly).length === 0) return null;
