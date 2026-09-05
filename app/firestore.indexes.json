@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "marketing_slots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clientId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
