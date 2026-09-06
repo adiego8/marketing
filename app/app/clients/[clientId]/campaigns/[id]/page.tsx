@@ -15,10 +15,9 @@ import {
   completeCampaign,
   deleteCampaign,
   updateCampaign,
-  listAssets,
   getStrategy,
 } from "@/lib/api";
-import type { Campaign, SavedAsset, QuotaEntry } from "@/lib/types";
+import type { Campaign, QuotaEntry } from "@/lib/types";
 import { CONTENT_TYPES, contentTypeLabel } from "@/lib/marketing/content-types";
 
 const CAMPAIGN_TABS = [
@@ -34,7 +33,6 @@ export default function CampaignDetailPage() {
   const campaignId = params.id as string;
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
-  const [campaignAssets, setCampaignAssets] = useState<SavedAsset[]>([]);
   const [accountQuota, setAccountQuota] = useState<Record<string, QuotaEntry>>({});
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState("");
@@ -48,15 +46,10 @@ export default function CampaignDetailPage() {
   useEffect(() => {
     Promise.all([
       getCampaign(clientId, campaignId),
-      // Assets are not ported yet, so this endpoint still proxies to the old
-      // backend. Its own catch keeps one dead call from failing the whole
-      // Promise.all and blanking a campaign that loaded fine.
-      listAssets(clientId, { campaign_id: campaignId, limit: 100 }).catch(() => []),
       getStrategy(clientId).catch(() => null),
     ])
-      .then(([camp, assets, strategy]) => {
+      .then(([camp, strategy]) => {
         setCampaign(camp);
-        setCampaignAssets(assets);
         if (strategy?.content_quota?.weekly) {
           setAccountQuota(strategy.content_quota.weekly);
         }
@@ -278,10 +271,6 @@ export default function CampaignDetailPage() {
               const breakdown = (contentPlan.breakdown || []) as Array<
                 Record<string, unknown>
               >;
-              const assetsByType: Record<string, number> = {};
-              campaignAssets.forEach((a) => {
-                assetsByType[a.type] = (assetsByType[a.type] || 0) + 1;
-              });
               const usedTypes = breakdown.map((item) => String(item.type));
               const availableTypes = CONTENT_TYPES.filter(
                 (t) => !usedTypes.includes(t.key)
@@ -295,17 +284,13 @@ export default function CampaignDetailPage() {
                         <thead>
                           <tr className="bg-stone-50">
                             <th className={table.head}>Type</th>
-                            <th className={table.head}>Planned</th>
-                            <th className={table.head}>Produced</th>
-                            <th className={table.head}>Remaining</th>
+                            <th className={table.head}>Planned per week</th>
                             <th className={table.head}></th>
                           </tr>
                         </thead>
                         <tbody>
                           {breakdown.map((item, i) => {
                             const planned = Number(item.count) || 0;
-                            const produced = assetsByType[String(item.type)] || 0;
-                            const remaining = Math.max(0, planned - produced);
                             return (
                               <tr key={i} className={table.row}>
                                 <td className={`${table.cell} font-medium`}>
@@ -326,16 +311,6 @@ export default function CampaignDetailPage() {
                                     }}
                                     className={`${field.inputSm} w-20`}
                                   />
-                                </td>
-                                <td className={table.cell}>{produced}</td>
-                                <td className={table.cell}>
-                                  {remaining === 0 ? (
-                                    <span className="text-green-700 font-medium">
-                                      0 ✓
-                                    </span>
-                                  ) : (
-                                    <span className="text-amber-700">{remaining}</span>
-                                  )}
                                 </td>
                                 <td className={`${table.cell} text-right`}>
                                   <button

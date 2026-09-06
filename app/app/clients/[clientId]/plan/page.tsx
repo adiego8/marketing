@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { previewPlan, listPlanRuns, commitPlan } from "@/lib/api";
+import { previewPlan, listPlanRuns, commitPlan, listCampaigns } from "@/lib/api";
+import type { CampaignListItem } from "@/lib/types";
 import { banner, btn, surface, table, toggle, text } from "@/lib/ui";
 import { channelPill, PILL } from "@/lib/ui-status";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
@@ -30,6 +31,7 @@ export default function PlanPage() {
   const [weeks, setWeeks] = useState(2);
   const [error, setError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
+  const [campaigns, setCampaigns] = useState<CampaignListItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +66,10 @@ export default function PlanPage() {
     }
   };
 
+  useEffect(() => {
+    listCampaigns(clientId).then(setCampaigns).catch(() => {});
+  }, [clientId]);
+
   const handleCommit = async () => {
     if (!run) return;
     setCommitting(true);
@@ -76,6 +82,11 @@ export default function PlanPage() {
       setCommitting(false);
     }
   };
+
+  const activeCampaigns = campaigns.filter((c) => c.status === "active");
+  const waiting = campaigns.filter((c) =>
+    ["proposal", "in_review"].includes(c.status)
+  );
 
   const byWeek = (run?.proposed_slots ?? []).reduce<Record<string, ProposedSlot[]>>(
     (acc, slot) => {
@@ -161,6 +172,33 @@ export default function PlanPage() {
           <p className={`${banner.error} mb-4`}>{error}</p>
         ))}
 
+      {/* Only active campaigns can supply a theme. A campaign sitting in
+          proposal or review is invisible to the planner, which is the single
+          most confusing thing about this screen. */}
+      {campaigns.length > 0 && activeCampaigns.length === 0 && (
+        <div className={`${banner.warn} mb-4 flex flex-wrap items-center justify-between gap-3`}>
+          <span>
+            {campaigns.length} campaign{campaigns.length === 1 ? "" : "s"}, but
+            none are active — the planner can only draw themes from an accepted
+            campaign, so it is working from your content pillars instead.
+          </span>
+          <Link
+            href={`/clients/${clientId}/campaigns`}
+            className={`${btn.outlineSm} shrink-0`}
+          >
+            Review campaigns
+          </Link>
+        </div>
+      )}
+      {waiting.length > 0 && activeCampaigns.length > 0 && (
+        <p className={`${banner.info} mb-4`}>
+          Planning from {activeCampaigns.length} active campaign
+          {activeCampaigns.length === 1 ? "" : "s"}.{" "}
+          {waiting.length} more {waiting.length === 1 ? "is" : "are"} awaiting
+          review and will not be scheduled until accepted.
+        </p>
+      )}
+
       {run?.status === "degraded" && (
         <p className={`${banner.warn} mb-4`}>
           The theme model was unavailable. Dates and channels are correct; themes
@@ -187,6 +225,50 @@ export default function PlanPage() {
         </div>
       ) : (
         <div className="space-y-8">
+          {/* A run that placed nothing used to drop the reader straight into a
+              Coverage table full of deficits. The reason is in the warnings —
+              lead with it. */}
+          {run.proposed_slots.length === 0 && (
+            <div className={`${surface.card} ${surface.pad}`}>
+              <h2 className={`${text.cardTitle} mb-2`}>
+                Nothing to add in this window
+              </h2>
+              <p className="text-sm text-slate-600 mb-3">
+                The planner found no room between {run.horizon.startDate} and{" "}
+                {run.horizon.endDate}. Every slot it could place is already
+                there.
+              </p>
+              {run.warnings.length > 0 && (
+                <ul className="space-y-1 mb-4">
+                  {run.warnings.map((w, i) => (
+                    <li key={i} className="text-sm text-slate-500">
+                      • {w}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {weeks < 4 && (
+                  <button
+                    onClick={() => {
+                      setWeeks(4);
+                      setRun(null);
+                    }}
+                    className={btn.outline}
+                  >
+                    Look 4 weeks ahead instead
+                  </button>
+                )}
+                <Link
+                  href={`/clients/${clientId}/schedule`}
+                  className={btn.outline}
+                >
+                  See what is already scheduled
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* Coverage — the number a human actually judges the plan by. */}
           <section>
             <h2 className={`${text.cardTitle} mb-3`}>Coverage</h2>

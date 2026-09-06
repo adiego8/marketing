@@ -1,20 +1,11 @@
 import type {
-  Run,
-  RunListItem,
   Strategy,
-  TaskConfig,
-  Feedback,
-  SavedAsset,
-  MemorySummary,
-  ResearchRequest,
   Campaign,
   CampaignListItem,
   Client,
   ClientListItem,
-  ScheduledAsset,
   Slot,
   SlotStatus,
-  Agency,
   PlanRun,
 } from "./types";
 
@@ -76,27 +67,6 @@ export const updateClient = (id: string, data: Record<string, unknown>) =>
 export const deleteClient = (id: string) =>
   request<{ archived: boolean }>(`/clients/${id}`, { method: "DELETE" });
 
-// Runs
-export const triggerRun = (clientId: string, taskType: string, campaignId?: string) => {
-  const qs = campaignId ? `?campaign_id=${campaignId}` : "";
-  return request<{ run_id: string; status: string }>(`${c(clientId)}/runs/tasks/${taskType}${qs}`, {
-    method: "POST",
-  });
-};
-
-export const getRun = (clientId: string, runId: string) =>
-  request<Run>(`${c(clientId)}/runs/${runId}`);
-
-export const listRuns = (clientId: string, params?: { task_type?: string; status?: string; limit?: number; offset?: number }) => {
-  const search = new URLSearchParams();
-  if (params?.task_type) search.set("task_type", params.task_type);
-  if (params?.status) search.set("status", params.status);
-  if (params?.limit) search.set("limit", String(params.limit));
-  if (params?.offset) search.set("offset", String(params.offset));
-  const qs = search.toString();
-  return request<RunListItem[]>(`${c(clientId)}/runs${qs ? `?${qs}` : ""}`);
-};
-
 // Strategy
 export const getStrategy = (clientId: string) =>
   request<Strategy>(`${c(clientId)}/strategy`);
@@ -104,79 +74,6 @@ export const getStrategy = (clientId: string) =>
 export const updateStrategy = (clientId: string, data: Partial<Strategy>) =>
   request<Strategy>(`${c(clientId)}/strategy`, {
     method: "PUT",
-    body: JSON.stringify(data),
-  });
-
-// Tasks (agency-level, no clientId)
-export const listTasks = () => request<TaskConfig[]>("/tasks");
-
-export const updateTask = (taskType: string, data: Partial<TaskConfig>) =>
-  request<TaskConfig>(`/tasks/${taskType}`, {
-    method: "PUT",
-    body: JSON.stringify(data),
-  });
-
-// Feedback
-export const submitFeedback = (clientId: string, data: {
-  run_id: string;
-  asset_index: number;
-  rating: number;
-  comment?: string;
-  save_asset?: boolean;
-}) => request<Feedback>(`${c(clientId)}/feedback`, { method: "POST", body: JSON.stringify(data) });
-
-export const triggerDebrief = (clientId: string, runId: string) =>
-  request<{ status: string; debrief: Record<string, unknown> }>(
-    `${c(clientId)}/feedback/${runId}/debrief`,
-    { method: "POST" }
-  );
-
-// Assets
-export const listAssets = (clientId: string, params?: { type?: string; min_rating?: number; limit?: number; campaign_id?: string }) => {
-  const search = new URLSearchParams();
-  if (params?.type) search.set("type", params.type);
-  if (params?.min_rating) search.set("min_rating", String(params.min_rating));
-  if (params?.limit) search.set("limit", String(params.limit));
-  if (params?.campaign_id) search.set("campaign_id", params.campaign_id);
-  const qs = search.toString();
-  return request<SavedAsset[]>(`${c(clientId)}/assets${qs ? `?${qs}` : ""}`);
-};
-
-export const createAsset = (clientId: string, data: { type: string; content: Record<string, unknown>; rating?: number; campaign_id?: string }) =>
-  request<SavedAsset>(`${c(clientId)}/assets`, { method: "POST", body: JSON.stringify(data) });
-
-export const generateAsset = (clientId: string, data: { type: string; brief: string; campaign_id?: string }) =>
-  request<{ type: string; content: string; campaign_id?: string }>(`${c(clientId)}/assets/generate`, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-
-export const updateAsset = (clientId: string, id: string, data: { type?: string; content?: Record<string, unknown>; rating?: number }) =>
-  request<SavedAsset>(`${c(clientId)}/assets/${id}`, { method: "PATCH", body: JSON.stringify(data) });
-
-export const deleteAsset = (clientId: string, id: string) =>
-  request<{ deleted: boolean }>(`${c(clientId)}/assets/${id}`, { method: "DELETE" });
-
-// Onboarding
-export const runResearch = (clientId: string, data: ResearchRequest) =>
-  request<Record<string, unknown>>(`${c(clientId)}/onboarding/research`, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-
-export const createProfile = (clientId: string, data: { research: Record<string, unknown>; overrides?: Record<string, unknown> }) =>
-  request<Strategy>(`${c(clientId)}/onboarding/profile`, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-
-// Memory
-export const listSummaries = (clientId: string, limit = 10) =>
-  request<MemorySummary[]>(`${c(clientId)}/memory/summaries?limit=${limit}`);
-
-export const createSummary = (clientId: string, data: { period_start: string; period_end: string }) =>
-  request<MemorySummary>(`${c(clientId)}/memory/summaries`, {
-    method: "POST",
     body: JSON.stringify(data),
   });
 
@@ -216,43 +113,9 @@ export const rejectCampaign = (clientId: string, id: string, reason: string) =>
 export const completeCampaign = (clientId: string, id: string) =>
   request<Campaign>(`${c(clientId)}/campaigns/${id}/complete`, { method: "POST" });
 
-// Agency (settings)
-export const getAgency = () => request<Agency>("/agencies/current");
-
-export const updateAgency = (data: { name?: string }) =>
-  request<Agency>("/agencies/current", {
-    method: "PATCH",
-    body: JSON.stringify(data),
-  });
-
 // Auth
 export const getAuthMe = () =>
   request<{ user_email: string; agency_id: string; google_connected: boolean }>("/auth/me");
-
-export const signOutApi = () =>
-  request<{ signed_out: boolean }>("/auth/signout", { method: "POST" });
-
-// Schedule
-export const scheduleAsset = (
-  clientId: string,
-  runId: string,
-  assetIndex: number,
-  scheduledFor: string,
-) =>
-  request<ScheduledAsset>(
-    `${c(clientId)}/runs/${runId}/assets/${assetIndex}/schedule`,
-    { method: "POST", body: JSON.stringify({ scheduled_for: scheduledFor }) },
-  );
-
-export const markAssetPosted = (clientId: string, assetId: string) =>
-  request<ScheduledAsset>(`${c(clientId)}/assets/${assetId}/posted`, {
-    method: "POST",
-  });
-
-export const unscheduleAsset = (clientId: string, assetId: string) =>
-  request<ScheduledAsset>(`${c(clientId)}/assets/${assetId}/schedule`, {
-    method: "DELETE",
-  });
 
 // Planner
 export const previewPlan = (clientId: string, weeks = 2) =>
@@ -266,6 +129,32 @@ export const listPlanRuns = (clientId: string, limit = 20) =>
 
 export const getPlanRun = (clientId: string, runId: string) =>
   request<PlanRun>(`${c(clientId)}/plan/runs/${runId}`);
+
+/**
+ * The plan as a PDF.
+ *
+ * Not `request()`: that parses JSON, and a download link cannot carry the
+ * Authorization header every endpoint requires — so the bytes are fetched with
+ * the token and handed to the browser as a blob.
+ */
+export async function downloadPlanPdf(
+  clientId: string,
+  params?: { start?: string; end?: string }
+): Promise<{ blob: Blob; filename: string }> {
+  const q = new URLSearchParams();
+  if (params?.start) q.set("start", params.start);
+  if (params?.end) q.set("end", params.end);
+
+  const res = await fetch(
+    `${API}${c(clientId)}/plan/export${q.toString() ? `?${q}` : ""}`,
+    { headers: await authHeader() }
+  );
+  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const match = /filename="([^"]+)"/.exec(disposition);
+  return { blob: await res.blob(), filename: match?.[1] ?? "content-plan.pdf" };
+}
 
 // Google Calendar
 export const getGoogleStatus = () =>

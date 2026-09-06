@@ -1,75 +1,3 @@
-export interface Run {
-  id: string;
-  task_type: string;
-  campaign_id?: string;
-  status: "running" | "completed" | "failed";
-  context_snapshot?: Record<string, unknown>;
-  output?: RunOutput;
-  debrief?: Debrief;
-  created_at: string;
-  completed_at?: string;
-}
-
-export interface RunListItem {
-  id: string;
-  task_type: string;
-  campaign_id?: string;
-  status: "running" | "completed" | "failed";
-  created_at: string;
-  completed_at?: string;
-}
-
-export interface RunOutput {
-  planning?: PlanningOutput;
-  generation?: { assets: Asset[] };
-  review?: { approved_assets: Asset[]; review_notes: string[]; attempts: number };
-  post_production?: { produced_assets: Asset[]; review_notes?: string[] };
-  deliver_slack?: { slack_message_ts?: string };
-  log_run?: { logged: boolean };
-  error?: string;
-}
-
-export interface PlanningOutput {
-  topic: string;
-  angle: string;
-  tone: string;
-  campaign_thread?: string;
-  reasoning: string;
-}
-
-export interface Asset {
-  type: string;
-  content: string | Slide[];
-  format?: string;
-  format_reasoning?: string;
-  platform_hint?: string;
-  rationale?: AssetRationale;
-  image_prompt?: string;
-  generated_images?: string[];
-  slides?: Slide[];
-  duration?: string;
-  goal?: string;
-  priority?: string;
-  effort?: string;
-  suggested_scheduled_for?: string;
-  schedule_reason?: string;
-}
-
-export interface ScheduledAsset {
-  id: string;
-  run_id?: string;
-  campaign_id?: string;
-  asset_index?: number;
-  type: string;
-  content: Record<string, unknown>;
-  status: "draft" | "scheduled" | "posted";
-  scheduled_for?: string;
-  suggested_scheduled_for?: string;
-  posted_at?: string;
-  google_event_id?: string;
-  saved_at: string;
-}
-
 /**
  * A committed slot: one piece of content scheduled for a date, time and
  * channel. This is what `marketing_slots` holds and what serializeSlot in
@@ -99,7 +27,16 @@ export interface Slot {
   brief: string;
   rationale: string;
   needs_theme: boolean;
-  status: SlotStatus;
+  /**
+   * Deliberately `string`, not SlotStatus.
+   *
+   * The PATCH route validates against SLOT_STATUSES, so anything this app
+   * writes is in the union. Reads are permissive on purpose: a value put there
+   * by hand, or left by an older version, should render as itself rather than
+   * be coerced into "planned" — which would silently change whether it counts
+   * against quota. statusPill and QUOTA_COUNTING both already fall back safely.
+   */
+  status: string;
   /** "agent" for planner output, "human" for a hand-added slot. */
   source: string;
   /** The planner never moves a pinned slot. */
@@ -124,14 +61,6 @@ export type SlotStatus =
   | "posted"
   | "cancelled"
   | "skipped";
-
-export interface Agency {
-  id: string;
-  name: string;
-  google_connected_email?: string;
-  google_connected: boolean;
-  created_at: string;
-}
 
 export interface Slide {
   slide: number;
@@ -179,31 +108,6 @@ export interface Strategy {
   updated_at: string;
 }
 
-export interface TaskConfig {
-  id: string;
-  task_type: string;
-  name: string;
-  description?: string;
-  pipeline: PipelineStep[];
-  schedule?: string;
-  active: boolean;
-}
-
-export interface PipelineStep {
-  step: string;
-  config: Record<string, unknown>;
-}
-
-export interface SavedAsset {
-  id: string;
-  run_id?: string;
-  campaign_id?: string;
-  type: string;
-  content: Record<string, unknown>;
-  rating?: number;
-  saved_at: string;
-}
-
 export interface Campaign {
   id: string;
   title: string;
@@ -230,32 +134,6 @@ export interface CampaignListItem {
   start_date?: string;
   end_date?: string;
   created_at: string;
-}
-
-export interface Feedback {
-  id: string;
-  run_id: string;
-  asset_index: number;
-  rating: number;
-  comment?: string;
-  created_at: string;
-}
-
-export interface MemorySummary {
-  id: string;
-  period_start: string;
-  period_end: string;
-  summary: string;
-  insights: Record<string, unknown>;
-  created_at: string;
-}
-
-export interface ResearchRequest {
-  company_name: string;
-  website_url?: string;
-  description?: string;
-  competitors?: string[];
-  research_focus?: string[];
 }
 
 export interface Branding {

@@ -166,7 +166,16 @@ export async function planFromInputs(
   }
 
   return {
-    status: decision.degraded ? "degraded" : "proposed",
+    // Nothing placed is "noop" even when there WAS a deficit. Reaching assign
+    // and coming back empty — every eligible day full, no channel able to
+    // carry the type — is still nothing to accept, and calling it "proposed"
+    // put a blue "ready" pill on a plan with no slots in it.
+    status:
+      proposed.length === 0
+        ? "noop"
+        : decision.degraded
+          ? "degraded"
+          : "proposed",
     observation,
     proposedSlots: proposed,
     deferred,

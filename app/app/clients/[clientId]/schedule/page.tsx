@@ -10,6 +10,7 @@ import {
   getGoogleStatus,
   startGoogleConnect,
   syncCalendar,
+  downloadPlanPdf,
 } from "@/lib/api";
 import { banner, btn, field, surface, table, toggle, text } from "@/lib/ui";
 import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
@@ -183,16 +184,37 @@ export default function SchedulePage() {
     }
   };
 
-  const handleDownload = () => {
-    // Built in the browser from slots already fetched: a plain download link
-    // cannot carry the Authorization header every endpoint requires.
-    const blob = new Blob([doc()], { type: "text/markdown;charset=utf-8" });
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  const handlePdf = async () => {
+    setPdfBusy(true);
+    setError(null);
+    try {
+      const { blob, filename } = await downloadPlanPdf(clientId, { start, end });
+      save(blob, filename);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not build the PDF");
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  const save = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = planFilename(clientName, start, end);
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownload = () => {
+    // Built in the browser from slots already fetched: a plain download link
+    // cannot carry the Authorization header every endpoint requires.
+    save(
+      new Blob([doc()], { type: "text/markdown;charset=utf-8" }),
+      planFilename(clientName, start, end)
+    );
   };
 
   const live = slots.filter(
@@ -238,9 +260,16 @@ export default function SchedulePage() {
           <button
             onClick={handleDownload}
             disabled={slots.length === 0}
+            className={btn.outline}
+          >
+            .md
+          </button>
+          <button
+            onClick={handlePdf}
+            disabled={slots.length === 0 || pdfBusy}
             className={btn.primarySm}
           >
-            Download .md
+            {pdfBusy ? "Building…" : "Download PDF"}
           </button>
         </div>
       </div>

@@ -15,7 +15,7 @@ import {
   defaultChannelsFor,
   implausibleChannels,
 } from "@/lib/marketing/content-types";
-import { CHANNELS } from "@/lib/marketing/posting-windows";
+import { CHANNELS, MAX_SLOTS_PER_DAY } from "@/lib/marketing/posting-windows";
 
 // The Strategy fields that hold a nested object. Naming them lets updateNested
 // index Strategy directly instead of casting it to a record it isn't.
@@ -523,6 +523,26 @@ export default function StrategyPage() {
                   channels it may go out on. The planner uses this to find gaps
                   in the calendar and decide where each piece belongs.
                 </p>
+                {(() => {
+                  // The assign stage never puts more than MAX_SLOTS_PER_DAY on
+                  // one day, so a quota above that ceiling can never be met —
+                  // it just turns every Coverage row into a permanent deficit
+                  // and buries the real warnings in noise.
+                  const asked = quotaRows.reduce((n, r) => n + r.count, 0);
+                  const ceiling = MAX_SLOTS_PER_DAY * 7;
+                  const over = asked > ceiling;
+                  return (
+                    <p
+                      className={`text-xs ${over ? "text-amber-700" : "text-slate-500"}`}
+                    >
+                      {asked} piece{asked === 1 ? "" : "s"} a week across all
+                      formats. The planner places at most {MAX_SLOTS_PER_DAY} a
+                      day, so {ceiling} is the most it can ever schedule.
+                      {over &&
+                        ` Anything above ${ceiling} will show as a permanent shortfall.`}
+                    </p>
+                  );
+                })()}
                 {quotaRows.map((row, i) => (
                   <div key={row.type} className="rounded-lg border border-slate-200 p-3 space-y-2">
                     <div className="flex items-center gap-3">

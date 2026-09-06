@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { randomBytes } from "crypto";
+import { createHmac, randomBytes } from "crypto";
 import {
   signState,
   verifyState,
@@ -40,7 +40,6 @@ describe("signState / verifyState", () => {
       JSON.stringify({ uid: "u1", agencyId: "a1", exp: Date.now() - 1 })
     ).toString("base64url");
     // Signed correctly, but stale — re-sign it the same way signState does.
-    const { createHmac } = require("crypto") as typeof import("crypto");
     const sig = createHmac("sha256", process.env.GOOGLE_OAUTH_STATE_SECRET!)
       .update(body)
       .digest("base64url");

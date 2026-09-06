@@ -117,5 +117,6 @@ and Assets are unlinked from the nav: their endpoints still proxy to the FastAPI
 backend in `../` and have not been ported. Calendar returns with Google sync;
 Runs and Assets are slated for deletion.
 
-`next.config.ts` proxies anything unported to `localhost:8080` as a `fallback`
-rewrite — after dynamic routes, so anything implemented here wins.
+Every page in the nav is backed by a route in `app/api/v1`. There is no proxy
+and no second backend: the FastAPI service this was ported from has been
+deleted, and its history is at `af1ea15`.

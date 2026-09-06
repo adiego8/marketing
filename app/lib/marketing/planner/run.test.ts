@@ -173,3 +173,26 @@ describe("planFromInputs", () => {
     ]);
   });
 });
+
+describe("status when nothing gets placed", () => {
+  it("is noop, not proposed, when assign returns no slots", async () => {
+    // A deficit existed and the model answered, but the model returned no
+    // fills, so nothing reaches the calendar. There is nothing to accept, and
+    // calling that "proposed" put a ready-looking badge on an empty plan.
+    const result = await planFromInputs(inputs(), async () => ({
+      fills: [],
+      warnings: [],
+      degraded: false,
+    }));
+    expect(result.proposedSlots).toHaveLength(0);
+    expect(result.status).toBe("noop");
+  });
+
+  it("still reports degraded only when something was actually placed", async () => {
+    // Degraded means "dates are right, themes are missing" — which is only
+    // meaningful if there are slots to look at.
+    const degraded = await planFromInputs(inputs(), failingDecide);
+    expect(degraded.proposedSlots.length).toBeGreaterThan(0);
+    expect(degraded.status).toBe("degraded");
+  });
+});

@@ -6,6 +6,7 @@
 
 import { db, COLLECTIONS, FieldValue, serializeSlot } from "../firestore";
 import { SLOT_STATUSES, type SlotStatus } from "./planner/types";
+import type { Slot } from "../types";
 
 export interface ListSlotsOptions {
   /** Inclusive ISO date bounds, in the client's local calendar. */
@@ -21,7 +22,10 @@ export interface ListSlotsOptions {
  * to the query needs a composite index, and a client's slots are bounded at a
  * few hundred a year, so this keeps the app running with zero Firestore setup.
  */
-export async function listSlots(clientId: string, opts: ListSlotsOptions = {}) {
+export async function listSlots(
+  clientId: string,
+  opts: ListSlotsOptions = {}
+): Promise<Slot[]> {
   const snap = await db()
     .collection(COLLECTIONS.slots)
     .where("clientId", "==", clientId)
@@ -42,7 +46,7 @@ export async function listSlots(clientId: string, opts: ListSlotsOptions = {}) {
     );
 }
 
-export async function getSlot(clientId: string, slotId: string) {
+export async function getSlot(clientId: string, slotId: string): Promise<Slot | null> {
   const snap = await db().collection(COLLECTIONS.slots).doc(slotId).get();
   if (!snap.exists) return null;
   const data = snap.data() ?? {};
