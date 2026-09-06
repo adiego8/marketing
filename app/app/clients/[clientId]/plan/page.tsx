@@ -6,6 +6,7 @@ import Link from "next/link";
 import { previewPlan, listPlanRuns, commitPlan } from "@/lib/api";
 import { banner, btn, surface, table, toggle, text } from "@/lib/ui";
 import { channelPill, PILL } from "@/lib/ui-status";
+import { contentTypeLabel } from "@/lib/marketing/content-types";
 import type { PlanRun, ProposedSlot } from "@/lib/types";
 
 const HORIZONS = [1, 2, 4];
@@ -200,8 +201,8 @@ export default function PlanPage() {
                             </span>
                           )}
                         </td>
-                        <td className={`${table.cell} capitalize`}>
-                          {gap.type.replace(/_/g, " ")}
+                        <td className={table.cell}>
+                          {contentTypeLabel(gap.type)}
                         </td>
                         <td className={table.cell}>{gap.quotaCount}</td>
                         <td className={table.cell}>{gap.existing}</td>
@@ -259,8 +260,8 @@ export default function PlanPage() {
                             {slot.channel}
                           </span>
                         </td>
-                        <td className={`${table.cell} capitalize`}>
-                          {slot.type.replace(/_/g, " ")}
+                        <td className={table.cell}>
+                          {contentTypeLabel(slot.type)}
                         </td>
                         <td className={table.cell}>
                           {slot.needsTheme ? (
@@ -297,8 +298,8 @@ export default function PlanPage() {
               <div className="space-y-2">
                 {run.deferred.map((d, i) => (
                   <p key={i} className="text-sm text-slate-600">
-                    <span className="capitalize font-medium text-slate-800">
-                      {d.type}
+                    <span className="font-medium text-slate-800">
+                      {contentTypeLabel(d.type)}
                     </span>{" "}
                     in {d.weekKey}: {d.reason}
                   </p>

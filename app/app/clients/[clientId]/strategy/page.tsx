@@ -7,7 +7,14 @@ import { EditableList } from "@/components/shared/editable-list";
 import { banner, btn, field, surface, toggle, text } from "@/lib/ui";
 import { getClient, getStrategy, updateStrategy } from "@/lib/api";
 import type { Strategy } from "@/lib/types";
-import { CONTENT_TYPES } from "@/lib/constants";
+import {
+  PUBLISHABLE_TYPES,
+  COMPONENT_TYPES,
+  contentType,
+  contentTypeLabel,
+  defaultChannelsFor,
+  implausibleChannels,
+} from "@/lib/marketing/content-types";
 import { CHANNELS } from "@/lib/marketing/posting-windows";
 
 // The Strategy fields that hold a nested object. Naming them lets updateNested
@@ -519,7 +526,16 @@ export default function StrategyPage() {
                 {quotaRows.map((row, i) => (
                   <div key={row.type} className="rounded-lg border border-slate-200 p-3 space-y-2">
                     <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium w-24 capitalize">{row.type.replace(/_/g, " ")}</span>
+                      <span className="w-28 shrink-0">
+                        <span className="block text-sm font-medium text-slate-800">
+                          {contentTypeLabel(row.type)}
+                        </span>
+                        {contentType(row.type)?.component && (
+                          <span className="block text-[10px] uppercase tracking-wide text-slate-400">
+                            component
+                          </span>
+                        )}
+                      </span>
                       <input
                         type="number"
                         min={0}
@@ -539,6 +555,11 @@ export default function StrategyPage() {
                         Remove
                       </button>
                     </div>
+                    {contentType(row.type)?.description && (
+                      <p className="text-xs text-slate-500">
+                        {contentType(row.type)!.description}
+                      </p>
+                    )}
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={field.micro}>Channels:</span>
                       {CHANNELS.map((channel) => {
@@ -565,27 +586,68 @@ export default function StrategyPage() {
                           Pick at least one, or the planner cannot place these.
                         </span>
                       )}
+                      {implausibleChannels(row.type, row.channels).length > 0 && (
+                        // A warning, not a block: the table encodes today's
+                        // platforms, and an unusual workflow should not be
+                        // stopped by it.
+                        <span className="text-xs text-amber-700">
+                          {contentTypeLabel(row.type)} does not normally go out on{" "}
+                          {implausibleChannels(row.type, row.channels).join(", ")}.
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
                 {(() => {
                   const usedTypes = quotaRows.map((r) => r.type);
-                  const availableTypes = CONTENT_TYPES.filter((t) => !usedTypes.includes(t));
-                  if (availableTypes.length === 0) return null;
+                  const add = (key: string) =>
+                    saveQuotaRows([
+                      ...quotaRows,
+                      // Preselected from the format itself: a reel on email is
+                      // not a choice worth offering by default.
+                      { type: key, count: 1, channels: defaultChannelsFor(key) },
+                    ]);
+                  const formats = PUBLISHABLE_TYPES.filter(
+                    (t) => !usedTypes.includes(t.key)
+                  );
+                  const components = COMPONENT_TYPES.filter(
+                    (t) => !usedTypes.includes(t.key)
+                  );
+                  if (formats.length === 0 && components.length === 0) return null;
                   return (
-                    <div className="flex gap-2 pt-2">
-                      <span className="text-sm text-slate-500 self-center">Add:</span>
-                      {availableTypes.map((type) => (
-                        <button
-                          key={type}
-                          className={btn.outlineSm}
-                          onClick={() =>
-                            saveQuotaRows([...quotaRows, { type, count: 1, channels: [] }])
-                          }
-                        >
-                          + {type.replace(/_/g, " ")}
-                        </button>
-                      ))}
+                    <div className="space-y-2 pt-2">
+                      {formats.length > 0 && (
+                        <div className="flex gap-2 flex-wrap items-center">
+                          <span className="text-sm text-slate-500">Add format:</span>
+                          {formats.map((t) => (
+                            <button
+                              key={t.key}
+                              className={btn.outlineSm}
+                              title={t.description}
+                              onClick={() => add(t.key)}
+                            >
+                              + {t.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {components.length > 0 && (
+                        <div className="flex gap-2 flex-wrap items-center">
+                          <span className="text-sm text-slate-400">
+                            Parts of a post:
+                          </span>
+                          {components.map((t) => (
+                            <button
+                              key={t.key}
+                              className={btn.outlineSm}
+                              title={t.description}
+                              onClick={() => add(t.key)}
+                            >
+                              + {t.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}

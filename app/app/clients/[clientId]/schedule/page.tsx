@@ -7,6 +7,7 @@ import { listSlots, updateSlot, getClient } from "@/lib/api";
 import { banner, btn, field, surface, table, toggle, text } from "@/lib/ui";
 import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
 import { planMarkdown, planFilename } from "@/lib/marketing/export/plan-markdown";
+import { contentTypeLabel } from "@/lib/marketing/content-types";
 import type { Slot, SlotStatus } from "@/lib/types";
 
 // Committed slots. The plan page shows a proposal; this shows what was accepted
@@ -199,6 +200,7 @@ export default function SchedulePage() {
                       <th className={`${table.head} w-32`}>Date</th>
                       <th className={`${table.head} w-20`}>Time</th>
                       <th className={`${table.head} w-28`}>Channel</th>
+                      <th className={`${table.head} w-24`}>Format</th>
                       <th className={table.head}>Theme</th>
                       <th className={`${table.head} w-36`}>Campaign</th>
                       <th className={`${table.head} w-40`}>Status</th>
@@ -221,6 +223,9 @@ export default function SchedulePage() {
                             <span className={channelPill(slot.channel)}>
                               {slot.channel}
                             </span>
+                          </td>
+                          <td className={table.cell}>
+                            {contentTypeLabel(slot.type)}
                           </td>
                           <td className={table.cell}>
                             {slot.needs_theme || !slot.theme ? (

@@ -108,10 +108,24 @@ describe("planMarkdown", () => {
     expect(planMarkdown([slot()], META)).toContain("Generated 2026-09-05 14:30 UTC");
   });
 
-  it("titlecases channel and type without leaking underscores", () => {
+  it("names the format from the shared table, not a mechanical titlecase", () => {
     const md = planMarkdown([slot({ type: "post_alt" })], META);
-    expect(md).toContain("Linkedin · Post Alt");
+    expect(md).toContain("Linkedin · Alt post");
     expect(md).not.toContain("post_alt");
+  });
+
+  it("still reads sensibly for a quota key the table has never seen", () => {
+    // Quota keys are free-form, so the document must not blank out on one.
+    const md = planMarkdown([slot({ type: "live_stream" })], META);
+    expect(md).toContain("Live Stream");
+    expect(md).not.toContain("live_stream");
+  });
+
+  it("labels the new formats", () => {
+    expect(planMarkdown([slot({ type: "reel", channel: "instagram" })], META))
+      .toContain("Instagram · Reel");
+    expect(planMarkdown([slot({ type: "newsletter", channel: "email" })], META))
+      .toContain("Email · Newsletter");
   });
 });
 

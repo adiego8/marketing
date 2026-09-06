@@ -1,4 +1,5 @@
 import type { Slot } from "../../types";
+import { contentTypeLabel } from "../content-types";
 
 // The content plan as a document.
 //
@@ -89,7 +90,7 @@ export function planMarkdown(slots: Slot[], meta: PlanDocMeta): string {
       for (const slot of weekSlots) {
         const heading =
           `**${dayLabel(slot.date)} · ${slot.time_local}** — ` +
-          `${titleCase(slot.channel)} · ${titleCase(slot.type)}` +
+          `${titleCase(slot.channel)} · ${contentTypeLabel(slot.type)}` +
           statusNote(slot.status);
         lines.push(`### ${heading}`);
         lines.push("");

@@ -19,7 +19,7 @@ import {
   getStrategy,
 } from "@/lib/api";
 import type { Campaign, SavedAsset, QuotaEntry } from "@/lib/types";
-import { CONTENT_TYPES } from "@/lib/constants";
+import { CONTENT_TYPES, contentTypeLabel } from "@/lib/marketing/content-types";
 
 const CAMPAIGN_TABS = [
   { value: "strategy", label: "Strategy" },
@@ -284,7 +284,7 @@ export default function CampaignDetailPage() {
               });
               const usedTypes = breakdown.map((item) => String(item.type));
               const availableTypes = CONTENT_TYPES.filter(
-                (t) => !usedTypes.includes(t)
+                (t) => !usedTypes.includes(t.key)
               );
 
               return (
@@ -308,8 +308,8 @@ export default function CampaignDetailPage() {
                             const remaining = Math.max(0, planned - produced);
                             return (
                               <tr key={i} className={table.row}>
-                                <td className={`${table.cell} font-medium capitalize`}>
-                                  {String(item.type).replace(/_/g, " ")}
+                                <td className={`${table.cell} font-medium`}>
+                                  {contentTypeLabel(String(item.type))}
                                 </td>
                                 <td className={table.cell}>
                                   <input
@@ -366,18 +366,19 @@ export default function CampaignDetailPage() {
                       <span className="text-sm text-slate-500 self-center">
                         Add:
                       </span>
-                      {availableTypes.map((contentType) => (
+                      {availableTypes.map((spec) => (
                         <button
-                          key={contentType}
+                          key={spec.key}
                           className={btn.outlineSm}
+                          title={spec.description}
                           onClick={() =>
                             updateBreakdown([
                               ...breakdown,
-                              { type: contentType, count: 1 },
+                              { type: spec.key, count: 1 },
                             ])
                           }
                         >
-                          + {contentType.replace(/_/g, " ")}
+                          + {spec.label}
                         </button>
                       ))}
                     </div>
