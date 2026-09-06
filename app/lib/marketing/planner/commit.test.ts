@@ -17,6 +17,9 @@ const SLOT: ProposedSlot = {
   theme: "Why quarterly filing slips",
   brief: "Open with the deadline nobody tracks.",
   rationale: "Pillar: process",
+  hook: "Nobody diarises the deadline. That is the whole problem.",
+  body: ["Name the date everyone misses.", "What it costs.", "The fix."],
+  cta: "Book the 20-minute check.",
   needsTheme: false,
 };
 
@@ -59,6 +62,9 @@ const READ_BY_SERIALIZER = [
   "theme",
   "brief",
   "rationale",
+  "hook",
+  "body",
+  "cta",
   "needsTheme",
   "status",
   "source",

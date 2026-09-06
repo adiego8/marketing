@@ -49,8 +49,24 @@ export function eventDescription(slot: Slot, appUrl?: string): string {
   lines.push("");
 
   if (slot.brief) {
-    lines.push("BRIEF");
+    lines.push("IN ONE LINE");
     lines.push(slot.brief);
+    lines.push("");
+  }
+  if (slot.hook) {
+    lines.push("HOOK");
+    lines.push(slot.hook);
+    lines.push("");
+  }
+  if (slot.body?.length) {
+    lines.push("BODY");
+    // Numbered because the order is the piece: slide 1, shot 1, tweet 1.
+    slot.body.forEach((beat, i) => lines.push(`${i + 1}. ${beat}`));
+    lines.push("");
+  }
+  if (slot.cta) {
+    lines.push("CTA");
+    lines.push(slot.cta);
     lines.push("");
   }
   if (slot.campaign_title) {
@@ -143,6 +159,54 @@ export function calendarEmbedUrl(calendarId: string, timezone = "UTC"): string {
 
 export function calendarOpenUrl(calendarId: string): string {
   return `https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(calendarId)}`;
+}
+
+/**
+ * Remove the Google events for a set of slots.
+ *
+ * Extracted from the delete branch inside syncSlots, with two differences that
+ * matter on a delete path:
+ *
+ *  - It reads googleCalendarId off the client rather than calling
+ *    ensureClientCalendar, which CREATES a calendar when none exists. Creating
+ *    a calendar in order to delete from it is absurd; no calendar means no
+ *    events, so it returns.
+ *  - It throws NotConnectedError only when there is something to remove. A run
+ *    whose slots never reached Google can be deleted with Google disconnected.
+ *
+ * @returns how many events were removed.
+ */
+export async function deleteSlotEvents(
+  agencyId: string,
+  clientId: string,
+  slots: Slot[]
+): Promise<number> {
+  const withEvents = slots.filter((s) => s.google_event_id);
+  if (withEvents.length === 0) return 0;
+
+  const clientSnap = await db().collection(COLLECTIONS.clients).doc(clientId).get();
+  const calendarId = clientSnap.data()?.googleCalendarId;
+  if (typeof calendarId !== "string" || !calendarId) return 0;
+
+  const auth = await getAuthorizedClient(agencyId);
+  // There are live events and no way to reach them. Refusing is more honest
+  // than deleting the slots and orphaning what is on someone's calendar.
+  if (!auth) throw new NotConnectedError();
+
+  const calendar = google.calendar({ version: "v3", auth });
+  let removed = 0;
+
+  for (const slot of withEvents) {
+    await calendar.events
+      .delete({ calendarId, eventId: slot.google_event_id! })
+      .catch((e: unknown) => {
+        // 404/410 means it is already gone, which is the desired end state.
+        const code = (e as { code?: number })?.code;
+        if (code !== 404 && code !== 410) throw e;
+      });
+    removed += 1;
+  }
+  return removed;
 }
 
 /* -------------------------------------------------------------- syncing -- */

@@ -121,7 +121,26 @@ export interface Observation {
   warnings: string[];
 }
 
-export interface Fill {
+/**
+ * The structure every piece shares, whatever its format.
+ *
+ * A hook, the substance, and an ask. Splitting these out rather than leaving
+ * one prose "brief" is what makes the output usable: a reel needs its hook in
+ * the first three seconds and its CTA at the end, a carousel needs a first
+ * slide and a last slide, and a post needs a line that stops the scroll. The
+ * shape is the same; what changes per format is what each part means, which
+ * the prompt spells out.
+ */
+export interface PieceStructure {
+  /** The opening. Slide 1, the first three seconds, the first line. */
+  hook: string;
+  /** The substance, one entry per beat: slide, shot, paragraph or tweet. */
+  body: string[];
+  /** The ask at the end. */
+  cta: string;
+}
+
+export interface Fill extends PieceStructure {
   gapId: string;
   campaignId: string | null;
   channel: Channel;
@@ -131,7 +150,7 @@ export interface Fill {
   needsTheme: boolean;
 }
 
-export interface ProposedSlot {
+export interface ProposedSlot extends PieceStructure {
   slotId: string;
   gapId: string;
   weekKey: WeekKey;
@@ -166,6 +185,13 @@ export const LEAD_TIME_MINUTES = 60;
 export const MAX_THEME_CHARS = 120;
 export const MAX_BRIEF_CHARS = 500;
 export const MAX_RATIONALE_CHARS = 240;
+export const MAX_HOOK_CHARS = 200;
+export const MAX_CTA_CHARS = 200;
+// body[] is the field that can actually blow the document limit: a plan run
+// embeds every ProposedSlot, so this is capped on both axes. 8 x 300 is a
+// carousel's worth of slides with room to spare.
+export const MAX_BODY_ITEMS = 8;
+export const MAX_BODY_ITEM_CHARS = 300;
 
 /** Horizon bounds. */
 export const MIN_HORIZON_WEEKS = 1;

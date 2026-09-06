@@ -14,6 +14,7 @@ import {
   contentTypeLabel,
   defaultChannelsFor,
   implausibleChannels,
+  isRetiredType,
 } from "@/lib/marketing/content-types";
 import { CHANNELS, MAX_SLOTS_PER_DAY } from "@/lib/marketing/posting-windows";
 
@@ -550,10 +551,16 @@ export default function StrategyPage() {
                         <span className="block text-sm font-medium text-slate-800">
                           {contentTypeLabel(row.type)}
                         </span>
-                        {contentType(row.type)?.component && (
-                          <span className="block text-[10px] uppercase tracking-wide text-slate-400">
-                            component
+                        {isRetiredType(row.type) ? (
+                          <span className="block text-[10px] uppercase tracking-wide text-amber-700">
+                            retired
                           </span>
+                        ) : (
+                          contentType(row.type)?.component && (
+                            <span className="block text-[10px] uppercase tracking-wide text-slate-400">
+                              component
+                            </span>
+                          )
                         )}
                       </span>
                       <input
@@ -576,8 +583,16 @@ export default function StrategyPage() {
                       </button>
                     </div>
                     {contentType(row.type)?.description && (
-                      <p className="text-xs text-slate-500">
-                        {contentType(row.type)!.description}
+                      <p
+                        className={`text-xs ${
+                          isRetiredType(row.type)
+                            ? "text-amber-700"
+                            : "text-slate-500"
+                        }`}
+                      >
+                        {isRetiredType(row.type)
+                          ? `${contentType(row.type)!.description} Scheduling it separately no longer adds anything — remove this row.`
+                          : contentType(row.type)!.description}
                       </p>
                     )}
                     <div className="flex items-center gap-2 flex-wrap">

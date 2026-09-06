@@ -233,6 +233,9 @@ export function assign(input: AssignInput): AssignResult {
           theme: fill.theme,
           brief: fill.brief,
           rationale: fill.rationale,
+          hook: fill.hook,
+          body: fill.body,
+          cta: fill.cta,
           needsTheme: fill.needsTheme,
         });
 

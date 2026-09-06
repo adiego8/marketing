@@ -37,6 +37,9 @@ function fill(gapId: string, over: Partial<Fill> = {}): Fill {
     theme: "A theme",
     brief: "",
     rationale: "",
+    hook: "A hook",
+    body: ["Beat one", "Beat two"],
+    cta: "An ask",
     needsTheme: false,
     ...over,
   };

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   CONTENT_TYPES,
+  isRetiredType,
   CONTENT_TYPE_KEYS,
   PUBLISHABLE_TYPES,
   COMPONENT_TYPES,
@@ -41,12 +42,23 @@ describe("CONTENT_TYPES", () => {
     }
   });
 
-  it("splits publishable formats from post components", () => {
+  it("offers only publishable formats", () => {
     expect(PUBLISHABLE_TYPES.map((t) => t.key)).toContain("reel");
-    expect(COMPONENT_TYPES.map((t) => t.key)).toEqual(["hook", "cta"]);
-    expect(PUBLISHABLE_TYPES.length + COMPONENT_TYPES.length).toBe(
-      CONTENT_TYPES.length
-    );
+    // hook and cta are retired: every piece carries its own now, so scheduling
+    // one on its own describes nothing.
+    expect(PUBLISHABLE_TYPES.map((t) => t.key)).not.toContain("hook");
+    expect(PUBLISHABLE_TYPES.map((t) => t.key)).not.toContain("cta");
+    expect(COMPONENT_TYPES).toEqual([]);
+  });
+
+  it("keeps retired types nameable so an existing quota still renders", () => {
+    // Retiring must not erase a saved quota row — it explains it instead.
+    expect(isRetiredType("hook")).toBe(true);
+    expect(isRetiredType("cta")).toBe(true);
+    expect(isRetiredType("reel")).toBe(false);
+    expect(isRetiredType("live_stream")).toBe(false);
+    expect(CONTENT_TYPE_KEYS).toContain("hook");
+    expect(contentTypeLabel("cta")).toBe("CTA");
   });
 
   it("puts each format only where it can actually be published", () => {

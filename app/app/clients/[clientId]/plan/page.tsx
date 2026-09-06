@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { previewPlan, listPlanRuns, commitPlan, listCampaigns } from "@/lib/api";
+import {
+  previewPlan,
+  listPlanRuns,
+  commitPlan,
+  listCampaigns,
+  deletePlanRun,
+} from "@/lib/api";
 import type { CampaignListItem } from "@/lib/types";
 import { banner, btn, surface, table, toggle, text } from "@/lib/ui";
 import { channelPill, PILL } from "@/lib/ui-status";
@@ -31,6 +37,7 @@ export default function PlanPage() {
   const [weeks, setWeeks] = useState(2);
   const [error, setError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const [campaigns, setCampaigns] = useState<CampaignListItem[]>([]);
 
   useEffect(() => {
@@ -87,6 +94,31 @@ export default function PlanPage() {
   const waiting = campaigns.filter((c) =>
     ["proposal", "in_review"].includes(c.status)
   );
+
+  const handleDiscard = async () => {
+    if (!run) return;
+    const what = run.committed_at
+      ? `Delete this plan and everything it created?\n\n` +
+        `• ${run.created_slot_ids.length} scheduled slot${run.created_slot_ids.length === 1 ? "" : "s"}\n` +
+        `• their Google Calendar events\n\n` +
+        `The quota reopens, so the next plan will propose replacements.`
+      : "Discard this preview? Nothing was written to the calendar.";
+    if (!confirm(what)) return;
+
+    setDiscarding(true);
+    setError(null);
+    try {
+      await deletePlanRun(clientId, run.id);
+      // Fall back to whatever the previous run was, so the page does not go
+      // blank on a client that still has history.
+      const rest = await listPlanRuns(clientId, 1);
+      setRun(rest[0] ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete the plan");
+    } finally {
+      setDiscarding(false);
+    }
+  };
 
   const byWeek = (run?.proposed_slots ?? []).reduce<Record<string, ProposedSlot[]>>(
     (acc, slot) => {
@@ -370,9 +402,30 @@ export default function PlanPage() {
                             </span>
                           ) : (
                             <>
-                              <p>{slot.theme}</p>
+                              <p className="font-medium text-slate-800">
+                                {slot.theme}
+                              </p>
+                              {/* Runs predating the piece structure have none
+                                  of these, so each is guarded. */}
+                              {slot.hook && (
+                                <p className="text-sm text-slate-700 mt-1">
+                                  {slot.hook}
+                                </p>
+                              )}
+                              {slot.body?.length > 0 && (
+                                <ol className="text-xs text-slate-500 mt-1 list-decimal ml-4 space-y-0.5">
+                                  {slot.body.map((beat, i) => (
+                                    <li key={i}>{beat}</li>
+                                  ))}
+                                </ol>
+                              )}
+                              {slot.cta && (
+                                <p className="text-xs text-teal-700 mt-1">
+                                  → {slot.cta}
+                                </p>
+                              )}
                               {slot.rationale && (
-                                <p className="text-xs text-slate-500 mt-0.5">
+                                <p className="text-xs text-slate-400 mt-1">
                                   {slot.rationale}
                                 </p>
                               )}
@@ -421,30 +474,48 @@ export default function PlanPage() {
                 {run.created_slot_ids.length} slot
                 {run.created_slot_ids.length === 1 ? "" : "s"} on the calendar.
               </p>
-              <button
-                onClick={handlePreview}
-                disabled={planning}
-                className={`${btn.outline} shrink-0`}
-              >
-                Plan the next stretch
-              </button>
+              <span className="flex gap-2 shrink-0">
+                <button
+                  onClick={handleDiscard}
+                  disabled={discarding}
+                  className={btn.danger}
+                >
+                  {discarding ? "Deleting…" : "Delete this plan"}
+                </button>
+                <button
+                  onClick={handlePreview}
+                  disabled={planning}
+                  className={btn.outline}
+                >
+                  Plan the next stretch
+                </button>
+              </span>
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
               <p className="text-sm text-slate-500">
                 Preview only. Nothing has been written to the calendar yet.
               </p>
-              <button
-                onClick={handleCommit}
-                disabled={committing || run.proposed_slots.length === 0}
-                className={`${btn.primarySm} shrink-0`}
-              >
-                {committing
-                  ? "Committing…"
-                  : `Accept ${run.proposed_slots.length} slot${
-                      run.proposed_slots.length === 1 ? "" : "s"
-                    }`}
-              </button>
+              <span className="flex gap-2 shrink-0">
+                <button
+                  onClick={handleDiscard}
+                  disabled={discarding}
+                  className={btn.outline}
+                >
+                  {discarding ? "Discarding…" : "Discard"}
+                </button>
+                <button
+                  onClick={handleCommit}
+                  disabled={committing || run.proposed_slots.length === 0}
+                  className={btn.primarySm}
+                >
+                  {committing
+                    ? "Committing…"
+                    : `Accept ${run.proposed_slots.length} slot${
+                        run.proposed_slots.length === 1 ? "" : "s"
+                      }`}
+                </button>
+              </span>
             </div>
           )}
         </div>

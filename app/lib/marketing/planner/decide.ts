@@ -2,7 +2,11 @@ import { isChannel, type Channel } from "../posting-windows";
 import { llmJson } from "../llm";
 import { PLANNER_DECIDE_PROMPT } from "./prompt";
 import {
+  MAX_BODY_ITEMS,
+  MAX_BODY_ITEM_CHARS,
   MAX_BRIEF_CHARS,
+  MAX_CTA_CHARS,
+  MAX_HOOK_CHARS,
   MAX_RATIONALE_CHARS,
   MAX_THEME_CHARS,
   type CampaignStatus,
@@ -138,12 +142,30 @@ export function skeletonFills(gaps: GapRequest[]): Fill[] {
     theme: "",
     brief: "",
     rationale: "",
+    hook: "",
+    body: [],
+    cta: "",
     needsTheme: true,
   }));
 }
 
 function clamp(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+/**
+ * The array sibling of clamp, capped on both axes.
+ *
+ * A model that returns a single string instead of an array is a common enough
+ * slip to be worth absorbing rather than discarding — one beat is better than
+ * none. Anything else becomes an empty list.
+ */
+function clampList(value: unknown, maxItems: number, maxChars: number): string[] {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+  return raw
+    .map((entry) => clamp(entry, maxChars))
+    .filter((entry) => entry.length > 0)
+    .slice(0, maxItems);
 }
 
 /**
@@ -216,6 +238,9 @@ export function parseFills(
       theme,
       brief: clamp(entry.brief, MAX_BRIEF_CHARS),
       rationale: clamp(entry.rationale, MAX_RATIONALE_CHARS),
+      hook: clamp(entry.hook, MAX_HOOK_CHARS),
+      body: clampList(entry.body, MAX_BODY_ITEMS, MAX_BODY_ITEM_CHARS),
+      cta: clamp(entry.cta, MAX_CTA_CHARS),
       needsTheme: theme === "",
     });
   }

@@ -28,6 +28,12 @@ export interface ContentTypeSpec {
    * these, and for campaign breakdowns that count them as deliverables.
    */
   component?: boolean;
+  /**
+   * No longer offered. Every piece now carries its own hook and CTA, so
+   * scheduling one on its own describes nothing. Existing quota rows keep
+   * working and say why.
+   */
+  retired?: boolean;
 }
 
 export const CONTENT_TYPES: ContentTypeSpec[] = [
@@ -76,16 +82,18 @@ export const CONTENT_TYPES: ContentTypeSpec[] = [
   {
     key: "hook",
     label: "Hook",
-    description: "An opening line. Part of a post, not a post.",
+    description: "Now part of every piece — see the hook on any slot.",
     channels: [...CHANNELS],
     component: true,
+    retired: true,
   },
   {
     key: "cta",
     label: "CTA",
-    description: "A closing ask. Part of a post, not a post.",
+    description: "Now part of every piece — see the CTA on any slot.",
     channels: [...CHANNELS],
     component: true,
+    retired: true,
   },
 ];
 
@@ -94,8 +102,17 @@ const BY_KEY = new Map(CONTENT_TYPES.map((t) => [t.key, t]));
 export const CONTENT_TYPE_KEYS = CONTENT_TYPES.map((t) => t.key);
 
 /** Publishable formats, in the order the quota editor should offer them. */
-export const PUBLISHABLE_TYPES = CONTENT_TYPES.filter((t) => !t.component);
-export const COMPONENT_TYPES = CONTENT_TYPES.filter((t) => t.component);
+export const PUBLISHABLE_TYPES = CONTENT_TYPES.filter(
+  (t) => !t.component && !t.retired
+);
+/** Still nameable, never offered. */
+export const COMPONENT_TYPES = CONTENT_TYPES.filter(
+  (t) => t.component && !t.retired
+);
+
+export function isRetiredType(key: string): boolean {
+  return BY_KEY.get(key)?.retired === true;
+}
 
 export function contentType(key: string): ContentTypeSpec | undefined {
   return BY_KEY.get(key);

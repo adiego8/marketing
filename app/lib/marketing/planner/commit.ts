@@ -107,6 +107,11 @@ export function slotDoc(clientId: string, runId: string, slot: ProposedSlot) {
     theme: slot.theme,
     brief: slot.brief,
     rationale: slot.rationale,
+    // The piece itself. Same names in Firestore and in the API response —
+    // single words, so camelCase and snake_case coincide for once.
+    hook: slot.hook,
+    body: slot.body,
+    cta: slot.cta,
     needsTheme: slot.needsTheme,
     status: "planned",
     // Human edits set this; the planner never moves a pinned slot.

@@ -26,6 +26,12 @@ export interface Slot {
   theme: string;
   brief: string;
   rationale: string;
+  /** The opening: slide 1, the first three seconds, the first line. */
+  hook: string;
+  /** The substance, one entry per beat: slide, shot, paragraph or tweet. */
+  body: string[];
+  /** The ask at the end. */
+  cta: string;
   needs_theme: boolean;
   /**
    * Deliberately `string`, not SlotStatus.
@@ -199,6 +205,12 @@ export interface ProposedSlot {
   theme: string;
   brief: string;
   rationale: string;
+  /** The opening: slide 1, the first three seconds, the first line. */
+  hook: string;
+  /** The substance, one entry per beat: slide, shot, paragraph or tweet. */
+  body: string[];
+  /** The ask at the end. */
+  cta: string;
   /** The model gave no theme; the date and channel are still correct. */
   needsTheme: boolean;
 }

@@ -400,8 +400,27 @@ export default function SchedulePage() {
                               </span>
                             ) : (
                               <>
-                                <p>{slot.theme}</p>
-                                {slot.brief && (
+                                <p className="font-medium text-slate-800">
+                                  {slot.theme}
+                                </p>
+                                {slot.hook && (
+                                  <p className="text-sm text-slate-700 mt-1">
+                                    {slot.hook}
+                                  </p>
+                                )}
+                                {slot.body?.length > 0 && (
+                                  <ol className="text-xs text-slate-500 mt-1 list-decimal ml-4 space-y-0.5">
+                                    {slot.body.map((beat, i) => (
+                                      <li key={i}>{beat}</li>
+                                    ))}
+                                  </ol>
+                                )}
+                                {slot.cta && (
+                                  <p className="text-xs text-teal-700 mt-1">
+                                    → {slot.cta}
+                                  </p>
+                                )}
+                                {!slot.hook && slot.brief && (
                                   <p className="text-xs text-slate-500 mt-0.5">
                                     {slot.brief}
                                   </p>

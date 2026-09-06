@@ -1,5 +1,7 @@
 import { createHash } from "crypto";
-import { db, COLLECTIONS, FieldValue, serializePlanRun } from "../../firestore";
+import { db, COLLECTIONS, FieldValue, serializePlanRun, serializeSlot } from "../../firestore";
+import { deleteSlotEvents } from "../calendar";
+import type { Slot } from "../../types";
 import { isChannel, type Channel } from "../posting-windows";
 import type { CampaignWindow, ExistingSlot, IsoDate } from "./types";
 
@@ -182,6 +184,74 @@ export async function listPlanRuns(clientId: string, limit = 20) {
     .map((doc) => serializePlanRun(doc.id, doc.data()))
     .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
     .slice(0, limit);
+}
+
+export interface DeletePlanRunResult {
+  deletedSlots: number;
+  removedEvents: number;
+  wasCommitted: boolean;
+}
+
+/**
+ * Delete a plan run and everything it created.
+ *
+ * Ordering is the mirror of the commit argument in calendar.ts: Google first,
+ * then Firestore. A Google failure then leaves everything intact and
+ * retryable, whereas deleting the slots first would orphan live calendar
+ * events with no googleEventId left to find them by.
+ *
+ * Slots are addressed through the run's own createdSlotIds — direct document
+ * refs, no query and no new composite index, matching the habit documented in
+ * loadPlannerSlots above. Each is re-read and skipped unless its planRunId
+ * still points here, so a slot that was re-pointed or hand-edited survives.
+ *
+ * Note this invalidates any OTHER uncommitted preview: fingerprintInputs
+ * hashes the slot ids in the horizon, so removing slots correctly makes those
+ * previews stale. That is the intended behaviour, not a bug — but the UI
+ * should say so before someone presses the button.
+ *
+ * @returns null when the run does not exist or belongs to another agency.
+ */
+export async function deletePlanRun(
+  clientId: string,
+  runId: string,
+  agencyId: string
+): Promise<DeletePlanRunResult | null> {
+  const run = await getPlanRun(clientId, runId);
+  if (!run) return null;
+
+  const runRef = db().collection(COLLECTIONS.planRuns).doc(runId);
+
+  // Never committed: the run document is the only thing that exists.
+  if (!run.committed_at) {
+    await runRef.delete();
+    return { deletedSlots: 0, removedEvents: 0, wasCommitted: false };
+  }
+
+  const refs = run.created_slot_ids.map((id) =>
+    db().collection(COLLECTIONS.slots).doc(id)
+  );
+  const snaps = refs.length > 0 ? await db().getAll(...refs) : [];
+
+  const mine = snaps.filter(
+    (snap) => snap.exists && snap.data()?.planRunId === runId
+  );
+  const slots = mine.map((snap) => serializeSlot(snap.id, snap.data() ?? {}) as Slot);
+
+  const removedEvents = await deleteSlotEvents(agencyId, clientId, slots);
+
+  // One batch for the slots and the run, so the record and what it created
+  // never disagree. Chunked at 500, Firestore's WriteBatch limit.
+  const CHUNK = 400;
+  for (let i = 0; i < mine.length; i += CHUNK) {
+    const batch = db().batch();
+    for (const snap of mine.slice(i, i + CHUNK)) batch.delete(snap.ref);
+    if (i + CHUNK >= mine.length) batch.delete(runRef);
+    await batch.commit();
+  }
+  if (mine.length === 0) await runRef.delete();
+
+  return { deletedSlots: mine.length, removedEvents, wasCommitted: true };
 }
 
 export async function getPlanRun(clientId: string, runId: string) {

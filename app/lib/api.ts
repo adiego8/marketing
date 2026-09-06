@@ -216,5 +216,13 @@ export const updateSlot = (
     body: JSON.stringify(data),
   });
 
+export const deletePlanRun = (clientId: string, runId: string) =>
+  request<{
+    deleted: boolean;
+    deletedSlots: number;
+    removedEvents: number;
+    wasCommitted: boolean;
+  }>(`${c(clientId)}/plan/runs/${runId}`, { method: "DELETE" });
+
 export const commitPlan = (clientId: string, runId: string) =>
   request<PlanRun>(`${c(clientId)}/plan/runs/${runId}/commit`, { method: "POST" });

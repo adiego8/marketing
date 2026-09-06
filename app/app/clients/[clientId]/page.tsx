@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { listPlanRuns } from "@/lib/api";
+import { listPlanRuns, deletePlanRun } from "@/lib/api";
 import { banner, btn, surface, table, text } from "@/lib/ui";
 import { statusPill } from "@/lib/ui-status";
 import type { PlanRun } from "@/lib/types";
@@ -25,6 +25,8 @@ export default function ClientDashboard() {
   const [runs, setRuns] = useState<PlanRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     listPlanRuns(clientId, 10)
@@ -34,6 +36,35 @@ export default function ClientDashboard() {
       )
       .finally(() => setLoading(false));
   }, [clientId]);
+
+  const handleDelete = async (run: PlanRun) => {
+    const what = run.committed_at
+      ? `Delete this plan and everything it created?\n\n` +
+        `• ${run.created_slot_ids.length} scheduled slot${run.created_slot_ids.length === 1 ? "" : "s"}\n` +
+        `• their Google Calendar events\n\n` +
+        `The quota reopens, so the next plan will propose replacements. Any ` +
+        `other preview you have not accepted will go stale.`
+      : "Discard this plan? It was never accepted, so nothing else is affected.";
+    if (!confirm(what)) return;
+
+    setDeleting(run.id);
+    setError(null);
+    try {
+      const r = await deletePlanRun(clientId, run.id);
+      setRuns((prev) => prev.filter((x) => x.id !== run.id));
+      if (r.deletedSlots > 0) {
+        setNotice(
+          `Deleted the plan, ${r.deletedSlots} slot${r.deletedSlots === 1 ? "" : "s"}` +
+            (r.removedEvents > 0 ? ` and ${r.removedEvents} calendar event${r.removedEvents === 1 ? "" : "s"}` : "") +
+            "."
+        );
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete the plan");
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   const latest = runs[0] ?? null;
   const slots = latest?.proposed_slots.length ?? 0;
@@ -60,6 +91,7 @@ export default function ClientDashboard() {
       </div>
 
       {error && <p className={`${banner.error} mb-6`}>{error}</p>}
+      {notice && <p className={`${banner.info} mb-6`}>{notice}</p>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-10">
         <div className={surface.tile}>
@@ -133,6 +165,7 @@ export default function ClientDashboard() {
                 <th className={table.head}>Horizon</th>
                 <th className={`${table.head} text-right`}>Slots</th>
                 <th className={`${table.head} text-right`}>Warnings</th>
+                <th className={table.head}></th>
               </tr>
             </thead>
             <tbody>
@@ -157,6 +190,15 @@ export default function ClientDashboard() {
                     }`}
                   >
                     {run.warnings.length}
+                  </td>
+                  <td className={`${table.cell} text-right`}>
+                    <button
+                      onClick={() => handleDelete(run)}
+                      disabled={deleting === run.id}
+                      className="text-xs text-slate-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                    >
+                      {deleting === run.id ? "Deleting…" : "Delete"}
+                    </button>
                   </td>
                 </tr>
               ))}

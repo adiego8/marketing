@@ -99,7 +99,17 @@ const s = StyleSheet.create({
   },
   status: { fontSize: 7.5, color: MUTED, marginLeft: "auto" },
   theme: { fontSize: 11, color: INK, marginBottom: 4, lineHeight: 1.35 },
-  brief: { fontSize: 9.5, color: BODY, lineHeight: 1.45, marginBottom: 4 },
+  brief: { fontSize: 9.5, color: BODY, lineHeight: 1.45, marginBottom: 6 },
+  partLabel: {
+    fontSize: 7,
+    letterSpacing: 1.2,
+    color: TEAL,
+    fontFamily: "Helvetica-Bold",
+    marginBottom: 2,
+  },
+  hook: { fontSize: 10, color: INK, lineHeight: 1.4, marginBottom: 6 },
+  beat: { fontSize: 9.5, color: BODY, lineHeight: 1.45, marginBottom: 2 },
+  beatBlock: { marginBottom: 6 },
   meta: { fontSize: 8.5, color: FAINT, lineHeight: 1.4 },
 
   empty: { fontSize: 10, color: MUTED, fontStyle: "italic", marginTop: 24 },
@@ -180,6 +190,29 @@ function PlanDoc({ slots, meta }: { slots: Slot[]; meta: PlanDocMeta }) {
                     {slot.needs_theme || !slot.theme ? "Theme not set" : slot.theme}
                   </Text>
                   {!!slot.brief && <Text style={s.brief}>{slot.brief}</Text>}
+
+                  {!!slot.hook && (
+                    <View>
+                      <Text style={s.partLabel}>HOOK</Text>
+                      <Text style={s.hook}>{slot.hook}</Text>
+                    </View>
+                  )}
+                  {slot.body?.length > 0 && (
+                    <View style={s.beatBlock}>
+                      <Text style={s.partLabel}>BODY</Text>
+                      {slot.body.map((beat, i) => (
+                        <Text key={i} style={s.beat}>
+                          {i + 1}. {beat}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                  {!!slot.cta && (
+                    <View>
+                      <Text style={s.partLabel}>CTA</Text>
+                      <Text style={s.hook}>{slot.cta}</Text>
+                    </View>
+                  )}
                   {(slot.campaign_title || slot.rationale) && (
                     <Text style={s.meta}>
                       {[

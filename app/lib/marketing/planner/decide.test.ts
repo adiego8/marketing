@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { expandGapIds, parseFills, skeletonFills, chunkRequest, type GapRequest } from "./decide";
+import {
+  MAX_BODY_ITEMS,
+  MAX_BODY_ITEM_CHARS,
+  MAX_HOOK_CHARS,
+  MAX_CTA_CHARS,
+} from "./types";
 import type { Gap } from "./types";
 
 function gap(over: Partial<Gap> = {}): Gap {
@@ -168,5 +174,77 @@ describe("skeletonFills", () => {
     const fills = skeletonFills(GAPS);
     expect(fills).toHaveLength(3);
     expect(fills.every((f) => f.needsTheme && f.channel === "linkedin")).toBe(true);
+  });
+});
+
+describe("parseFills — the piece structure", () => {
+  const gaps = [
+    {
+      gap_id: "2026-W38__post__0",
+      week: "2026-W38",
+      type: "post",
+      index_in_week: 0,
+      of_in_week: 1,
+      allowed_channels: ["linkedin", "instagram"],
+      default_channel: "linkedin",
+      eligible_campaign_ids: ["c1"],
+    },
+  ] as unknown as Parameters<typeof parseFills>[1];
+
+  function fillFor(entry: Record<string, unknown>) {
+    const { fills } = parseFills(
+      { fills: [{ gap_id: "2026-W38__post__0", theme: "A theme", ...entry }] },
+      gaps
+    );
+    return fills[0];
+  }
+
+  it("carries hook, body and cta through", () => {
+    const f = fillFor({
+      hook: "Three quotes is not diligence.",
+      body: ["Name the ritual.", "Do the arithmetic.", "Offer the fix."],
+      cta: "Reply with your last job.",
+    });
+    expect(f.hook).toBe("Three quotes is not diligence.");
+    expect(f.body).toEqual(["Name the ritual.", "Do the arithmetic.", "Offer the fix."]);
+    expect(f.cta).toBe("Reply with your last job.");
+  });
+
+  it("caps body on both axes", () => {
+    // A plan run embeds every slot, so an unbounded body[] is what would
+    // actually breach Firestore's 1 MiB document limit.
+    const f = fillFor({
+      body: Array.from({ length: 40 }, () => "x".repeat(2000)),
+    });
+    expect(f.body).toHaveLength(MAX_BODY_ITEMS);
+    expect(f.body[0].length).toBe(MAX_BODY_ITEM_CHARS);
+  });
+
+  it("caps hook and cta", () => {
+    const f = fillFor({ hook: "h".repeat(900), cta: "c".repeat(900) });
+    expect(f.hook.length).toBe(MAX_HOOK_CHARS);
+    expect(f.cta.length).toBe(MAX_CTA_CHARS);
+  });
+
+  it("absorbs a single string where an array was asked for", () => {
+    // A common model slip. One beat beats none.
+    expect(fillFor({ body: "Just the one beat." }).body).toEqual([
+      "Just the one beat.",
+    ]);
+  });
+
+  it("drops empty entries and non-arrays without throwing", () => {
+    expect(fillFor({ body: ["a", "", "   ", "b"] }).body).toEqual(["a", "b"]);
+    expect(fillFor({ body: 42 }).body).toEqual([]);
+    expect(fillFor({ body: null }).body).toEqual([]);
+    expect(fillFor({}).body).toEqual([]);
+  });
+
+  it("gives skeletons an empty structure rather than undefined", () => {
+    // The degraded path must still produce a renderable slot.
+    const [skeleton] = skeletonFills(gaps);
+    expect(skeleton.hook).toBe("");
+    expect(skeleton.body).toEqual([]);
+    expect(skeleton.cta).toBe("");
   });
 });

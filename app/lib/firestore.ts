@@ -43,6 +43,17 @@ function str(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
+/**
+ * The array sibling of str().
+ *
+ * A slot written before the piece structure existed has no `body` at all, and
+ * must deserialize to [] rather than undefined — every render site maps over
+ * it.
+ */
+function strArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((x): x is string => typeof x === "string") : [];
+}
+
 function num(value: unknown): number | null {
   return typeof value === "number" ? value : null;
 }
@@ -132,6 +143,9 @@ export function serializeSlot(id: string, d: FirebaseFirestore.DocumentData) {
     theme: str(d.theme),
     brief: str(d.brief),
     rationale: str(d.rationale),
+    hook: str(d.hook),
+    body: strArray(d.body),
+    cta: str(d.cta),
     needs_theme: d.needsTheme === true,
     status: str(d.status, "planned"),
     source: str(d.source, "agent"),

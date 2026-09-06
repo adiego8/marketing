@@ -102,6 +102,19 @@ export function planMarkdown(slots: Slot[], meta: PlanDocMeta): string {
           lines.push(slot.brief);
           lines.push("");
         }
+        if (slot.hook) {
+          lines.push(`**Hook** — ${slot.hook}`);
+          lines.push("");
+        }
+        if (slot.body?.length) {
+          // Numbered, because for a carousel or a reel the order is the piece.
+          slot.body.forEach((beat, i) => lines.push(`${i + 1}. ${beat}`));
+          lines.push("");
+        }
+        if (slot.cta) {
+          lines.push(`**CTA** — ${slot.cta}`);
+          lines.push("");
+        }
         const meta: string[] = [];
         if (slot.campaign_title) meta.push(`Campaign: ${slot.campaign_title}`);
         if (slot.rationale) meta.push(slot.rationale);

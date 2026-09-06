@@ -20,6 +20,9 @@ function slot(overrides: Partial<Slot> = {}): Slot {
     theme: "Why quarterly filing slips",
     brief: "Open with the deadline nobody tracks.",
     rationale: "Pillar: process",
+    hook: "Nobody diarises the deadline. That is the whole problem.",
+    body: ["Name the date everyone misses.", "What it costs.", "The fix."],
+    cta: "Book the 20-minute check.",
     needs_theme: false,
     status: "planned",
     source: "agent",
@@ -126,6 +129,32 @@ describe("planMarkdown", () => {
       .toContain("Instagram · Reel");
     expect(planMarkdown([slot({ type: "newsletter", channel: "email" })], META))
       .toContain("Email · Newsletter");
+  });
+});
+
+describe("planMarkdown — the piece structure", () => {
+  it("renders hook, numbered beats and CTA", () => {
+    const md = planMarkdown([slot()], META);
+    expect(md).toContain("**Hook** — Nobody diarises the deadline.");
+    expect(md).toContain("1. Name the date everyone misses.");
+    expect(md).toContain("3. The fix.");
+    expect(md).toContain("**CTA** — Book the 20-minute check.");
+  });
+
+  it("numbers the beats in order, because the order is the piece", () => {
+    // A carousel's slides and a reel's shots only mean anything in sequence.
+    const md = planMarkdown([slot({ body: ["First", "Second", "Third"] })], META);
+    expect(md.indexOf("1. First")).toBeLessThan(md.indexOf("2. Second"));
+    expect(md.indexOf("2. Second")).toBeLessThan(md.indexOf("3. Third"));
+  });
+
+  it("omits each part that is missing, rather than printing an empty label", () => {
+    // Slots committed before the structure existed have none of these.
+    const md = planMarkdown([slot({ hook: "", body: [], cta: "" })], META);
+    expect(md).not.toContain("**Hook**");
+    expect(md).not.toContain("**CTA**");
+    // The theme and brief still carry the piece.
+    expect(md).toContain("Why quarterly filing slips");
   });
 });
 
