@@ -3,6 +3,7 @@ import {
   previewPlan,
   EmptyQuotaError,
   NoStrategyError,
+  NoActiveCampaignsError,
 } from "@/lib/marketing/planner/run";
 import {
   requireClient,
@@ -37,7 +38,11 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json(run);
   } catch (error) {
     // Preconditions the user can act on, rather than a 500 they cannot.
-    if (error instanceof EmptyQuotaError || error instanceof NoStrategyError) {
+    if (
+      error instanceof EmptyQuotaError ||
+      error instanceof NoStrategyError ||
+      error instanceof NoActiveCampaignsError
+    ) {
       return jsonError(error.message, 400);
     }
     return serverError("Plan preview error", error);

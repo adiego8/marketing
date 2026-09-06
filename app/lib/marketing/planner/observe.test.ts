@@ -184,7 +184,23 @@ describe("rankCampaigns", () => {
 });
 
 describe("observe", () => {
+  // The quota is the weekly CAP now; the campaign's content plan is the demand.
   const quota = { post: { count: 3, channels: ["linkedin" as const] } };
+
+  /** Wants far more posts than the cap allows, so pacing never binds below it. */
+  const DEMANDING: CampaignWindow = {
+    id: "c1",
+    title: "Always On",
+    description: "",
+    startDate: "2026-08-31",
+    endDate: "2026-09-27",
+    goal: "",
+    keyMessage: "",
+    plannedByType: { post: 40 },
+    plannedTotal: 40,
+    channels: ["linkedin"],
+    timeline: [],
+  };
 
   function run(over: Partial<Parameters<typeof observe>[0]> = {}) {
     return observe({
@@ -193,7 +209,7 @@ describe("observe", () => {
       horizonWeeks: 2,
       quota,
       slots: [],
-      campaigns: [],
+      campaigns: [DEMANDING],
       strategyChannels: [],
       ...over,
     });
@@ -251,15 +267,15 @@ describe("observe", () => {
     expect(gap?.surplus).toBe(2);
   });
 
-  it("trims a quota the week physically cannot hold", () => {
-    // 9 posts/week against LinkedIn's 3 posting days at 2/day = 6 max.
+  it("trims demand the week physically cannot hold", () => {
+    // 9 posts/week allowed against LinkedIn's 3 posting days at 2/day = 6 max.
     const obs = observe({
       timezone: NY,
       now: SAT_10AM.toJSDate(),
       horizonWeeks: 2,
       quota: { post: { count: 9, channels: ["linkedin"] } },
       slots: [],
-      campaigns: [],
+      campaigns: [DEMANDING],
       strategyChannels: [],
     });
     const gap = obs.gaps.find((g) => g.weekKey === "2026-W37");
@@ -272,9 +288,69 @@ describe("observe", () => {
     expect(obs.pinnedSlotIds).toEqual(["pin1"]);
   });
 
-  it("produces no gaps for an empty quota", () => {
-    const obs = run({ quota: {} });
+  it("plans a type the campaign wants even when the quota never mentions it", () => {
+    // The bug this model change fixes: a campaign asking for carousels got
+    // none, because gaps were built from quota keys and carousel was not one.
+    const obs = run({
+      quota: {},
+      campaigns: [
+        { ...DEMANDING, plannedByType: { carousel: 4 }, plannedTotal: 4 },
+      ],
+    });
+    expect(obs.gaps.map((g) => g.type)).toContain("carousel");
+    expect(obs.totalDeficit).toBeGreaterThan(0);
+  });
+
+  it("never plans a type no campaign asked for", () => {
+    // The other half: a quota listing "cta" used to produce a cta every week
+    // whether or not anything wanted one.
+    const obs = run({
+      quota: { post: { count: 3, channels: ["linkedin"] }, cta: { count: 5, channels: ["linkedin"] } },
+    });
+    expect(obs.gaps.map((g) => g.type)).not.toContain("cta");
+  });
+
+  it("holds the campaign to the quota's weekly pace", () => {
+    // 40 posts owed, but 3/week is the cap.
+    const gap = run().gaps.find((g) => g.weekKey === "2026-W37");
+    expect(gap?.wanted).toBe(3);
+    expect(gap?.notes.join(" ")).toContain("Held to 3/week");
+  });
+
+  it("spreads a small campaign across the weeks rather than front-loading it", () => {
+    // 4 posts with two usable weeks ahead is 2 and 2, not 3 then 1. W36 is
+    // the partial week and LinkedIn cannot post in what is left of it, so the
+    // horizon runs to W38 to give the spread somewhere to happen.
+    const obs = run({
+      horizonWeeks: 3,
+      campaigns: [{ ...DEMANDING, plannedByType: { post: 4 }, plannedTotal: 4 }],
+    });
+    expect(obs.gaps.find((g) => g.weekKey === "2026-W37")?.wanted).toBe(2);
+    expect(obs.gaps.find((g) => g.weekKey === "2026-W38")?.wanted).toBe(2);
+  });
+
+  it("does not re-plan in week two what week one already took", () => {
+    // The demand is consumed as it is allocated; without that, every week
+    // would plan the campaign's whole remaining total again.
+    const obs = run({
+      campaigns: [{ ...DEMANDING, plannedByType: { post: 3 }, plannedTotal: 3 }],
+    });
+    const total = obs.gaps.reduce((n, g) => n + g.deficit, 0);
+    expect(total).toBeLessThanOrEqual(3);
+  });
+
+  it("plans nothing at all when no campaign is active", () => {
+    const obs = run({ campaigns: [] });
     expect(obs.gaps).toHaveLength(0);
     expect(obs.totalDeficit).toBe(0);
+    expect(obs.warnings.join(" ")).toContain("No active campaigns");
+  });
+
+  it("says so when every campaign plan is already fully scheduled", () => {
+    const obs = run({
+      campaigns: [{ ...DEMANDING, plannedByType: { post: 1 }, plannedTotal: 1 }],
+      slots: [slot({ campaignId: "c1", type: "post" })],
+    });
+    expect(obs.warnings.join(" ")).toContain("already fully scheduled");
   });
 });

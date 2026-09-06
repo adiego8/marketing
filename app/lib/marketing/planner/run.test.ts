@@ -101,18 +101,27 @@ describe("planFromInputs", () => {
     expect(proposedSlots[0].campaignTitle).toBe("Q4 Push");
   });
 
-  it("reports noop rather than failing when quota is already met", async () => {
+  it("reports noop rather than failing when the campaign plan is delivered", async () => {
+    // Delivery is counted per campaign now, so these slots have to be
+    // attributed to it — an unattributed slot is not the campaign's work.
     const met = inputs({
-      slots: [
-        { id: "a", date: "2026-09-08", timeLocal: "09:00", weekKey: "2026-W37", type: "post", channel: "linkedin", status: "planned", campaignId: null, pinned: false },
-        { id: "b", date: "2026-09-09", timeLocal: "09:00", weekKey: "2026-W37", type: "post", channel: "linkedin", status: "planned", campaignId: null, pinned: false },
-        { id: "c", date: "2026-09-10", timeLocal: "09:00", weekKey: "2026-W37", type: "post", channel: "linkedin", status: "planned", campaignId: null, pinned: false },
-      ],
+      campaigns: [{ ...CAMPAIGN, plannedByType: { post: 3 }, plannedTotal: 3 }],
+      slots: ["a", "b", "c"].map((id, i) => ({
+        id,
+        date: `2026-09-0${8 + i}`,
+        timeLocal: "09:00",
+        weekKey: "2026-W37",
+        type: "post",
+        channel: "linkedin" as const,
+        status: "planned",
+        campaignId: "c1",
+        pinned: false,
+      })),
     });
     const result = await planFromInputs(met, stubDecide);
     expect(result.status).toBe("noop");
     expect(result.proposedSlots).toHaveLength(0);
-    expect(result.warnings.join(" ")).toContain("already meets its quota");
+    expect(result.warnings.join(" ")).toContain("already fully scheduled");
   });
 
   // The degradation guarantee: dates and channels are computed in code, so a
@@ -127,16 +136,31 @@ describe("planFromInputs", () => {
     expect(result.warnings.join(" ")).toContain("connection refused");
   });
 
-  it("plans from pillars when no campaign is active", async () => {
+  it("plans nothing when no campaign is active", async () => {
+    // The demand is the campaigns' content plans. With none active there is
+    // nothing to schedule, and saying so beats inventing evergreen filler the
+    // quota happened to list.
     const result = await planFromInputs(inputs({ campaigns: [] }), stubDecide);
-    expect(result.proposedSlots).toHaveLength(3);
-    expect(result.proposedSlots.every((s) => s.campaignId === null)).toBe(true);
-    expect(result.warnings.join(" ")).toContain("planning from content pillars");
+    expect(result.proposedSlots).toHaveLength(0);
+    expect(result.status).toBe("noop");
+    expect(result.warnings.join(" ")).toContain("No active campaigns");
   });
 
-  it("warns when there is neither a campaign nor a pillar to draw on", async () => {
-    const result = await planFromInputs(inputs({ campaigns: [], pillars: [] }), stubDecide);
-    expect(result.warnings.join(" ")).toContain("themes will be generic");
+  it("plans only what the campaign's content plan asks for", async () => {
+    // The quota lists post; the campaign asks for carousel. The campaign wins
+    // on WHAT, and the quota only caps how fast.
+    const result = await planFromInputs(
+      inputs({
+        quota: { post: { count: 3, channels: ["linkedin"] } },
+        campaigns: [
+          { ...CAMPAIGN, plannedByType: { carousel: 2 }, plannedTotal: 2 },
+        ],
+      }),
+      stubDecide
+    );
+    const types = new Set(result.proposedSlots.map((s) => s.type));
+    expect(types).toContain("carousel");
+    expect(types).not.toContain("post");
   });
 
   it("clamps an out-of-range horizon", async () => {

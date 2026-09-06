@@ -31,6 +31,15 @@ import { horizonWeeks, todayIn, zoneOrUTC } from "./weeks";
 //                     to end with no Firestore and no OpenAI.
 //   previewPlan     — loads from Firestore, calls the above, persists the run.
 
+export class NoActiveCampaignsError extends Error {
+  constructor() {
+    super(
+      "No active campaigns. The planner schedules what a campaign's content plan asks for, so accept a campaign before planning."
+    );
+    this.name = "NoActiveCampaignsError";
+  }
+}
+
 export class EmptyQuotaError extends Error {
   constructor() {
     super(
@@ -115,7 +124,10 @@ export async function planFromInputs(
       observation,
       proposedSlots: [],
       deferred: [],
-      warnings: [...warnings, "Every week in the horizon already meets its quota."],
+      // observe already explains WHY there is nothing: no active campaign, or
+      // every campaign plan delivered. Repeating "meets its quota" here would
+      // contradict it, since the quota is no longer the demand.
+      warnings: [...warnings, ...observation.warnings],
       inputsFingerprint: fingerprint,
       llm: { called: false, degraded: false, durationMs: 0 },
     };
@@ -193,10 +205,10 @@ export async function previewPlan(
   const strategy = await getStrategy(clientId);
   if (!strategy) throw new NoStrategyError();
 
+  // The quota is no longer the demand, only the weekly pace limit and the
+  // channel preference, so an empty one is workable — the campaign then sets
+  // its own pace. What cannot be worked around is having no campaign at all.
   const quota = (strategy.content_quota?.weekly ?? {}) as Record<string, QuotaEntry>;
-  if (Object.keys(quota).length === 0 || Object.values(quota).every((q) => !q.count)) {
-    throw new EmptyQuotaError();
-  }
 
   const now = opts.now ?? new Date();
   const weeks = opts.horizonWeeks ?? 2;
@@ -208,6 +220,8 @@ export async function previewPlan(
     loadPlannerSlots(clientId, spans[0].start, spans[spans.length - 1].end),
     loadRecentThemes(clientId),
   ]);
+
+  if (allCampaigns.length === 0) throw new NoActiveCampaignsError();
 
   const contentStrategy = (strategy.content_strategy ?? {}) as {
     platforms?: unknown;

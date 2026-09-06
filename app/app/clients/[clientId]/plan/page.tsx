@@ -310,7 +310,7 @@ export default function PlanPage() {
                   <tr className="bg-stone-50">
                     <th className={`${table.head} w-32`}>Week</th>
                     <th className={`${table.head} w-24`}>Type</th>
-                    <th className={`${table.head} w-20`}>Quota</th>
+                    <th className={`${table.head} w-24`}>Cap / week</th>
                     <th className={`${table.head} w-24`}>Scheduled</th>
                     <th className={`${table.head} w-24`}>Proposed</th>
                     <th className={table.head}>Notes</th>
@@ -336,7 +336,9 @@ export default function PlanPage() {
                         <td className={table.cell}>
                           {contentTypeLabel(gap.type)}
                         </td>
-                        <td className={table.cell}>{gap.quotaCount}</td>
+                        <td className={table.cell}>
+                          {gap.quotaCount > 0 ? gap.quotaCount : "—"}
+                        </td>
                         <td className={table.cell}>{gap.existing}</td>
                         <td
                           className={`${table.cell} ${

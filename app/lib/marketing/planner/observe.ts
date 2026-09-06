@@ -265,13 +265,53 @@ export function observe(input: ObserveInput): Observation {
 
   const gaps: Gap[] = [];
   const capacity: Record<WeekKey, WeekCapacity> = {};
-  const quotaTypes = Object.entries(input.quota).filter(([, e]) => e.count > 0);
 
-  for (const span of spans) {
+  // WHAT gets made comes from the campaigns' content plans; the quota only
+  // says how fast. Driving demand from the quota instead produced content no
+  // campaign had asked for — a "cta" every week because the quota listed one —
+  // while silently dropping types a campaign DID ask for but the quota never
+  // mentioned.
+  //
+  // Pieces still owed per type, across every active campaign, after subtracting
+  // what is already scheduled. Decremented as the loop allocates across weeks:
+  // without that, week two would re-plan what week one already took.
+  const owed = new Map<string, number>();
+  for (const campaign of input.campaigns) {
+    for (const [type, planned] of Object.entries(campaign.plannedByType)) {
+      if (planned <= 0) continue;
+      const done = input.slots.filter(
+        (s) =>
+          s.campaignId === campaign.id &&
+          s.type === type &&
+          countsAgainstQuota(s.status)
+      ).length;
+      owed.set(type, (owed.get(type) ?? 0) + Math.max(0, planned - done));
+    }
+  }
+
+  // Entries can exist with a value of 0 once a campaign is fully delivered, so
+  // the "anything left?" test is on the values, not the map's size.
+  const demandTypes = Array.from(owed.keys()).filter((t) => (owed.get(t) ?? 0) > 0);
+
+  if (input.campaigns.length === 0) {
+    warnings.push(
+      "No active campaigns, so there is nothing to plan. Accept a campaign to give the planner a content plan to work from."
+    );
+  } else if (demandTypes.length === 0) {
+    warnings.push(
+      "Every active campaign's content plan is already fully scheduled."
+    );
+  }
+
+  for (const [spanIndex, span] of spans.entries()) {
     const isPartial = span.start <= today && today <= span.end;
+    const weeksLeft = spans.length - spanIndex;
 
     // Per-type gaps for this week, before capacity trimming.
-    const weekGaps: Gap[] = quotaTypes.map(([type, entry], index) => {
+    const weekGaps: Gap[] = demandTypes.map((type, index) => {
+      // A type a campaign wants but the quota never mentions still gets
+      // planned; the quota then imposes no weekly cap on it.
+      const entry = input.quota[type] ?? { count: 0, channels: [] };
       const { channels, note } = resolveChannels(
         type,
         entry,
@@ -287,13 +327,29 @@ export function observe(input: ObserveInput): Observation {
       const existingPast = ofType.filter((s) => s.date < today).length;
 
       const days = eligibleDays(span, channels, tz, now);
-      const wanted = isPartial
-        ? proratedWanted(entry.count, existingPast, days.length)
-        : entry.count;
 
-      if (isPartial && wanted < entry.count) {
+      // Spread what the campaign still owes across the weeks left, then let
+      // the quota cap the pace. A quota of 0 for this type means no cap.
+      const stillOwed = owed.get(type) ?? 0;
+      const paced = Math.ceil(stillOwed / weeksLeft);
+      const cap = entry.count > 0 ? entry.count : paced;
+      const target = Math.min(paced, cap);
+
+      const wanted = isPartial
+        ? proratedWanted(target, existingPast, days.length)
+        : target;
+
+      if (stillOwed > 0) {
         notes.push(
-          `Partial week: ${days.length} posting day(s) left, so asking for ${wanted} of ${entry.count}.`
+          `${stillOwed} left in the campaign plan, over ${weeksLeft} week(s).`
+        );
+      }
+      if (entry.count > 0 && paced > entry.count) {
+        notes.push(`Held to ${entry.count}/week by the quota.`);
+      }
+      if (isPartial && wanted < target) {
+        notes.push(
+          `Partial week: ${days.length} posting day(s) left, so asking for ${wanted} of ${target}.`
         );
       }
       if (days.length === 0) {
@@ -313,12 +369,13 @@ export function observe(input: ObserveInput): Observation {
       return {
         weekKey: span.weekKey,
         type,
+        // The weekly cap, not the demand. Demand is the campaign's.
         quotaCount: entry.count,
         wanted,
         existing,
         existingPast,
         deficit: Math.max(0, wanted - existing),
-        surplus: Math.max(0, existing - entry.count),
+        surplus: entry.count > 0 ? Math.max(0, existing - entry.count) : 0,
         allowedChannels: channels,
         defaultChannel: defaultChannelFor(channels, index),
         eligibleCampaignIds,
@@ -345,8 +402,15 @@ export function observe(input: ObserveInput): Observation {
       });
       cap.oversubscribed = true;
       warnings.push(
-        `${span.weekKey}: quota asks for ${totalDeficit} more slot(s) but ${MAX_SLOTS_PER_DAY}/day over ${cap.eligibleDays} posting day(s) allows ${cap.remaining}. Trimmed proportionally.`
+        `${span.weekKey}: the campaign plans need ${totalDeficit} more slot(s) but ${MAX_SLOTS_PER_DAY}/day over ${cap.eligibleDays} posting day(s) allows ${cap.remaining}. Trimmed proportionally.`
       );
+    }
+
+    // Consume what this week took, so the next week plans the remainder and
+    // not the whole campaign again.
+    for (const gap of weekGaps) {
+      const taken = gap.deficit + gap.existing;
+      owed.set(gap.type, Math.max(0, (owed.get(gap.type) ?? 0) - taken));
     }
 
     capacity[span.weekKey] = cap;
