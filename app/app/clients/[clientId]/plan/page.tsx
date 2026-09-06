@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { previewPlan, listPlanRuns } from "@/lib/api";
 import { banner, btn, surface, table, toggle, text } from "@/lib/ui";
 import { channelPill, PILL } from "@/lib/ui-status";
@@ -106,7 +107,26 @@ export default function PlanPage() {
         </div>
       </div>
 
-      {error && <p className={`${banner.error} mb-4`}>{error}</p>}
+      {error &&
+        (/quota/i.test(error) ? (
+          // The planner's one hard precondition. Reaching it means the run was
+          // refused before anything was computed, so point at the fix rather
+          // than leaving a raw API message on screen.
+          <div className={`${banner.warn} mb-4 flex flex-wrap items-center justify-between gap-3`}>
+            <span>
+              No weekly content quota set. The planner needs to know how much of
+              each content type to schedule.
+            </span>
+            <Link
+              href={`/clients/${clientId}/strategy`}
+              className={`${btn.primarySm} shrink-0`}
+            >
+              Set quota →
+            </Link>
+          </div>
+        ) : (
+          <p className={`${banner.error} mb-4`}>{error}</p>
+        ))}
 
       {run?.status === "degraded" && (
         <p className={`${banner.warn} mb-4`}>
