@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { listSlots, updateSlot, getClient } from "@/lib/api";
+import {
+  listSlots,
+  updateSlot,
+  getClient,
+  getGoogleStatus,
+  startGoogleConnect,
+  syncCalendar,
+} from "@/lib/api";
 import { banner, btn, field, surface, table, toggle, text } from "@/lib/ui";
 import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
 import { planMarkdown, planFilename } from "@/lib/marketing/export/plan-markdown";
@@ -14,6 +21,17 @@ import type { Slot, SlotStatus } from "@/lib/types";
 // and is actually scheduled.
 
 const HORIZONS = [2, 4, 12];
+
+// The callback can only pass a code in the URL, so the copy lives here.
+const GOOGLE_ERRORS: Record<string, string> = {
+  access_denied: "You declined the Google permissions, so nothing was connected.",
+  "invalid-state": "That sign-in link expired. Press Connect Google again.",
+  "no-code": "Google did not return an authorisation code. Try again.",
+  "no-refresh-token":
+    "Google withheld a refresh token. Remove this app under your Google account permissions, then connect again.",
+  "exchange-failed": "Google rejected the authorisation. Check the OAuth client's redirect URI.",
+  "not-configured": "Google OAuth is not configured on this server.",
+};
 
 // The statuses a human sets from here. Quota-freeing ones last, so the
 // destructive choice is never the one next to the cursor by default.
@@ -50,6 +68,16 @@ export default function SchedulePage() {
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [google, setGoogle] = useState<{
+    configured: boolean;
+    missing: string[];
+    connected: boolean;
+    email: string | null;
+    needs_reconnect: boolean;
+  } | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
+  const [calendarUrl, setCalendarUrl] = useState<string | null>(null);
 
   const start = isoDate(new Date());
   const end = isoDate(new Date(Date.now() + weeks * 7 * 86400_000));
@@ -79,6 +107,54 @@ export default function SchedulePage() {
       })
       .catch(() => {});
   }, [clientId]);
+
+  useEffect(() => {
+    getGoogleStatus().then(setGoogle).catch(() => setGoogle(null));
+
+    // The OAuth callback redirects back here with its result. Read from
+    // location rather than useSearchParams, which would need a Suspense
+    // boundary to prerender.
+    const result = new URLSearchParams(window.location.search).get("google");
+    if (!result) return;
+    if (result === "connected") setSyncNote("Google connected");
+    else setError(GOOGLE_ERRORS[result] ?? `Google returned "${result}".`);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
+  const handleConnect = async () => {
+    try {
+      const { url } = await startGoogleConnect(window.location.pathname);
+      // A full navigation, not a fetch: this is Google's consent screen.
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start the Google connection");
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setError(null);
+    setSyncNote(null);
+    try {
+      const r = await syncCalendar(clientId, { start, end });
+      setCalendarUrl(r.open_url);
+      setSyncNote(
+        [
+          `${r.synced} event${r.synced === 1 ? "" : "s"} written`,
+          r.removed > 0 ? `${r.removed} removed` : null,
+          r.failed > 0 ? `${r.failed} failed` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      );
+      if (r.errors.length > 0) setError(r.errors.slice(0, 3).join(" · "));
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleStatus = async (slot: Slot, status: SlotStatus) => {
     if (status === slot.status) return;
@@ -168,6 +244,67 @@ export default function SchedulePage() {
           </button>
         </div>
       </div>
+
+      {google && slots.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+          {!google.configured ? (
+            <span className="text-sm text-slate-500">
+              Google Calendar is not set up on this server.{" "}
+              <span className="font-mono text-xs">
+                {google.missing.join(", ")}
+              </span>{" "}
+              missing from .env.local.
+            </span>
+          ) : !google.connected ? (
+            <>
+              <span className="text-sm text-slate-500">
+                Push this schedule to Google Calendar — one calendar per client.
+              </span>
+              <button onClick={handleConnect} className={`${btn.outline} shrink-0`}>
+                Connect Google
+              </button>
+            </>
+          ) : google.needs_reconnect ? (
+            <>
+              <span className="text-sm text-amber-700">
+                Connected as {google.email}, but without calendar access.
+                Reconnect to grant it.
+              </span>
+              <button onClick={handleConnect} className={`${btn.outline} shrink-0`}>
+                Reconnect
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="text-sm text-slate-500">
+                Google Calendar · {google.email}
+                {syncNote && (
+                  <span className="text-teal-700 font-medium"> — {syncNote}</span>
+                )}
+              </span>
+              <span className="flex gap-2 shrink-0">
+                {calendarUrl && (
+                  <a
+                    href={calendarUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={btn.outline}
+                  >
+                    Open in Google ↗
+                  </a>
+                )}
+                <button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className={btn.primarySm}
+                >
+                  {syncing ? "Syncing…" : "Sync to Google"}
+                </button>
+              </span>
+            </>
+          )}
+        </div>
+      )}
 
       {error && <p className={`${banner.error} mb-4`}>{error}</p>}
 

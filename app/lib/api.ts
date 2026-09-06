@@ -267,6 +267,43 @@ export const listPlanRuns = (clientId: string, limit = 20) =>
 export const getPlanRun = (clientId: string, runId: string) =>
   request<PlanRun>(`${c(clientId)}/plan/runs/${runId}`);
 
+// Google Calendar
+export const getGoogleStatus = () =>
+  request<{
+    configured: boolean;
+    missing: string[];
+    connected: boolean;
+    email: string | null;
+    scopes: string[];
+    needs_reconnect: boolean;
+  }>("/google/status");
+
+export const startGoogleConnect = (returnTo?: string) =>
+  request<{ url: string }>("/google/start", {
+    method: "POST",
+    body: JSON.stringify({ returnTo }),
+  });
+
+export const disconnectGoogle = () =>
+  request<{ connected: boolean }>("/google/disconnect", { method: "POST" });
+
+export const syncCalendar = (
+  clientId: string,
+  params?: { start?: string; end?: string }
+) =>
+  request<{
+    synced: number;
+    failed: number;
+    removed: number;
+    calendarId: string;
+    errors: string[];
+    embed_url: string;
+    open_url: string;
+  }>(`${c(clientId)}/calendar/sync`, {
+    method: "POST",
+    body: JSON.stringify(params ?? {}),
+  });
+
 // Slots
 export const listSlots = (
   clientId: string,

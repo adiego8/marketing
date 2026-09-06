@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // googleapis is a large CommonJS package that Next's bundler mangles.
+  // numerico-website carries the same line for the same reason.
+  serverExternalPackages: ["googleapis"],
+
   async rewrites() {
     // `fallback`, NOT a plain array.
     //
