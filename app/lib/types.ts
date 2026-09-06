@@ -49,8 +49,21 @@ export interface Slot {
   pinned: boolean;
   content: Record<string, unknown> | null;
   google_event_id: string | null;
+  /** pending | synced | stale | locked | removed | error. */
   google_sync_status: string;
   google_sync_error: string | null;
+  /**
+   * What the last successful push wrote, so reconciliation can tell OUR change
+   * from THEIRS. Comparing the event against the slot's current rendering
+   * cannot: a slot edited in the app is legitimately different from its event,
+   * which is what "stale" means. Null on every slot synced before Phase 5.
+   */
+  google_event_title: string | null;
+  google_event_body_hash: string | null;
+  /** The title and notes were edited in Google; sync no longer rewrites them. */
+  google_event_locked: boolean;
+  /** When a move made in Google was last adopted. */
+  google_adopted_at: string | null;
   last_human_edit_at: string | null;
   created_at: string | null;
   updated_at: string | null;

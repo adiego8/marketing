@@ -156,6 +156,12 @@ export function serializeSlot(id: string, d: FirebaseFirestore.DocumentData) {
     // Written by syncSlots on a failure and, until now, never read — so a
     // slot could sit in "error" with the reason invisible to the UI.
     google_sync_error: d.googleSyncError ?? null,
+    // What the last push wrote, for reconcile. Null means "we do not know",
+    // which classify() reads as "no divergence" rather than guessing.
+    google_event_title: d.googleEventTitle ?? null,
+    google_event_body_hash: d.googleEventBodyHash ?? null,
+    google_event_locked: d.googleEventLocked === true,
+    google_adopted_at: toISO(d.googleAdoptedAt),
     last_human_edit_at: toISO(d.lastHumanEditAt),
     created_at: toISO(d.createdAt),
     updated_at: toISO(d.updatedAt),

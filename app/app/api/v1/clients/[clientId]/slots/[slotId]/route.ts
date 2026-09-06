@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { isSlotStatus, updateSlot, type SlotPatch } from "@/lib/marketing/slots";
+import {
+  isSlotStatus,
+  updateSlot,
+  setEventLock,
+  type SlotPatch,
+} from "@/lib/marketing/slots";
 import {
   SLOT_STATUSES,
   MAX_THEME_CHARS,
@@ -40,6 +45,21 @@ export async function PATCH(request: Request, { params }: Params) {
     if ("response" in ctx) return ctx.response;
 
     const body = (await readBody(request)) as Record<string, unknown>;
+
+    // Taking an event's text back from Google. Its own write, not a SlotPatch
+    // field: it clears the lock AND marks the slot stale so the next sync
+    // actually pushes the app's text over the hand-edited event. Handled first
+    // and alone, because pairing it with a content edit would push the two
+    // writes into an order that is not worth reasoning about.
+    if ("google_event_locked" in body) {
+      if (typeof body.google_event_locked !== "boolean") {
+        return jsonError("google_event_locked must be a boolean", 400);
+      }
+      const unlocked = await setEventLock(clientId, slotId, body.google_event_locked);
+      if (!unlocked) return jsonError("Slot not found", 404);
+      return NextResponse.json(unlocked);
+    }
+
     const patch: SlotPatch = {};
 
     if ("status" in body) {

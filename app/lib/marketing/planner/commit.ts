@@ -125,6 +125,13 @@ export function slotDoc(clientId: string, runId: string, slot: ProposedSlot) {
     // committed slot read back as unsynced regardless of the truth.
     googleEventId: null,
     googleSyncStatus: "pending",
+    // Phase 5 reconciliation: what the last push wrote, and whether a hand edit
+    // in Google has taken ownership of the text. Seeded null/false so
+    // serializeSlot never falls back to a default that means something else.
+    googleEventTitle: null,
+    googleEventBodyHash: null,
+    googleEventLocked: false,
+    googleAdoptedAt: null,
     lastHumanEditAt: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),

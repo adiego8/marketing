@@ -79,6 +79,11 @@ export default function SchedulePage() {
   } | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
+  // What the last sync adopted FROM Google, as opposed to pushed to it. Kept
+  // separate from syncNote because these are changes the person made, and they
+  // deserve to be read rather than counted.
+  const [syncChanges, setSyncChanges] = useState<string[]>([]);
+  const [syncWarnings, setSyncWarnings] = useState<string[]>([]);
   const [calendarUrl, setCalendarUrl] = useState<string | null>(null);
 
   const start = isoDate(new Date());
@@ -137,6 +142,8 @@ export default function SchedulePage() {
     setSyncing(true);
     setError(null);
     setSyncNote(null);
+    setSyncChanges([]);
+    setSyncWarnings([]);
     try {
       const r = await syncCalendar(clientId, { start, end });
       setCalendarUrl(r.open_url);
@@ -144,11 +151,16 @@ export default function SchedulePage() {
         [
           `${r.synced} event${r.synced === 1 ? "" : "s"} written`,
           r.removed > 0 ? `${r.removed} removed` : null,
+          r.adopted > 0 ? `${r.adopted} moved` : null,
+          r.cancelled > 0 ? `${r.cancelled} cancelled` : null,
+          r.locked > 0 ? `${r.locked} handed to Google` : null,
           r.failed > 0 ? `${r.failed} failed` : null,
         ]
           .filter(Boolean)
           .join(" · ")
       );
+      setSyncChanges(r.changes);
+      setSyncWarnings(r.warnings);
       if (r.errors.length > 0) setError(r.errors.slice(0, 3).join(" · "));
       await load();
     } catch (e) {
@@ -193,6 +205,27 @@ export default function SchedulePage() {
       setEditingId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the slot");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /**
+   * Take an event's text back after a hand edit in Google locked it.
+   *
+   * The way out of rule 3 — without it, one rename in Google would mean the
+   * app could never write that event's title again.
+   */
+  const handleUnlock = async (slot: Slot) => {
+    setBusyId(slot.id);
+    setError(null);
+    try {
+      replaceSlot(
+        await updateSlot(clientId, slot.id, { google_event_locked: false })
+      );
+      setSyncNote("Taken back — sync to push the app's text over it");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not take the event back");
     } finally {
       setBusyId(null);
     }
@@ -403,6 +436,34 @@ export default function SchedulePage() {
         </div>
       )}
 
+      {syncWarnings.length > 0 && (
+        <div className={`${banner.warn} mb-4`}>
+          {syncWarnings.map((w) => (
+            <p key={w}>{w}</p>
+          ))}
+        </div>
+      )}
+
+      {syncChanges.length > 0 && (
+        <div className="mb-4 rounded-lg border border-teal-200 bg-teal-50/60 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">
+            Adopted from Google
+          </p>
+          <ul className="mt-1.5 space-y-1">
+            {syncChanges.slice(0, 5).map((c) => (
+              <li key={c} className="text-sm text-teal-900">
+                {c}
+              </li>
+            ))}
+          </ul>
+          {syncChanges.length > 5 && (
+            <p className="mt-1.5 text-xs text-teal-700">
+              +{syncChanges.length - 5} more
+            </p>
+          )}
+        </div>
+      )}
+
       {error && <p className={`${banner.error} mb-4`}>{error}</p>}
 
       {loading ? (
@@ -534,6 +595,25 @@ export default function SchedulePage() {
                                 changed since sync
                               </span>
                             )}
+                            {slot.google_event_locked && (
+                              <span className="text-[10px] uppercase tracking-wide text-amber-700">
+                                google owns text
+                              </span>
+                            )}
+                            {slot.google_sync_status === "removed" &&
+                              slot.status === "cancelled" && (
+                                <span className="text-[10px] uppercase tracking-wide text-slate-400">
+                                  removed in google
+                                </span>
+                              )}
+                            {slot.google_sync_error && (
+                              <span
+                                className="text-[10px] uppercase tracking-wide text-red-700"
+                                title={slot.google_sync_error}
+                              >
+                                sync failed
+                              </span>
+                            )}
                           </td>
                         </tr>
 
@@ -635,6 +715,23 @@ export default function SchedulePage() {
                                     Cancel
                                   </button>
                                 </div>
+
+                                {slot.google_event_locked && (
+                                  <div className="border-t border-slate-200 pt-3">
+                                    <p className="text-sm text-amber-700">
+                                      This event&rsquo;s title and notes were edited in
+                                      Google, so syncing no longer rewrites them. Only
+                                      its date and time still follow the plan.
+                                    </p>
+                                    <button
+                                      onClick={() => handleUnlock(slot)}
+                                      disabled={busyId === slot.id}
+                                      className={`${btn.outlineSm} mt-2`}
+                                    >
+                                      {busyId === slot.id ? "Working…" : "Take it back"}
+                                    </button>
+                                  </div>
+                                )}
 
                                 <div className="border-t border-slate-200 pt-3 space-y-2">
                                   <label className={field.micro}>

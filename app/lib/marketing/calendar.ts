@@ -13,6 +13,16 @@ import { DateTime } from "luxon";
 import { db, COLLECTIONS, FieldValue, serializeSlot } from "../firestore";
 import { getAuthorizedClient, NotConnectedError } from "./google";
 import { contentTypeLabel } from "./content-types";
+import { adoptSlotSchedule, cancelFromGoogle, setEventLock } from "./slots";
+import {
+  classify,
+  describeChange,
+  deterministicEventId,
+  hashBody,
+  plannerWarnings,
+  type Divergence,
+  type RemoteEvent,
+} from "./reconcile";
 import type { Slot } from "../types";
 
 const EVENT_MINUTES = 30;
@@ -209,14 +219,210 @@ export async function deleteSlotEvents(
   return removed;
 }
 
+/* ---------------------------------------------------------- reconciling -- */
+
+/**
+ * Every event on the calendar, whatever the date.
+ *
+ * Deliberately unbounded in time. A windowed list would omit an event the user
+ * dragged outside the window, which classify() would then be told is absent —
+ * and an absent event can mean "cancel this slot". The calendar is app-owned
+ * and one per client, so listing it whole is one or two round trips.
+ *
+ * singleEvents stays FALSE. With expansion on, a repeating event comes back as
+ * instances keyed `{masterId}_{timestamp}`, so our stored master id matches
+ * nothing and every repeating slot reads as deleted. Masters come back under
+ * the id we stored, carrying the recurrence rule that tells classify to leave
+ * them alone.
+ */
+export async function listCalendarEvents(
+  calendar: calendar_v3.Calendar,
+  calendarId: string
+): Promise<Map<string, RemoteEvent>> {
+  const byId = new Map<string, RemoteEvent>();
+  let pageToken: string | undefined;
+
+  do {
+    const page = await calendar.events.list({
+      calendarId,
+      showDeleted: true,
+      singleEvents: false,
+      maxResults: 2500,
+      pageToken,
+      fields: "nextPageToken,items(id,status,summary,description,start,recurrence)",
+    });
+
+    for (const item of page.data.items ?? []) {
+      if (!item.id) continue;
+      byId.set(item.id, {
+        id: item.id,
+        status: item.status ?? "confirmed",
+        summary: item.summary ?? "",
+        description: item.description ?? "",
+        start: { dateTime: item.start?.dateTime, date: item.start?.date },
+        recurrence: item.recurrence,
+      });
+    }
+    pageToken = page.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  return byId;
+}
+
+interface ReconcileTally {
+  adopted: number;
+  cancelled: number;
+  locked: number;
+  changes: string[];
+  warnings: string[];
+}
+
+/**
+ * Adopt what changed in Google, before anything is pushed.
+ *
+ * Runs as its own pass rather than inside the push loop for three reasons: the
+ * delete rule changes `status`, which the loop branches on; the move rule
+ * changes date and time, which eventTimes() reads; and the "did we recognise
+ * anything?" guard is a property of the whole listing, not of one slot.
+ *
+ * Mutates the slots in `slots` as it writes them, so the push loop that follows
+ * reads the adopted values without a second collection read.
+ */
+async function reconcileSlots(
+  clientId: string,
+  slots: Slot[],
+  events: Map<string, RemoteEvent>,
+  appUrl?: string
+): Promise<ReconcileTally> {
+  const tally: ReconcileTally = {
+    adopted: 0,
+    cancelled: 0,
+    locked: 0,
+    changes: [],
+    warnings: [],
+  };
+
+  const claimed = slots.filter((s) => s.google_event_id);
+  const recognisedAny = claimed.some((s) => events.has(s.google_event_id!));
+
+  // Nothing we stored came back. Either the calendar is gone, the token lost
+  // its scope, or googleCalendarId is stale — and in all three cases treating
+  // "absent" as "deleted" would cancel the client's entire schedule in one
+  // click. Say so instead.
+  if (claimed.length > 0 && !recognisedAny) {
+    tally.warnings.push(
+      `${claimed.length} slot${claimed.length === 1 ? "" : "s"} point at events that are ` +
+        `not on this calendar, and none of the ones we looked for were found — ` +
+        `nothing was cancelled.`
+    );
+  }
+
+  for (const slot of slots) {
+    if (!slot.google_event_id) continue;
+    if (slot.status === "cancelled" || slot.status === "skipped") continue;
+
+    const remote = events.get(slot.google_event_id);
+    const divergence = classify(slot, remote, {
+      renderedTitle: eventTitle(slot),
+      renderedBodyHash: hashBody(eventDescription(slot, appUrl)),
+      recognisedAny,
+    });
+
+    switch (divergence.kind) {
+      case "moved": {
+        const warnings = plannerWarnings(slot, divergence.schedule, slots);
+        const withWarnings: Divergence = {
+          ...divergence,
+          warnings: [...divergence.warnings, ...warnings],
+        };
+        const updated = await adoptSlotSchedule(clientId, slot.id, divergence.schedule);
+        if (updated) {
+          const line = describeChange(slot, withWarnings);
+          if (line) tally.changes.push(line);
+          // In-memory, so the push pass below re-times the event from the
+          // adopted position rather than moving it straight back.
+          slot.date = divergence.schedule.date;
+          slot.time_local = divergence.schedule.timeLocal;
+          slot.week_key = divergence.schedule.weekKey;
+          slot.scheduled_at = divergence.schedule.scheduledAt;
+          tally.adopted += 1;
+        }
+        break;
+      }
+
+      case "deleted":
+      case "missing": {
+        const updated = await cancelFromGoogle(clientId, slot.id);
+        if (updated) {
+          const line = describeChange(slot, divergence);
+          if (line) tally.changes.push(line);
+          // Both matter: "cancelled" makes the push loop take the dropped
+          // branch, and a null id makes it skip that branch entirely instead
+          // of deleting an event that is already gone.
+          slot.status = "cancelled";
+          slot.google_event_id = null;
+          slot.google_sync_status = "removed";
+          tally.cancelled += 1;
+        }
+        break;
+      }
+
+      case "edited": {
+        // Record what the event now says, not what we last wrote. Otherwise the
+        // fingerprint keeps the app's old title and every later sync reports
+        // the same edit again — and an unlock could never survive this pass.
+        const updated = await setEventLock(clientId, slot.id, true, {
+          title: remote!.summary,
+          bodyHash: hashBody(remote!.description ?? ""),
+        });
+        if (updated) {
+          const line = describeChange(slot, divergence);
+          if (line) tally.changes.push(line);
+          slot.google_event_locked = true;
+          tally.locked += 1;
+        }
+        break;
+      }
+
+      case "recurring": {
+        const line = describeChange(slot, divergence);
+        if (line) tally.changes.push(line);
+        // Left entirely alone — pushing start/end to a series master would
+        // rewrite every occurrence.
+        slot.google_event_locked = true;
+        break;
+      }
+
+      default:
+        // "none". refreshFingerprint is handled by the push pass, which
+        // records the fingerprint on every successful write anyway.
+        break;
+    }
+  }
+
+  return tally;
+}
+
 /* -------------------------------------------------------------- syncing -- */
 
 export interface SyncResult {
+  /** Events written by the push pass. */
   synced: number;
   failed: number;
+  /** Events deleted because the SLOT was dropped in the app. */
   removed: number;
+  /** Slots whose schedule moved to match Google. */
+  adopted: number;
+  /** Slots cancelled because their event is gone. */
+  cancelled: number;
+  /** Slots newly handed to Google this run. */
+  locked: number;
   calendarId: string;
   errors: string[];
+  /** Reconcile refused or degraded — not a per-slot failure. */
+  warnings: string[];
+  /** One line per Google-side change adopted, written for a person. */
+  changes: string[];
 }
 
 /**
@@ -254,7 +460,42 @@ export async function syncSlots(
       return true;
     });
 
-  const result: SyncResult = { synced: 0, failed: 0, removed: 0, calendarId, errors: [] };
+  const result: SyncResult = {
+    synced: 0,
+    failed: 0,
+    removed: 0,
+    adopted: 0,
+    cancelled: 0,
+    locked: 0,
+    calendarId,
+    errors: [],
+    warnings: [],
+    changes: [],
+  };
+
+  // Read Google before writing to it. A failure here must never turn into a
+  // write: reconcile is skipped and the push pass runs exactly as it did
+  // before Phase 5, so a transient list error costs the two-way half of the
+  // sync and nothing else.
+  let remoteEvents: Map<string, RemoteEvent> | null = null;
+  try {
+    remoteEvents = await listCalendarEvents(calendar, calendarId);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    result.warnings.push(
+      `Could not read the calendar (${message}): nothing was reconciled, ` +
+        `${slots.length} slot${slots.length === 1 ? "" : "s"} still pushed.`
+    );
+  }
+
+  if (remoteEvents) {
+    const tally = await reconcileSlots(clientId, slots, remoteEvents, opts.appUrl);
+    result.adopted = tally.adopted;
+    result.cancelled = tally.cancelled;
+    result.locked = tally.locked;
+    result.changes = tally.changes;
+    result.warnings.push(...tally.warnings);
+  }
 
   for (const slot of slots) {
     const ref = db().collection(COLLECTIONS.slots).doc(slot.id);
@@ -281,24 +522,69 @@ export async function syncSlots(
       }
 
       const times = eventTimes(slot);
-      const body: calendar_v3.Schema$Event = {
-        summary: eventTitle(slot),
-        description: eventDescription(slot, opts.appUrl),
-        start: times.start,
-        end: times.end,
-      };
+      const title = eventTitle(slot);
+      const description = eventDescription(slot, opts.appUrl);
+      const locked = slot.google_event_locked === true;
+
+      // A locked event's text belongs to whoever edited it in Google. Timing
+      // is still ours, so the piece stays where the plan says it is.
+      //
+      // status: "confirmed" revives a tombstone in place. A deleted event is
+      // not gone — Google keeps it as status "cancelled" — so patching it back
+      // to confirmed is how a slot that reconcile decided to keep gets its
+      // event returned, without a 404 and without minting a second event.
+      const body: calendar_v3.Schema$Event = locked
+        ? { status: "confirmed", start: times.start, end: times.end }
+        : {
+            status: "confirmed",
+            summary: title,
+            description,
+            start: times.start,
+            end: times.end,
+          };
 
       let eventId = slot.google_event_id;
       if (eventId) {
-        await calendar.events.patch({ calendarId, eventId, requestBody: body });
+        await calendar.events
+          .patch({ calendarId, eventId, requestBody: body })
+          .catch(async (e: unknown) => {
+            // The event is gone and reconcile did not catch it — the listing
+            // failed, or it was deleted between the two passes. Recreate it
+            // rather than parking the slot in "error", which is what happened
+            // before Phase 5 and left no visible reason.
+            const code = (e as { code?: number })?.code;
+            if (code !== 404 && code !== 410) throw e;
+            const recreated = await calendar.events.insert({
+              calendarId,
+              requestBody: { ...body, summary: title, description, id: eventId! },
+            });
+            eventId = recreated.data.id ?? eventId;
+          });
       } else {
-        const created = await calendar.events.insert({ calendarId, requestBody: body });
-        eventId = created.data.id ?? null;
+        // A supplied id makes a duplicate insert a 409 instead of a second
+        // event. Two concurrent syncs would otherwise each create one, and the
+        // orphan could never be cleaned up: deleting events no slot claims is
+        // exactly the inference reconcile.ts refuses to make.
+        const id = deterministicEventId(slot.id);
+        const created = await calendar.events
+          .insert({ calendarId, requestBody: { ...body, id } })
+          .catch(async (e: unknown) => {
+            if ((e as { code?: number })?.code !== 409) throw e;
+            return calendar.events.patch({ calendarId, eventId: id, requestBody: body });
+          });
+        eventId = created.data.id ?? id;
       }
 
       await ref.update({
         googleEventId: eventId,
-        googleSyncStatus: "synced",
+        // "locked" rather than "synced" so the header's "N changed since the
+        // last sync" can reach zero. Calling a locked slot synced would be a
+        // lie — its text edit never left the app.
+        googleSyncStatus: locked ? "locked" : "synced",
+        // What we just wrote, so the next reconcile compares against our own
+        // output instead of the slot's current rendering.
+        ...(locked ? {} : { googleEventTitle: title, googleEventBodyHash: hashBody(description) }),
+        googleSyncError: null,
         updatedAt: FieldValue.serverTimestamp(),
       });
       result.synced += 1;

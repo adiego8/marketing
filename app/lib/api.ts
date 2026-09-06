@@ -194,8 +194,18 @@ export const syncCalendar = (
     synced: number;
     failed: number;
     removed: number;
+    /** Slots whose date and time followed a move made in Google. */
+    adopted: number;
+    /** Slots cancelled because their event is gone from Google. */
+    cancelled: number;
+    /** Slots whose text Google now owns. */
+    locked: number;
     calendarId: string;
     errors: string[];
+    /** Reconcile refused or degraded — not a per-slot failure. */
+    warnings: string[];
+    /** One line per Google-side change adopted, written for a person. */
+    changes: string[];
     embed_url: string;
     open_url: string;
   }>(`${c(clientId)}/calendar/sync`, {
@@ -225,6 +235,11 @@ export interface SlotEdit {
   hook?: string;
   body?: string[];
   cta?: string;
+  /**
+   * Take an event's text back from Google after a hand edit there locked it.
+   * The only way out of a lock, so the rule is not permanent.
+   */
+  google_event_locked?: boolean;
 }
 
 export const updateSlot = (clientId: string, slotId: string, data: SlotEdit) =>
