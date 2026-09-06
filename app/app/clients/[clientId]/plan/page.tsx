@@ -123,7 +123,25 @@ export default function PlanPage() {
       </div>
 
       {error &&
-        (/quota/i.test(error) ? (
+        (/changed after this plan/i.test(error) ? (
+          // The stale guard. The plan on screen was computed from a strategy or
+          // calendar that has since moved, so accepting it would schedule
+          // against inputs that no longer exist. The fix is always the same
+          // one click, so offer it rather than describing it.
+          <div className={`${banner.warn} mb-4 flex flex-wrap items-center justify-between gap-3`}>
+            <span>
+              Your strategy or calendar changed after this plan was generated,
+              so it no longer reflects what would actually be scheduled.
+            </span>
+            <button
+              onClick={handlePreview}
+              disabled={planning}
+              className={`${btn.primarySm} shrink-0`}
+            >
+              {planning ? "Planning…" : "Generate a fresh plan"}
+            </button>
+          </div>
+        ) : /quota/i.test(error) ? (
           // The planner's one hard precondition. Reaching it means the run was
           // refused before anything was computed, so point at the fix rather
           // than leaving a raw API message on screen.
