@@ -116,7 +116,9 @@ export function serializeSlot(id: string, d: FirebaseFirestore.DocumentData) {
     id,
     client_id: d.clientId ?? null,
     campaign_id: d.campaignId ?? null,
+    campaign_title: d.campaignTitle ?? null,
     plan_run_id: d.planRunId ?? null,
+    gap_id: str(d.gapId),
     // Local calendar date + time in the client's timezone; scheduled_at is the
     // derived UTC instant. week_key is denormalized so quota math needs no
     // date arithmetic at read time.

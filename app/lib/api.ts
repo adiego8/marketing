@@ -12,7 +12,8 @@ import type {
   Client,
   ClientListItem,
   ScheduledAsset,
-  CalendarItem,
+  Slot,
+  SlotStatus,
   Agency,
   PlanRun,
 } from "./types";
@@ -253,14 +254,6 @@ export const unscheduleAsset = (clientId: string, assetId: string) =>
     method: "DELETE",
   });
 
-export const getCalendar = (clientId: string, start: string, end: string) =>
-  request<CalendarItem[]>(`${c(clientId)}/calendar?start=${start}&end=${end}`);
-
-export const getCalendarUrls = (clientId: string) =>
-  request<{ calendar_id: string | null; embed_url: string | null; open_url: string | null }>(
-    `${c(clientId)}/calendar/urls`,
-  );
-
 // Planner
 export const previewPlan = (clientId: string, weeks = 2) =>
   request<PlanRun>(`${c(clientId)}/plan/preview`, {
@@ -273,6 +266,29 @@ export const listPlanRuns = (clientId: string, limit = 20) =>
 
 export const getPlanRun = (clientId: string, runId: string) =>
   request<PlanRun>(`${c(clientId)}/plan/runs/${runId}`);
+
+// Slots
+export const listSlots = (
+  clientId: string,
+  params?: { start?: string; end?: string; status?: string }
+) => {
+  const q = new URLSearchParams();
+  if (params?.start) q.set("start", params.start);
+  if (params?.end) q.set("end", params.end);
+  if (params?.status) q.set("status", params.status);
+  const qs = q.toString();
+  return request<Slot[]>(`${c(clientId)}/slots${qs ? `?${qs}` : ""}`);
+};
+
+export const updateSlot = (
+  clientId: string,
+  slotId: string,
+  data: { status?: SlotStatus; pinned?: boolean }
+) =>
+  request<Slot>(`${c(clientId)}/slots/${slotId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
 
 export const commitPlan = (clientId: string, runId: string) =>
   request<PlanRun>(`${c(clientId)}/plan/runs/${runId}/commit`, { method: "POST" });

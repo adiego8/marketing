@@ -60,6 +60,15 @@ npm run seed       # after signing in once — creates a client with a quota
 The first person to sign in claims the agency and becomes its admin. Run the
 seed **after** that, so it attaches to the agency your sign-in created.
 
+## The loop
+
+Strategy (set a weekly quota) → Plan (generate a preview, accept it) →
+**Schedule** (what is committed; copy or download it as a Markdown plan).
+
+Cancelling or skipping a slot on the Schedule page gives its quota back, so the
+next plan run proposes a replacement — see `QUOTA_COUNTING` in
+`lib/marketing/planner/types.ts`.
+
 ## Firestore indexes
 
 **None are required.** Both planner queries filter on `clientId` alone and

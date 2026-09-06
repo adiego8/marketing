@@ -70,19 +70,60 @@ export interface ScheduledAsset {
   saved_at: string;
 }
 
-export interface CalendarItem {
+/**
+ * A committed slot: one piece of content scheduled for a date, time and
+ * channel. This is what `marketing_slots` holds and what serializeSlot in
+ * lib/firestore.ts returns.
+ *
+ * Not to be confused with ProposedSlot below, which is the camelCase
+ * pre-commit shape embedded in a plan run. A ProposedSlot becomes a Slot only
+ * when a plan is accepted.
+ */
+export interface Slot {
   id: string;
-  run_id?: string;
-  campaign_id?: string;
-  campaign_title?: string;
+  client_id: string | null;
+  campaign_id: string | null;
+  campaign_title: string | null;
+  plan_run_id: string | null;
+  gap_id: string;
+  /** Calendar date in the client's timezone, not UTC. */
+  date: string;
+  time_local: string;
+  timezone: string;
+  /** The UTC instant derived from date + time_local + timezone. */
+  scheduled_at: string | null;
+  week_key: string;
   type: string;
-  content: Record<string, unknown>;
-  status: "draft" | "scheduled" | "posted";
-  scheduled_for?: string;
-  suggested_scheduled_for?: string;
-  posted_at?: string;
-  google_event_id?: string;
+  channel: string;
+  theme: string;
+  brief: string;
+  rationale: string;
+  needs_theme: boolean;
+  status: SlotStatus;
+  /** "agent" for planner output, "human" for a hand-added slot. */
+  source: string;
+  /** The planner never moves a pinned slot. */
+  pinned: boolean;
+  content: Record<string, unknown> | null;
+  google_event_id: string | null;
+  google_sync_status: string;
+  last_human_edit_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
+
+/**
+ * planned/confirmed/drafted/posted consume quota; cancelled/skipped free it,
+ * so the next plan run refills that gap. Mirrors SLOT_STATUSES in
+ * lib/marketing/planner/types.ts.
+ */
+export type SlotStatus =
+  | "planned"
+  | "confirmed"
+  | "drafted"
+  | "posted"
+  | "cancelled"
+  | "skipped";
 
 export interface Agency {
   id: string;

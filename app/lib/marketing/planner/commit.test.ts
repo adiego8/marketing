@@ -35,6 +35,42 @@ const READ_BY_OBSERVE = [
   "pinned",
 ] as const;
 
+// serializeSlot in lib/firestore.ts is the OTHER reader — the one every API
+// response goes through. This list is every `d.*` it touches.
+//
+// The first version of this test covered only READ_BY_OBSERVE, and that is
+// precisely how `calendarEventId` shipped where `googleEventId` was expected:
+// observe does not read it, so nothing failed. A slot missing one of these
+// does not error, it silently deserializes to the field's default — so a
+// synced slot reads back as unsynced, and Phase 4 re-pushes it.
+const READ_BY_SERIALIZER = [
+  "clientId",
+  "campaignId",
+  "campaignTitle",
+  "planRunId",
+  "gapId",
+  "date",
+  "timeLocal",
+  "timezone",
+  "scheduledAt",
+  "weekKey",
+  "type",
+  "channel",
+  "theme",
+  "brief",
+  "rationale",
+  "needsTheme",
+  "status",
+  "source",
+  "pinned",
+  "content",
+  "googleEventId",
+  "googleSyncStatus",
+  "lastHumanEditAt",
+  "createdAt",
+  "updatedAt",
+] as const;
+
 describe("slotDoc", () => {
   const doc = slotDoc("c1", "run1", SLOT);
 
@@ -43,6 +79,28 @@ describe("slotDoc", () => {
       expect(doc, `missing ${key}`).toHaveProperty(key);
       expect(doc[key as keyof typeof doc], `${key} is undefined`).toBeDefined();
     }
+  });
+
+  it("writes every field serializeSlot reads back", () => {
+    for (const key of READ_BY_SERIALIZER) {
+      expect(doc, `missing ${key} — serializeSlot will return its default`)
+        .toHaveProperty(key);
+      expect(doc[key as keyof typeof doc], `${key} is undefined`).toBeDefined();
+    }
+  });
+
+  it("names the Google sync fields the way serializeSlot spells them", () => {
+    // The specific drift this test exists to prevent.
+    expect(doc).toHaveProperty("googleEventId");
+    expect(doc).not.toHaveProperty("calendarEventId");
+    expect(doc.googleSyncStatus).toBe("pending");
+  });
+
+  it("marks the slot as planner output", () => {
+    // Human-added slots will carry source "human"; the distinction is what
+    // lets reconciliation tell an agent slot from one someone typed.
+    expect(doc.source).toBe("agent");
+    expect(doc.lastHumanEditAt).toBeNull();
   });
 
   it("carries the proposal through unchanged", () => {

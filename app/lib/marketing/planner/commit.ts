@@ -111,9 +111,18 @@ export function slotDoc(clientId: string, runId: string, slot: ProposedSlot) {
     status: "planned",
     // Human edits set this; the planner never moves a pinned slot.
     pinned: false,
-    // Phase 4 fills this when the slot reaches Google Calendar.
-    calendarEventId: null,
+    // Distinguishes planner output from a slot someone added by hand.
+    source: "agent",
+    // The written copy, once there is any. Nothing produces it yet.
+    content: null,
+    // Phase 4 fills these when the slot reaches Google Calendar. The names
+    // must match serializeSlot — this was `calendarEventId` and so every
+    // committed slot read back as unsynced regardless of the truth.
+    googleEventId: null,
+    googleSyncStatus: "pending",
+    lastHumanEditAt: null,
     createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   };
 }
 
