@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { previewPlan, listPlanRuns } from "@/lib/api";
+import { previewPlan, listPlanRuns, commitPlan } from "@/lib/api";
 import { banner, btn, surface, table, toggle, text } from "@/lib/ui";
 import { channelPill, PILL } from "@/lib/ui-status";
 import type { PlanRun, ProposedSlot } from "@/lib/types";
@@ -28,6 +28,7 @@ export default function PlanPage() {
   const [planning, setPlanning] = useState(false);
   const [weeks, setWeeks] = useState(2);
   const [error, setError] = useState<string | null>(null);
+  const [committing, setCommitting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +60,19 @@ export default function PlanPage() {
       setError(e instanceof Error ? e.message : "Planning failed");
     } finally {
       setPlanning(false);
+    }
+  };
+
+  const handleCommit = async () => {
+    if (!run) return;
+    setCommitting(true);
+    setError(null);
+    try {
+      setRun(await commitPlan(clientId, run.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Commit failed");
+    } finally {
+      setCommitting(false);
     }
   };
 
@@ -298,14 +312,40 @@ export default function PlanPage() {
             </section>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-sm text-slate-500">
-              Preview only. Nothing has been written to the calendar.
-            </p>
-            <button className={btn.outline} disabled>
-              Commit (Phase 3)
-            </button>
-          </div>
+          {run.committed_at ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 p-4">
+              <p className="text-sm text-teal-800">
+                Committed{" "}
+                {new Date(run.committed_at).toLocaleString()} ·{" "}
+                {run.created_slot_ids.length} slot
+                {run.created_slot_ids.length === 1 ? "" : "s"} on the calendar.
+              </p>
+              <button
+                onClick={handlePreview}
+                disabled={planning}
+                className={`${btn.outline} shrink-0`}
+              >
+                Plan the next stretch
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-sm text-slate-500">
+                Preview only. Nothing has been written to the calendar yet.
+              </p>
+              <button
+                onClick={handleCommit}
+                disabled={committing || run.proposed_slots.length === 0}
+                className={`${btn.primarySm} shrink-0`}
+              >
+                {committing
+                  ? "Committing…"
+                  : `Accept ${run.proposed_slots.length} slot${
+                      run.proposed_slots.length === 1 ? "" : "s"
+                    }`}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

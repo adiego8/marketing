@@ -273,3 +273,6 @@ export const listPlanRuns = (clientId: string, limit = 20) =>
 
 export const getPlanRun = (clientId: string, runId: string) =>
   request<PlanRun>(`${c(clientId)}/plan/runs/${runId}`);
+
+export const commitPlan = (clientId: string, runId: string) =>
+  request<PlanRun>(`${c(clientId)}/plan/runs/${runId}/commit`, { method: "POST" });
