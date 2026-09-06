@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -11,6 +11,7 @@ import {
   startGoogleConnect,
   syncCalendar,
   downloadPlanPdf,
+  regenerateSlot,
 } from "@/lib/api";
 import { banner, btn, field, surface, table, toggle, text } from "@/lib/ui";
 import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
@@ -157,6 +158,60 @@ export default function SchedulePage() {
     }
   };
 
+  const openEditor = (slot: Slot) => {
+    setEditingId(slot.id);
+    // A local draft, saved explicitly — the same shape as the campaign content
+    // plan, rather than saving on every keystroke.
+    setDraft({ ...slot, body: [...slot.body] });
+    setSteer("");
+    setError(null);
+  };
+
+  const patchDraft = (patch: Partial<Slot>) =>
+    setDraft((d) => (d ? { ...d, ...patch } : d));
+
+  const replaceSlot = (updated: Slot) => {
+    setSlots((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    setDraft({ ...updated, body: [...updated.body] });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!draft) return;
+    setBusyId(draft.id);
+    setError(null);
+    try {
+      replaceSlot(
+        await updateSlot(clientId, draft.id, {
+          theme: draft.theme,
+          brief: draft.brief,
+          rationale: draft.rationale,
+          hook: draft.hook,
+          body: draft.body.map((b) => b.trim()).filter(Boolean),
+          cta: draft.cta,
+        })
+      );
+      setEditingId(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save the slot");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleRegenerate = async (slot: Slot, mode: "angle" | "rewrite") => {
+    setBusyId(slot.id);
+    setError(null);
+    try {
+      replaceSlot(
+        await regenerateSlot(clientId, slot.id, { mode, steer: steer || undefined })
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not regenerate the slot");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const handleStatus = async (slot: Slot, status: SlotStatus) => {
     if (status === slot.status) return;
     setSavingId(slot.id);
@@ -185,6 +240,10 @@ export default function SchedulePage() {
   };
 
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Slot | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [steer, setSteer] = useState("");
 
   const handlePdf = async () => {
     setPdfBusy(true);
@@ -220,6 +279,9 @@ export default function SchedulePage() {
   const live = slots.filter(
     (s) => s.status !== "cancelled" && s.status !== "skipped"
   );
+  // Edited or regenerated after their event was written. syncSlots patches by
+  // googleEventId, so re-syncing rewrites the event in place.
+  const stale = slots.filter((s) => s.google_sync_status === "stale");
 
   const byWeek = slots.reduce<Record<string, Slot[]>>((acc, slot) => {
     (acc[slot.week_key || "Unscheduled"] ||= []).push(slot);
@@ -307,6 +369,12 @@ export default function SchedulePage() {
             <>
               <span className="text-sm text-slate-500">
                 Google Calendar · {google.email}
+                {stale.length > 0 && (
+                  <span className="text-amber-700 font-medium">
+                    {" "}
+                    — {stale.length} changed since the last sync
+                  </span>
+                )}
                 {syncNote && (
                   <span className="text-teal-700 font-medium"> — {syncNote}</span>
                 )}
@@ -376,9 +444,10 @@ export default function SchedulePage() {
                     {weekSlots.map((slot) => {
                       const dropped =
                         slot.status === "cancelled" || slot.status === "skipped";
+                      const open = editingId === slot.id;
                       return (
+                        <Fragment key={slot.id}>
                         <tr
-                          key={slot.id}
                           className={`${table.row} ${dropped ? "opacity-50" : ""}`}
                         >
                           <td className={`${table.cell} font-medium whitespace-nowrap`}>
@@ -451,9 +520,158 @@ export default function SchedulePage() {
                                   </option>
                                 ))}
                               </select>
+                              <button
+                                onClick={() =>
+                                  open ? setEditingId(null) : openEditor(slot)
+                                }
+                                className="text-xs font-semibold text-slate-400 hover:text-teal-700 transition-colors"
+                              >
+                                {open ? "Close" : "Edit"}
+                              </button>
                             </div>
+                            {slot.google_sync_status === "stale" && (
+                              <span className="text-[10px] uppercase tracking-wide text-amber-700">
+                                changed since sync
+                              </span>
+                            )}
                           </td>
                         </tr>
+
+                        {open && draft && (
+                          <tr>
+                            <td colSpan={7} className="bg-stone-50 px-4 py-4">
+                              <div className="max-w-3xl space-y-3">
+                                <div>
+                                  <label className={field.micro}>Theme</label>
+                                  <input
+                                    className={field.inputSm}
+                                    value={draft.theme}
+                                    onChange={(e) => patchDraft({ theme: e.target.value })}
+                                  />
+                                </div>
+                                <div>
+                                  <label className={field.micro}>Hook</label>
+                                  <textarea
+                                    className={`${field.textarea} h-16`}
+                                    value={draft.hook}
+                                    onChange={(e) => patchDraft({ hook: e.target.value })}
+                                    placeholder="The first line, the first three seconds, slide 1."
+                                  />
+                                </div>
+                                <div>
+                                  <label className={field.micro}>
+                                    Body — one entry per beat, in order
+                                  </label>
+                                  <div className="space-y-2">
+                                    {draft.body.map((beat, i) => (
+                                      <div key={i} className="flex gap-2 items-start">
+                                        <span className="text-xs text-slate-400 pt-2 w-4 shrink-0">
+                                          {i + 1}
+                                        </span>
+                                        <textarea
+                                          className={`${field.textarea} h-14`}
+                                          value={beat}
+                                          onChange={(e) => {
+                                            const body = [...draft.body];
+                                            body[i] = e.target.value;
+                                            patchDraft({ body });
+                                          }}
+                                        />
+                                        <button
+                                          onClick={() =>
+                                            patchDraft({
+                                              body: draft.body.filter((_, j) => j !== i),
+                                            })
+                                          }
+                                          aria-label={`Remove beat ${i + 1}`}
+                                          className="text-slate-400 hover:text-red-600 transition-colors pt-2"
+                                        >
+                                          &#215;
+                                        </button>
+                                      </div>
+                                    ))}
+                                    {draft.body.length < 8 && (
+                                      <button
+                                        onClick={() =>
+                                          patchDraft({ body: [...draft.body, ""] })
+                                        }
+                                        className={btn.outlineSm}
+                                      >
+                                        + Beat
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className={field.micro}>CTA</label>
+                                  <input
+                                    className={field.inputSm}
+                                    value={draft.cta}
+                                    onChange={(e) => patchDraft({ cta: e.target.value })}
+                                    placeholder="The ask, written as it would be said."
+                                  />
+                                </div>
+                                <div>
+                                  <label className={field.micro}>In one line</label>
+                                  <input
+                                    className={field.inputSm}
+                                    value={draft.brief}
+                                    onChange={(e) => patchDraft({ brief: e.target.value })}
+                                  />
+                                </div>
+
+                                <div className="flex flex-wrap gap-2 items-center pt-1">
+                                  <button
+                                    onClick={handleSaveEdit}
+                                    disabled={busyId === slot.id}
+                                    className={btn.primarySm}
+                                  >
+                                    {busyId === slot.id ? "Saving…" : "Save"}
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingId(null)}
+                                    className={btn.outlineSm}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+
+                                <div className="border-t border-slate-200 pt-3 space-y-2">
+                                  <label className={field.micro}>
+                                    Or have the agent try again
+                                  </label>
+                                  <input
+                                    className={field.inputSm}
+                                    value={steer}
+                                    onChange={(e) => setSteer(e.target.value)}
+                                    placeholder="Optional: what to change — e.g. make the hook blunter"
+                                  />
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      onClick={() => handleRegenerate(slot, "rewrite")}
+                                      disabled={busyId === slot.id}
+                                      className={btn.outlineSm}
+                                    >
+                                      {busyId === slot.id ? "Working…" : "Rewrite"}
+                                    </button>
+                                    <button
+                                      onClick={() => handleRegenerate(slot, "angle")}
+                                      disabled={busyId === slot.id}
+                                      className={btn.outlineSm}
+                                    >
+                                      New angle
+                                    </button>
+                                    <span className="text-xs text-slate-400 self-center">
+                                      Rewrite keeps the theme. New angle replaces it.
+                                      The date, time and channel never move.
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                   </tbody>

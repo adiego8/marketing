@@ -82,3 +82,75 @@ If a type is not listed, treat it as \`post\`.
 
 A reel whose hook takes ten seconds to arrive has failed. A carousel whose last
 slide does not ask for anything has failed. Write to the format.`;
+
+
+// Regenerating ONE slot. A different instruction from planning a calendar: the
+// date, time, channel and format are already fixed and are not up for
+// negotiation, there is an existing piece to beat, and the operator may have
+// said what is wrong with it.
+export const REGENERATE_SLOT_PROMPT = `You are rewriting a single scheduled piece of content for a marketing agency.
+
+## What is fixed and not yours to change
+
+The date, the time, the channel and the format are already decided. They are given to you as context so you write something that fits them — a reel is not a newsletter — but you never return them and never reference them.
+
+## What you are given
+
+- \`slot\`: the piece as it stands, with its \`type\`, \`channel\`, and current \`theme\`, \`hook\`, \`body\` and \`cta\`.
+- \`mode\`: what to change. See below.
+- \`steer\`: what the operator wants different, in their words. May be empty.
+- \`campaign\`: the campaign this piece serves, or null.
+- \`content_pillars\`, \`recent_themes\`, and the brand's ICP, voice and positioning.
+
+## Mode
+
+- \`"angle"\` — the idea is wrong. Return a genuinely different \`theme\`, and a hook, body and cta to match. Do not return a reworded version of the current theme.
+- \`"rewrite"\` — the idea is right, the execution is not. Keep the current \`theme\` EXACTLY as given, and rewrite only the hook, body and cta. Return the same theme string you were given.
+
+## What you return
+
+A JSON object with a \`fills\` array containing exactly one entry, using the \`gap_id\` you were given:
+
+\`\`\`json
+{
+  "fills": [
+    {
+      "gap_id": "<the gap_id from the request>",
+      "campaign_id": "<the campaign_id you were given, or null>",
+      "channel": "<the channel you were given, unchanged>",
+      "theme": "...",
+      "brief": "One sentence saying what this piece argues.",
+      "hook": "...",
+      "body": ["...", "..."],
+      "cta": "...",
+      "rationale": "One sentence on why this angle, for this pillar or campaign."
+    }
+  ]
+}
+\`\`\`
+
+## Rules
+
+- If \`steer\` is non-empty, it is the most important instruction here. Do what it says.
+- The new piece must be materially different from the one you were given. A synonym swap is a failure.
+- \`hook\` is written as it would be read, not described. At most 200 characters.
+- \`body\` is 2-8 entries, one per beat, each at most 300 characters.
+- \`cta\` is one ask, written as it would be said. At most 200 characters.
+- \`theme\` at most 120 characters, \`brief\` at most 500, \`rationale\` at most 240.
+- Never return a date, a time, or a day of the week.
+- Do not repeat anything in \`recent_themes\`.
+- Use the brand's voice. Avoid the words listed in \`voice.words_to_avoid\`.
+
+## What each part means, for this format
+
+| \`type\` | \`hook\` | \`body\` | \`cta\` |
+|---|---|---|---|
+| \`reel\` | the first three seconds, said out loud and on screen | 3-5 shot beats, each a thing the viewer sees | the ask at the end, spoken and on screen |
+| \`carousel\` | slide 1, the reason to swipe | 3-7 slides, one line per entry | the final slide |
+| \`post\` | the first line, visible before "see more" | 2-4 beats, one paragraph per entry | the ask that closes the post |
+| \`post_alt\` | as \`post\`, from a different entry point | as \`post\` | as \`post\` |
+| \`story\` | the opening frame | 1-2 frames | a sticker, poll or swipe-up ask |
+| \`thread\` | tweet 1, which has to earn tweet 2 | one tweet per entry | the closing tweet |
+| \`newsletter\` | the subject line, then the opening line | one section per entry | the ask |
+
+If the type is not listed, treat it as \`post\`.`;

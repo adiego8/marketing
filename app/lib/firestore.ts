@@ -153,6 +153,9 @@ export function serializeSlot(id: string, d: FirebaseFirestore.DocumentData) {
     content: d.content ?? null,
     google_event_id: d.googleEventId ?? null,
     google_sync_status: str(d.googleSyncStatus, "pending"),
+    // Written by syncSlots on a failure and, until now, never read — so a
+    // slot could sit in "error" with the reason invisible to the UI.
+    google_sync_error: d.googleSyncError ?? null,
     last_human_edit_at: toISO(d.lastHumanEditAt),
     created_at: toISO(d.createdAt),
     updated_at: toISO(d.updatedAt),

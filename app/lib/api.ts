@@ -156,6 +156,16 @@ export async function downloadPlanPdf(
   return { blob: await res.blob(), filename: match?.[1] ?? "content-plan.pdf" };
 }
 
+export const regenerateSlot = (
+  clientId: string,
+  slotId: string,
+  data: { mode: "angle" | "rewrite"; steer?: string }
+) =>
+  request<Slot>(`${c(clientId)}/slots/${slotId}/regenerate`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
 // Google Calendar
 export const getGoogleStatus = () =>
   request<{
@@ -206,11 +216,18 @@ export const listSlots = (
   return request<Slot[]>(`${c(clientId)}/slots${qs ? `?${qs}` : ""}`);
 };
 
-export const updateSlot = (
-  clientId: string,
-  slotId: string,
-  data: { status?: SlotStatus; pinned?: boolean }
-) =>
+export interface SlotEdit {
+  status?: SlotStatus;
+  pinned?: boolean;
+  theme?: string;
+  brief?: string;
+  rationale?: string;
+  hook?: string;
+  body?: string[];
+  cta?: string;
+}
+
+export const updateSlot = (clientId: string, slotId: string, data: SlotEdit) =>
   request<Slot>(`${c(clientId)}/slots/${slotId}`, {
     method: "PATCH",
     body: JSON.stringify(data),

@@ -50,6 +50,7 @@ export interface Slot {
   content: Record<string, unknown> | null;
   google_event_id: string | null;
   google_sync_status: string;
+  google_sync_error: string | null;
   last_human_edit_at: string | null;
   created_at: string | null;
   updated_at: string | null;

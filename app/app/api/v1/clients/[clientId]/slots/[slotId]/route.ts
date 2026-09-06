@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { isSlotStatus, updateSlot, type SlotPatch } from "@/lib/marketing/slots";
-import { SLOT_STATUSES } from "@/lib/marketing/planner/types";
+import {
+  SLOT_STATUSES,
+  MAX_THEME_CHARS,
+  MAX_BRIEF_CHARS,
+  MAX_RATIONALE_CHARS,
+  MAX_HOOK_CHARS,
+  MAX_CTA_CHARS,
+  MAX_BODY_ITEMS,
+  MAX_BODY_ITEM_CHARS,
+} from "@/lib/marketing/planner/types";
 import {
   requireClient,
   jsonError,
@@ -10,10 +19,20 @@ import {
 
 type Params = { params: Promise<{ clientId: string; slotId: string }> };
 
+// The same caps the model is held to, so a hand edit cannot produce a slot the
+// planner could not have produced.
+const TEXT_LIMITS: Record<string, number> = {
+  theme: MAX_THEME_CHARS,
+  brief: MAX_BRIEF_CHARS,
+  rationale: MAX_RATIONALE_CHARS,
+  hook: MAX_HOOK_CHARS,
+  cta: MAX_CTA_CHARS,
+};
+
 // PATCH /api/v1/clients/[clientId]/slots/[slotId]
 //
-// Status and pinning only — see updateSlot for why the planner's own output
-// (date, channel, theme) is not editable here.
+// Status, pinning, and the piece itself. Scheduling — date, time, channel,
+// format — stays the planner's; see updateSlot for why.
 export async function PATCH(request: Request, { params }: Params) {
   try {
     const { clientId, slotId } = await params;
@@ -40,8 +59,39 @@ export async function PATCH(request: Request, { params }: Params) {
       }
       patch.pinned = body.pinned;
     }
+    for (const [key, max] of Object.entries(TEXT_LIMITS)) {
+      if (!(key in body)) continue;
+      const value = body[key];
+      if (typeof value !== "string") {
+        return jsonError(`${key} must be a string`, 400);
+      }
+      if (value.length > max) {
+        return jsonError(`${key} must be at most ${max} characters`, 400);
+      }
+      (patch as Record<string, unknown>)[key] = value;
+    }
+
+    if ("body" in body) {
+      if (!Array.isArray(body.body) || body.body.some((x) => typeof x !== "string")) {
+        return jsonError("body must be an array of strings", 400);
+      }
+      if (body.body.length > MAX_BODY_ITEMS) {
+        return jsonError(`body must have at most ${MAX_BODY_ITEMS} entries`, 400);
+      }
+      if ((body.body as string[]).some((x) => x.length > MAX_BODY_ITEM_CHARS)) {
+        return jsonError(
+          `each body entry must be at most ${MAX_BODY_ITEM_CHARS} characters`,
+          400
+        );
+      }
+      patch.body = (body.body as string[]).map((x) => x.trim()).filter(Boolean);
+    }
+
     if (Object.keys(patch).length === 0) {
-      return jsonError("Nothing to update. Send status and/or pinned.", 400);
+      return jsonError(
+        "Nothing to update. Send status, pinned, or any of theme, brief, rationale, hook, body, cta.",
+        400
+      );
     }
 
     const slot = await updateSlot(clientId, slotId, patch);
