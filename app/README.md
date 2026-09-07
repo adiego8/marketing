@@ -132,6 +132,25 @@ that behave differently from the rest:
 | `FIREBASE_PRIVATE_KEY` | Paste it **without** the surrounding double quotes, keeping the literal `\n` escapes; `lib/firebase-admin.ts:40` unescapes them. `.env.local` needs the quotes because dotenv strips them, and Vercel does not — leave them in and the key begins with a `"`, `cert()` throws at module load, and *every* route importing firebase-admin returns a 500 HTML page. The symptom is the login screen saying "You do not have access to this app.", which is the client's fallback for a response that was not JSON. |
 | `GOOGLE_OAUTH_REDIRECT_URI` | The deployed origin, e.g. `https://<domain>/api/v1/google/callback`, and the identical string listed on the OAuth client in Google Cloud. |
 
+`package.json` pins one override:
+
+```json
+"overrides": { "jwks-rsa": { "jose": "^5.10.0" } }
+```
+
+firebase-admin is on Next's built-in external list, so it is `import`ed at
+runtime rather than bundled, and its chain — firebase-admin → jwks-rsa → jose —
+ends in a CommonJS `require()` of a package that jose 6 ships as ESM only. Node
+17-22.11 and any runtime started with `--no-experimental-require-module` throw
+ERR_REQUIRE_ESM there and every API route 500s, while a local Node 22.12+ loads
+it happily — so this fails only once deployed. jose 5 exports a `require`
+condition, and jwks-rsa uses just `importJWK` and `exportSPKI`, which are
+unchanged between the two. Reproduce either way with:
+
+```bash
+node --no-experimental-require-module -e "require('firebase-admin/auth')"
+```
+
 Before the first deploy, three things live outside this repo:
 
 1. **Publish the OAuth consent screen.** While its status is "Testing", Google
