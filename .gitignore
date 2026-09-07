@@ -19,7 +19,3 @@ client_secret_*.json
 
 # Local Claude Code settings
 .claude/settings.local.json
-
-# The frontend is currently its own git repo with its own history.
-# It gets absorbed into this repo during the Next.js backend migration.
-frontend/

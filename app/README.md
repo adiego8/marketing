@@ -114,7 +114,11 @@ Those are checked by dry-running against real data before a write path ships.
 
 ## Deploying
 
-Vercel. The build is the default Next output — do **not** add
+Vercel, with **Root Directory set to `app`** — this app is not at the repository
+root; the design specs it is built from, and the deleted Python backend's
+history, share the repo with it. Set Ignored Build Step to
+`git diff --quiet HEAD^ HEAD -- ./` so a commit touching only `docs/` does not
+redeploy an identical app. The build is the default Next output: do **not** add
 `output: "standalone"`, which produces a tree Vercel does not serve.
 `vercel.json` pins functions to `iad1` so they sit beside Firestore rather than
 wherever the account default lands.
@@ -142,7 +146,7 @@ Before the first deploy, three things live outside this repo:
 
 Dashboard, Strategy, Branding, Campaigns, Plan and Schedule, each backed by a
 route in `app/api/v1`. There is no proxy and no second backend: the FastAPI
-service this was ported from has been deleted, and its history is at `af1ea15`.
+service this was ported from has been deleted, and its history is at `efc3748`.
 
 The schedule pushes to a Google calendar per client and reconciles two ways —
 moves, deletions and renames made in Google are adopted rather than overwritten
