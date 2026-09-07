@@ -4,7 +4,7 @@ import {
   getSession,
   getClientForSession,
   isAuthConfigured,
-  AUTH_NOT_CONFIGURED,
+  authNotConfigured,
   type Session,
 } from "../auth";
 
@@ -31,7 +31,7 @@ export async function requireSession(): Promise<
   // Answered before the 401 so a server with no credentials reports its own
   // misconfiguration instead of blaming the caller's token.
   if (!isAuthConfigured()) {
-    return { response: jsonError(AUTH_NOT_CONFIGURED, 503) };
+    return { response: jsonError(authNotConfigured(), 503) };
   }
 
   const headersList = await headers();

@@ -1,4 +1,4 @@
-import { adminAuth } from "./firebase-admin";
+import { adminAuth, adminInitError } from "./firebase-admin";
 import { db, COLLECTIONS, FieldValue } from "./firestore";
 import type { DecodedIdToken } from "firebase-admin/auth";
 
@@ -45,9 +45,29 @@ export function isAuthConfigured(): boolean {
   return Boolean(adminAuth);
 }
 
-export const AUTH_NOT_CONFIGURED =
+const AUTH_VARS_MISSING =
   "Firebase Admin credentials are missing. Set FIREBASE_PROJECT_ID, " +
   "FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in .env.local (see .env.example).";
+
+/**
+ * Why auth is unavailable, in the caller's words.
+ *
+ * Present-but-invalid is a different problem from absent and needs a different
+ * fix, so it gets a different sentence. The commonest cause by far is a
+ * FIREBASE_PRIVATE_KEY pasted into a hosting dashboard with the surrounding
+ * quotes still attached — dotenv strips those, a dashboard does not.
+ */
+export function authNotConfigured(): string {
+  if (adminInitError) {
+    // The SDK's messages end in a full stop; a second one reads as a typo.
+    const why = adminInitError.replace(/\.\s*$/, "");
+    return `Firebase Admin credentials were rejected: ${why}. Check FIREBASE_PRIVATE_KEY — it must have no surrounding quotes.`;
+  }
+  return AUTH_VARS_MISSING;
+}
+
+/** @deprecated Prefer authNotConfigured(), which names the actual failure. */
+export const AUTH_NOT_CONFIGURED = AUTH_VARS_MISSING;
 
 export async function verifyToken(authHeader: string | null): Promise<DecodedIdToken | null> {
   if (!adminAuth || !authHeader?.startsWith("Bearer ")) return null;

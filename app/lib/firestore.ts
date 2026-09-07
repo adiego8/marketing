@@ -1,11 +1,15 @@
-import { adminDb } from "./firebase-admin";
+import { adminDb, adminInitError } from "./firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 // Server-side Firestore handle (Admin SDK). Throws if accessed without
 // Firebase env vars configured, surfacing misconfig instead of silent no-ops.
 export function db() {
   if (!adminDb) {
-    throw new Error("Firestore is not configured (missing Firebase Admin env vars).");
+    throw new Error(
+      adminInitError
+        ? `Firestore is not configured: Firebase Admin credentials were rejected (${adminInitError}).`
+        : "Firestore is not configured (missing Firebase Admin env vars)."
+    );
   }
   return adminDb;
 }

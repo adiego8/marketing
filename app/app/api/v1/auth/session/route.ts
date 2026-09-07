@@ -4,7 +4,7 @@ import {
   verifyToken,
   ensureMember,
   isAuthConfigured,
-  AUTH_NOT_CONFIGURED,
+  authNotConfigured,
 } from "@/lib/auth";
 import { jsonError, serverError } from "@/lib/marketing/route-helpers";
 
@@ -20,7 +20,7 @@ export async function POST() {
     // This is the route the login screen surfaces errors from, so it is the
     // one place a missing service account most needs to name itself rather
     // than read as "your sign-in was rejected".
-    if (!isAuthConfigured()) return jsonError(AUTH_NOT_CONFIGURED, 503);
+    if (!isAuthConfigured()) return jsonError(authNotConfigured(), 503);
 
     const headersList = await headers();
     const decoded = await verifyToken(headersList.get("authorization"));
