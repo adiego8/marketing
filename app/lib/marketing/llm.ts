@@ -10,7 +10,7 @@ import OpenAI from "openai";
 // What it adds over the Python: a timeout and one retry. There, a truncated
 // response made json.loads throw, which the global handler turned into a 500.
 
-const DEFAULT_MODEL = process.env.LLM_MODEL || "gpt-5.5";
+export const DEFAULT_MODEL = process.env.LLM_MODEL || "gpt-5.5";
 const TIMEOUT_MS = 120_000;
 
 // Newer models reject any temperature other than the default: gpt-5, gpt-5.5

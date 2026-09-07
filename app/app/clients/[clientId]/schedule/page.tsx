@@ -12,9 +12,11 @@ import {
   syncCalendar,
   downloadPlanPdf,
   regenerateSlot,
+  writeSlotCopy,
 } from "@/lib/api";
 import { banner, btn, field, surface, table, toggle, text } from "@/lib/ui";
 import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
+import { readCopy, isCopyStale, copyWarnings } from "@/lib/marketing/copy";
 import { planMarkdown, planFilename } from "@/lib/marketing/export/plan-markdown";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
 import type { Slot, SlotStatus } from "@/lib/types";
@@ -77,6 +79,11 @@ export default function SchedulePage() {
     email: string | null;
     needs_reconnect: boolean;
   } | null>(null);
+  // The copy has its own steer, deliberately: the box above drives Rewrite
+  // and New angle, which rewrite the BRIEF. One input feeding two different
+  // objects would be a trap.
+  const [copySteer, setCopySteer] = useState("");
+  const [copyNote, setCopyNote] = useState<string[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
   // What the last sync adopted FROM Google, as opposed to pushed to it. Kept
@@ -226,6 +233,24 @@ export default function SchedulePage() {
       setSyncNote("Taken back — sync to push the app's text over it");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not take the event back");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleWriteCopy = async (slot: Slot) => {
+    setBusyId(slot.id);
+    setError(null);
+    setCopyNote([]);
+    try {
+      const updated = await writeSlotCopy(clientId, slot.id, {
+        steer: copySteer || undefined,
+      });
+      replaceSlot(updated);
+      setCopyNote(updated.warnings ?? []);
+      setCopySteer("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not write the copy");
     } finally {
       setBusyId(null);
     }
@@ -614,6 +639,15 @@ export default function SchedulePage() {
                                 sync failed
                               </span>
                             )}
+                            {readCopy(slot) && (
+                              <span
+                                className={`text-[10px] uppercase tracking-wide ${
+                                  isCopyStale(slot) ? "text-amber-700" : "text-teal-700"
+                                }`}
+                              >
+                                {isCopyStale(slot) ? "copy is older than the brief" : "copy ready"}
+                              </span>
+                            )}
                           </td>
                         </tr>
 
@@ -764,6 +798,118 @@ export default function SchedulePage() {
                                     </span>
                                   </div>
                                 </div>
+
+                                {(() => {
+                                  const copy = readCopy(slot);
+                                  const stale = isCopyStale(slot);
+                                  const warnings = copy ? copyWarnings(copy, slot) : [];
+                                  return (
+                                    <div className="border-t border-slate-200 pt-3 space-y-2">
+                                      <label className={field.micro}>
+                                        {copy ? "The finished copy" : "Write the finished copy"}
+                                      </label>
+
+                                      {stale && (
+                                        <p className="text-xs text-amber-700">
+                                          The brief above changed after this was
+                                          written, so the two no longer match.
+                                        </p>
+                                      )}
+
+                                      {copy && (
+                                        <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+                                          {copy.headline && (
+                                            <p className="text-sm font-semibold text-slate-800">
+                                              {copy.headline}
+                                            </p>
+                                          )}
+                                          {copy.blocks.map((block, i) => (
+                                            <div key={i}>
+                                              <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                                                {block.label}
+                                              </p>
+                                              <p className="text-sm text-slate-800 whitespace-pre-wrap">
+                                                {block.text}
+                                              </p>
+                                              {block.onScreen && (
+                                                <p className="text-xs text-slate-500">
+                                                  on screen: {block.onScreen}
+                                                </p>
+                                              )}
+                                              {block.note && (
+                                                <p className="text-xs text-slate-400 italic">
+                                                  {block.note}
+                                                </p>
+                                              )}
+                                            </div>
+                                          ))}
+                                          {copy.caption && (
+                                            <div>
+                                              <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                                                Caption
+                                              </p>
+                                              <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                                                {copy.caption}
+                                              </p>
+                                            </div>
+                                          )}
+                                          {copy.hashtags.length > 0 && (
+                                            <p className="text-xs text-teal-700">
+                                              {copy.hashtags.join(" ")}
+                                            </p>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      {warnings.length > 0 && (
+                                        <div className={banner.warn}>
+                                          {warnings.map((w) => (
+                                            <p key={w}>{w}</p>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {copyNote.length > 0 && busyId !== slot.id && (
+                                        <div className={banner.warn}>
+                                          {copyNote.map((w) => (
+                                            <p key={w}>{w}</p>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      {slot.google_event_locked && copy && (
+                                        <p className="text-xs text-amber-700">
+                                          This event&rsquo;s text is Google&rsquo;s, so the
+                                          copy above will not appear on the calendar
+                                          until you take it back.
+                                        </p>
+                                      )}
+
+                                      <input
+                                        className={field.inputSm}
+                                        value={copySteer}
+                                        onChange={(e) => setCopySteer(e.target.value)}
+                                        placeholder="Optional: how to write it — e.g. shorter slides, no questions"
+                                      />
+                                      <div className="flex flex-wrap gap-2">
+                                        <button
+                                          onClick={() => handleWriteCopy(slot)}
+                                          disabled={busyId === slot.id}
+                                          className={btn.primarySm}
+                                        >
+                                          {busyId === slot.id
+                                            ? "Writing…"
+                                            : copy
+                                              ? "Write it again"
+                                              : "Write the copy"}
+                                        </button>
+                                        <span className="text-xs text-slate-400 self-center">
+                                          Writes the words from the brief above. The
+                                          brief itself is not changed.
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </td>
                           </tr>

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { eventTitle, eventDescription } from "./calendar";
+import { eventTitle, eventDescription, MAX_EVENT_DESCRIPTION_CHARS } from "./calendar";
+import { sourceHash, type SlotCopy } from "./copy";
 import type { Slot } from "../types";
 
 // The calendar event is often the only surface someone sees on the day, so it
@@ -99,5 +100,89 @@ describe("eventDescription", () => {
     expect(eventDescription(slot({ needs_theme: true, theme: "" }))).toContain(
       "could not reach the model"
     );
+  });
+});
+
+describe("eventDescription with finished copy", () => {
+  function copy(over: Partial<SlotCopy> = {}): SlotCopy {
+    return {
+      headline: null,
+      blocks: [
+        { label: "Slide 1", text: "Your receipts are not the problem." },
+        { label: "Slide 2", text: "The process that demands them is." },
+      ],
+      caption: "Two slides on the real cost.",
+      hashtags: ["#bookkeeping"],
+      sourceHash: "",
+      generatedAt: "2026-09-07T10:00:00.000Z",
+      model: "gpt-5.5",
+      editedAt: null,
+      ...over,
+    };
+  }
+
+  /** A slot carrying copy written from its own current brief. */
+  function withFreshCopy(over: Partial<SlotCopy> = {}) {
+    const base = slot();
+    return slot({
+      content: copy({ sourceHash: sourceHash(base), ...over }) as unknown as Record<string, unknown>,
+    });
+  }
+
+  it("replaces the brief with the words once they exist", () => {
+    // The copy says what the brief said, in finished form. Printing both is
+    // noise on the one surface someone reads on the day.
+    const out = eventDescription(withFreshCopy());
+    expect(out).toContain("SLIDE 1");
+    expect(out).toContain("Your receipts are not the problem.");
+    expect(out).toContain("CAPTION");
+    expect(out).not.toContain("HOOK");
+    expect(out).not.toContain("BODY");
+  });
+
+  it("keeps the brief alongside copy that is out of date", () => {
+    // The bug this branch exists for: regenerate a synced slot's brief and the
+    // calendar would otherwise show words written from a brief nobody can see.
+    const out = eventDescription(
+      slot({
+        content: copy({ sourceHash: "written-from-an-older-brief" }) as unknown as Record<string, unknown>,
+      })
+    );
+    expect(out).toContain("HEADS UP");
+    expect(out).toContain("changed after this copy was written");
+    expect(out).toContain("SLIDE 1");
+    expect(out).toContain("HOOK");
+    expect(out).toContain("BODY");
+  });
+
+  it("is unchanged for a slot with no copy", () => {
+    // The regression guard: every slot that exists today takes this path.
+    const out = eventDescription(slot());
+    expect(out).toContain("HOOK");
+    expect(out).toContain("BODY");
+    expect(out).not.toContain("SLIDE 1");
+    expect(out).not.toContain("HEADS UP");
+  });
+
+  it("stays under Google's limit and keeps the link when it truncates", () => {
+    // Over ~8 KB Google answers 400, which would park the most content-rich
+    // slots in the plan in googleSyncStatus "error".
+    const huge = withFreshCopy({
+      blocks: Array.from({ length: 12 }, (_, i) => ({
+        label: `Slide ${i + 1}`,
+        text: "x".repeat(1200),
+      })),
+      caption: "c".repeat(3000),
+    });
+    const out = eventDescription(huge, "https://app.example.com");
+    expect(out.length).toBeLessThanOrEqual(MAX_EVENT_DESCRIPTION_CHARS);
+    expect(out).toContain("truncated");
+    expect(out.endsWith("/clients/c1/schedule")).toBe(true);
+  });
+
+  it("does not truncate an ordinary piece", () => {
+    const out = eventDescription(withFreshCopy(), "https://app.example.com");
+    expect(out).not.toContain("truncated");
+    expect(out.endsWith("/clients/c1/schedule")).toBe(true);
   });
 });

@@ -1,5 +1,6 @@
 import type { Slot } from "../../types";
 import { contentTypeLabel } from "../content-types";
+import { readCopy, isCopyStale, copySections } from "../copy";
 
 // The content plan as a document.
 //
@@ -114,6 +115,22 @@ export function planMarkdown(slots: Slot[], meta: PlanDocMeta): string {
         if (slot.cta) {
           lines.push(`**CTA** — ${slot.cta}`);
           lines.push("");
+        }
+        // The finished words, after the brief they were written from. A reader
+        // wants the argument first and the copy to paste second.
+        const copy = readCopy(slot);
+        if (copy) {
+          if (isCopyStale(slot)) {
+            lines.push("_The brief above changed after this copy was written._");
+            lines.push("");
+          }
+          for (const section of copySections(copy)) {
+            lines.push(`**${section.label}**`);
+            lines.push("");
+            lines.push(section.text);
+            if (section.note) lines.push(`_${section.note}_`);
+            lines.push("");
+          }
         }
         const meta: string[] = [];
         if (slot.campaign_title) meta.push(`Campaign: ${slot.campaign_title}`);

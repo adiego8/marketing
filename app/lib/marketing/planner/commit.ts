@@ -118,7 +118,9 @@ export function slotDoc(clientId: string, runId: string, slot: ProposedSlot) {
     pinned: false,
     // Distinguishes planner output from a slot someone added by hand.
     source: "agent",
-    // The written copy, once there is any. Nothing produces it yet.
+    // The finished copy, written after commit by write-copy.ts. See
+    // lib/marketing/copy.ts for the shape and readCopy for the one place
+    // it is narrowed.
     content: null,
     // Phase 4 fills these when the slot reaches Google Calendar. The names
     // must match serializeSlot — this was `calendarEventId` and so every

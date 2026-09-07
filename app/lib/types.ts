@@ -47,6 +47,12 @@ export interface Slot {
   source: string;
   /** The planner never moves a pinned slot. */
   pinned: boolean;
+  /**
+   * The finished, publishable copy — see lib/marketing/copy.ts. Deliberately
+   * untyped here: serializeSlot passes it through unvalidated and it is
+   * hand-editable JSON, so readCopy() is the single narrowing point rather
+   * than a cast at every read.
+   */
   content: Record<string, unknown> | null;
   google_event_id: string | null;
   /** pending | synced | stale | locked | removed | error. */

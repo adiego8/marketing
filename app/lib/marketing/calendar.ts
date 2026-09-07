@@ -13,6 +13,7 @@ import { DateTime } from "luxon";
 import { db, COLLECTIONS, FieldValue, serializeSlot } from "../firestore";
 import { getAuthorizedClient, NotConnectedError } from "./google";
 import { contentTypeLabel } from "./content-types";
+import { readCopy, isCopyStale, copyToLines } from "./copy";
 import { adoptSlotSchedule, cancelFromGoogle, setEventLock } from "./slots";
 import {
   classify,
@@ -37,14 +38,27 @@ export function eventTitle(slot: Slot): string {
 }
 
 /**
- * The production brief, in the event body.
+ * The piece, in the event body.
  *
  * A calendar event is often the only surface someone sees on the day, so it
- * carries everything needed to actually make the piece rather than a link
- * back to the app.
+ * carries everything needed to actually make the piece rather than a link back
+ * to the app. Since Phase 6 that means the finished copy where there is any —
+ * you should be able to post from your phone.
+ *
+ * Three branches, and the middle one is the reason the third exists:
+ *
+ *  - no copy: exactly what this produced before Phase 6, byte for byte.
+ *  - fresh copy: the words replace HOOK / BODY / CTA. The brief is what the
+ *    copy was written from; repeating both is noise.
+ *  - STALE copy: the brief has moved since the copy was written, so BOTH are
+ *    shown and the mismatch is named. Without this branch, regenerating a
+ *    slot's brief after its copy was synced leaves the calendar showing words
+ *    written from a brief nobody can see, with no signal at all.
  */
 export function eventDescription(slot: Slot, appUrl?: string): string {
   const lines: string[] = [];
+  const copy = readCopy(slot);
+  const stale = copy !== null && isCopyStale(slot);
 
   lines.push(`${contentTypeLabel(slot.type)} · ${slot.channel}`);
   lines.push("");
@@ -58,27 +72,42 @@ export function eventDescription(slot: Slot, appUrl?: string): string {
   }
   lines.push("");
 
-  if (slot.brief) {
-    lines.push("IN ONE LINE");
-    lines.push(slot.brief);
-    lines.push("");
+  if (copy) {
+    if (stale) {
+      lines.push("HEADS UP");
+      lines.push("The brief below was changed after this copy was written.");
+      lines.push("");
+    }
+    lines.push(...copyToLines(copy));
   }
-  if (slot.hook) {
-    lines.push("HOOK");
-    lines.push(slot.hook);
-    lines.push("");
+
+  // The brief: on its own when there is no copy, and alongside stale copy so
+  // the newer thinking is visible. Suppressed under fresh copy, which says the
+  // same thing in finished words.
+  if (!copy || stale) {
+    if (slot.brief) {
+      lines.push("IN ONE LINE");
+      lines.push(slot.brief);
+      lines.push("");
+    }
+    if (slot.hook) {
+      lines.push("HOOK");
+      lines.push(slot.hook);
+      lines.push("");
+    }
+    if (slot.body?.length) {
+      lines.push("BODY");
+      // Numbered because the order is the piece: slide 1, shot 1, tweet 1.
+      slot.body.forEach((beat, i) => lines.push(`${i + 1}. ${beat}`));
+      lines.push("");
+    }
+    if (slot.cta) {
+      lines.push("CTA");
+      lines.push(slot.cta);
+      lines.push("");
+    }
   }
-  if (slot.body?.length) {
-    lines.push("BODY");
-    // Numbered because the order is the piece: slide 1, shot 1, tweet 1.
-    slot.body.forEach((beat, i) => lines.push(`${i + 1}. ${beat}`));
-    lines.push("");
-  }
-  if (slot.cta) {
-    lines.push("CTA");
-    lines.push(slot.cta);
-    lines.push("");
-  }
+
   if (slot.campaign_title) {
     lines.push("CAMPAIGN");
     lines.push(slot.campaign_title);
@@ -89,10 +118,37 @@ export function eventDescription(slot: Slot, appUrl?: string): string {
     lines.push(slot.rationale);
     lines.push("");
   }
-  if (appUrl && slot.client_id) {
-    lines.push(`${appUrl}/clients/${slot.client_id}/schedule`);
-  }
-  return lines.join("\n").trim();
+
+  const link = appUrl && slot.client_id
+    ? `${appUrl}/clients/${slot.client_id}/schedule`
+    : null;
+
+  const body = lines.join("\n").trim();
+  return truncateDescription(body, link);
+}
+
+/**
+ * Google rejects an event description over about 8 KB with a 400.
+ *
+ * Before Phase 6 the worst case was a few kilobytes and this could not fire.
+ * Full copy — a dozen blocks plus a caption — can reach four times the limit,
+ * and the failure would land on exactly the most content-rich slots in the
+ * plan, parking them in googleSyncStatus "error".
+ *
+ * The link is appended AFTER truncating rather than trimmed with everything
+ * else, because it is the escape hatch: a truncated event is only useful if it
+ * still says where to read the rest.
+ */
+export const MAX_EVENT_DESCRIPTION_CHARS = 7500;
+
+function truncateDescription(body: string, link: string | null): string {
+  const tail = link ? `\n\n${link}` : "";
+  const room = MAX_EVENT_DESCRIPTION_CHARS - tail.length;
+
+  if (body.length <= room) return `${body}${tail}`;
+
+  const notice = "\n\n… truncated — open the app for the rest.";
+  return `${body.slice(0, room - notice.length).trimEnd()}${notice}${tail}`;
 }
 
 /**

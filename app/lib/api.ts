@@ -235,12 +235,30 @@ export interface SlotEdit {
   hook?: string;
   body?: string[];
   cta?: string;
+  /** The finished copy. null clears it. */
+  content?: Record<string, unknown> | null;
   /**
    * Take an event's text back from Google after a hand edit there locked it.
    * The only way out of a lock, so the rule is not permanent.
    */
   google_event_locked?: boolean;
 }
+
+/**
+ * Write the finished, publishable words from the brief the slot carries.
+ *
+ * Returns the updated slot plus any platform-limit warnings — a tweet over 280
+ * is worth saying out loud rather than silently shortening.
+ */
+export const writeSlotCopy = (
+  clientId: string,
+  slotId: string,
+  data: { steer?: string } = {}
+) =>
+  request<Slot & { warnings: string[] }>(`${c(clientId)}/slots/${slotId}/copy`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 
 export const updateSlot = (clientId: string, slotId: string, data: SlotEdit) =>
   request<Slot>(`${c(clientId)}/slots/${slotId}`, {

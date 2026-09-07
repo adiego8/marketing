@@ -149,7 +149,7 @@ export function skeletonFills(gaps: GapRequest[]): Fill[] {
   }));
 }
 
-function clamp(value: unknown, max: number): string {
+export function clamp(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
@@ -160,7 +160,7 @@ function clamp(value: unknown, max: number): string {
  * slip to be worth absorbing rather than discarding — one beat is better than
  * none. Anything else becomes an empty list.
  */
-function clampList(value: unknown, maxItems: number, maxChars: number): string[] {
+export function clampList(value: unknown, maxItems: number, maxChars: number): string[] {
   const raw = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
   return raw
     .map((entry) => clamp(entry, maxChars))

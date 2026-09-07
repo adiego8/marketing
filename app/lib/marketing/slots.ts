@@ -69,10 +69,22 @@ export interface SlotPatch {
   hook?: string;
   body?: string[];
   cta?: string;
+  /**
+   * The finished copy — what actually gets posted. Written by write-copy.ts and
+   * hand-editable; null clears it. See lib/marketing/copy.ts for the shape.
+   */
+  content?: Record<string, unknown> | null;
 }
 
-/** The content half, so the regenerate path can share the write. */
-export const CONTENT_FIELDS = [
+/**
+ * The brief half, so the regenerate path can share the write.
+ *
+ * Named BRIEF_FIELDS rather than CONTENT_FIELDS since Phase 6: `content` is now
+ * the finished copy, a different thing from the brief these six fields make up,
+ * and the old name sat awkwardly beside content_plan, content_quota and
+ * content_strategy already.
+ */
+export const BRIEF_FIELDS = [
   "theme",
   "brief",
   "rationale",
@@ -80,6 +92,16 @@ export const CONTENT_FIELDS = [
   "body",
   "cta",
 ] as const;
+
+/**
+ * Everything the Google Calendar event is rendered from.
+ *
+ * Kept separate from BRIEF_FIELDS, which the write loop above iterates and
+ * which reads as "the brief". This one exists for exactly one reason: since
+ * Phase 6 eventDescription renders the copy when there is any, so writing copy
+ * makes the event stale just as editing the hook does.
+ */
+const EVENT_FIELDS = [...BRIEF_FIELDS, "content"] as const;
 
 /**
  * Apply an edit to a committed slot.
@@ -114,9 +136,13 @@ export async function updateSlot(
 
   if (patch.status !== undefined) update.status = patch.status;
   if (patch.pinned !== undefined) update.pinned = patch.pinned;
-  for (const key of CONTENT_FIELDS) {
+  for (const key of BRIEF_FIELDS) {
     if (patch[key] !== undefined) update[key] = patch[key];
   }
+  // Separate from the loop above: null is a meaningful value here (it clears
+  // the copy), so this cannot use the same `!== undefined` sweep over a tuple
+  // that BRIEF_FIELDS keys.
+  if (patch.content !== undefined) update.content = patch.content;
 
   // A theme written by hand must clear needsTheme, or the slot keeps its red
   // "needs theme" pill and keeps writing "Theme not set" into its calendar
@@ -132,7 +158,7 @@ export async function updateSlot(
   // now, so the next sync will NOT carry this edit across, and calling it
   // stale would light "N changed since the last sync" with no sync able to
   // clear it. Locked stays locked until someone takes it back.
-  const touchedContent = CONTENT_FIELDS.some((k) => patch[k] !== undefined);
+  const touchedContent = EVENT_FIELDS.some((k) => patch[k] !== undefined);
   if (touchedContent && existing.google_sync_status === "synced") {
     update.googleSyncStatus = "stale";
   }

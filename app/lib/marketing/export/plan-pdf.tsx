@@ -16,6 +16,7 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer";
 import { contentTypeLabel } from "../content-types";
+import { readCopy, isCopyStale, copySections } from "../copy";
 import type { Slot } from "../../types";
 import type { PlanDocMeta } from "./plan-markdown";
 
@@ -174,7 +175,11 @@ function PlanDoc({ slots, meta }: { slots: Slot[]; meta: PlanDocMeta }) {
               </View>
 
               {weekSlots.map((slot) => (
-                <View key={slot.id} style={s.slot} wrap={false}>
+                // Wrapping is deliberate. A slot with finished copy — a dozen
+                // blocks plus a caption — is taller than a page, and
+                // wrap={false} on something taller than a page renders it over
+                // itself. That bug has shipped here once already.
+                <View key={slot.id} style={s.slot} minPresenceAhead={60}>
                   <View style={s.slotTop}>
                     <Text style={s.when}>
                       {dayLabel(slot.date)} · {slot.time_local}
@@ -213,6 +218,30 @@ function PlanDoc({ slots, meta }: { slots: Slot[]; meta: PlanDocMeta }) {
                       <Text style={s.hook}>{slot.cta}</Text>
                     </View>
                   )}
+                  {(() => {
+                    const copy = readCopy(slot);
+                    if (!copy) return null;
+                    return (
+                      <View style={s.beatBlock}>
+                        {isCopyStale(slot) && (
+                          <Text style={s.meta}>
+                            The brief above changed after this copy was written.
+                          </Text>
+                        )}
+                        {copySections(copy).map((section, i) => (
+                          <View key={i}>
+                            <Text style={s.partLabel}>
+                              {section.label.toUpperCase()}
+                            </Text>
+                            <Text style={s.beat}>{section.text}</Text>
+                            {!!section.note && (
+                              <Text style={s.meta}>{section.note}</Text>
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  })()}
                   {(slot.campaign_title || slot.rationale) && (
                     <Text style={s.meta}>
                       {[
