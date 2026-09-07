@@ -16,6 +16,7 @@ import {
 import { banner, btn, field, surface, table, toggle, text } from "@/lib/ui";
 import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
 import { readCopy, isCopyStale } from "@/lib/marketing/copy";
+import { calendarOpenUrl } from "@/lib/marketing/calendar-links";
 import { planMarkdown, planFilename } from "@/lib/marketing/export/plan-markdown";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
 import type { Slot, SlotStatus } from "@/lib/types";
@@ -116,6 +117,10 @@ export default function SchedulePage() {
       .then((c) => {
         setClientName(c.name);
         setTimezone(c.timezone || "UTC");
+        // The link used to arrive only in the sync response, so the client's
+        // own calendar was unreachable until you pushed to it. The id is on
+        // the client the moment the calendar exists.
+        if (c.google_calendar_id) setCalendarUrl(calendarOpenUrl(c.google_calendar_id));
       })
       .catch(() => {});
   }, [clientId]);

@@ -216,17 +216,6 @@ export async function ensureClientCalendar(
   return calendarId;
 }
 
-export function calendarEmbedUrl(calendarId: string, timezone = "UTC"): string {
-  return (
-    `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(calendarId)}` +
-    `&ctz=${encodeURIComponent(timezone)}&mode=WEEK`
-  );
-}
-
-export function calendarOpenUrl(calendarId: string): string {
-  return `https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(calendarId)}`;
-}
-
 /**
  * Remove the Google events for a set of slots.
  *

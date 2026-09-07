@@ -99,24 +99,52 @@ Then move the sort and limit back into the query in
 ## Checks
 
 ```bash
-npm run test        # 94 tests over the planner's pure functions
+npm run test        # 261 tests over the pure functions
 npm run typecheck
 npm run build
 npm run lint
 ```
 
-The tests cover gap arithmetic, ISO week boundaries, and date assignment —
-where a bug produces a plausible-looking but wrong calendar (DST drift, a
-53-week ISO year, posts landing on a weekend). They use injected fakes, so
-they prove the algorithm, not the Firestore integration.
+The tests cover gap arithmetic, ISO week boundaries and date assignment — where
+a bug produces a plausible-looking but wrong calendar (DST drift, a 53-week ISO
+year, posts landing on a weekend) — plus the calendar reconciler's classifier
+and the copy normaliser. Nothing is mocked anywhere: only pure functions are
+tested, so they prove the algorithms, not the Firestore or Google integration.
+Those are checked by dry-running against real data before a write path ships.
+
+## Deploying
+
+Vercel. The build is the default Next output — do **not** add
+`output: "standalone"`, which produces a tree Vercel does not serve.
+`vercel.json` pins functions to `iad1` so they sit beside Firestore rather than
+wherever the account default lands.
+
+Every variable in `.env.example` must be set in the Vercel project, with three
+that behave differently from the rest:
+
+| Var | Care needed |
+|---|---|
+| `NEXT_PUBLIC_FIREBASE_*` | All six. Read by `lib/firebase.ts` and baked into the browser bundle at build time, so changing one needs a redeploy, not a restart. |
+| `FIREBASE_PRIVATE_KEY` | Paste it with its literal `\n` escapes, in double quotes. `lib/firebase-admin.ts:40` unescapes them; a real multi-line paste also works, an unquoted one does not. |
+| `GOOGLE_OAUTH_REDIRECT_URI` | The deployed origin, e.g. `https://<domain>/api/v1/google/callback`, and the identical string listed on the OAuth client in Google Cloud. |
+
+Before the first deploy, three things live outside this repo:
+
+1. **Publish the OAuth consent screen.** While its status is "Testing", Google
+   expires refresh tokens after 7 days and only listed test users can connect —
+   calendar sync works at launch and dies the following week.
+2. **Add the production redirect URI** to the OAuth client, keeping the
+   localhost one for development.
+3. **Deploy the Firestore rules and indexes** to the `marketing` database:
+   `firebase deploy --only firestore`. The rules are deny-all by design.
 
 ## What works today
 
-Dashboard, Strategy, Branding, Campaigns and Plan. Onboarding, Calendar, Runs
-and Assets are unlinked from the nav: their endpoints still proxy to the FastAPI
-backend in `../` and have not been ported. Calendar returns with Google sync;
-Runs and Assets are slated for deletion.
+Dashboard, Strategy, Branding, Campaigns, Plan and Schedule, each backed by a
+route in `app/api/v1`. There is no proxy and no second backend: the FastAPI
+service this was ported from has been deleted, and its history is at `af1ea15`.
 
-Every page in the nav is backed by a route in `app/api/v1`. There is no proxy
-and no second backend: the FastAPI service this was ported from has been
-deleted, and its history is at `af1ea15`.
+The schedule pushes to a Google calendar per client and reconciles two ways —
+moves, deletions and renames made in Google are adopted rather than overwritten
+— and each piece has its own page where its brief and its finished copy are
+written. Onboarding, Runs and Assets remain unbuilt and unlinked.

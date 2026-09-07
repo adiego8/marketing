@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { syncSlots, calendarEmbedUrl, calendarOpenUrl } from "@/lib/marketing/calendar";
+import { syncSlots } from "@/lib/marketing/calendar";
+import { calendarEmbedUrl, calendarOpenUrl } from "@/lib/marketing/calendar-links";
 import { NotConnectedError } from "@/lib/marketing/google";
 import {
   requireClient,
