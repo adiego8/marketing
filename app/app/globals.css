@@ -1,0 +1,161 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Dark mode is inert: nothing ever adds the `dark` class and there is no theme
+   toggle. Numerico is light-only. The variant stays declared because
+   components/ui/* is full of `dark:` utilities and an undeclared variant is a
+   build error, not a no-op. */
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  /* Was `--font-sans: var(--font-sans)`, a self-reference, so `font-sans` on
+     `html` resolved to nothing and Geist was downloaded but never applied.
+     These now point at the variables app/layout.tsx actually defines. */
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-plus-jakarta-sans);
+  --font-mono: var(--font-inconsolata);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/*
+  Numerico's palette, mirrored from numerico-website/app/globals.css and its
+  component class strings: stone-50 ground, white surfaces, slate ink,
+  slate-200 borders.
+
+  The accent is the one substitution. The website is amber-500; this app is
+  teal-600, so a Numerico product is recognisable as *this* Numerico product —
+  and so amber stays free to mean "degraded", which the planner emits whenever
+  it cannot reach the model.
+
+  The token names below are shadcn's, and every one is retuned rather than
+  deleted: components/ui/* still backs the retained Dialog and the orphaned
+  pages, and pointing the tokens at Numerico means those inherit the palette
+  for free instead of rendering as an unstyled fallback.
+*/
+:root {
+  --radius: 0.5rem; /* rounded-lg, the Numerico default */
+
+  --background: #fafaf9; /* stone-50 */
+  --foreground: #1e293b; /* slate-800 */
+
+  --card: #ffffff;
+  --card-foreground: #1e293b;
+  --popover: #ffffff;
+  --popover-foreground: #1e293b;
+
+  --primary: #0d9488; /* teal-600 */
+  --primary-foreground: #ffffff;
+
+  --secondary: #f1f5f9; /* slate-100 */
+  --secondary-foreground: #334155; /* slate-700 */
+
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b; /* slate-500 */
+
+  --accent: #ccfbf1; /* teal-100 */
+  --accent-foreground: #0f766e; /* teal-700 */
+
+  --destructive: #dc2626; /* red-600 */
+
+  --border: #e2e8f0; /* slate-200 */
+  --input: #e2e8f0;
+  --ring: #0f766e; /* teal-700 */
+
+  --chart-1: #0d9488;
+  --chart-2: #0f766e;
+  --chart-3: #64748b;
+  --chart-4: #94a3b8;
+  --chart-5: #cbd5e1;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1e293b;
+  --sidebar-primary: #0d9488;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0fdfa; /* teal-50 */
+  --sidebar-accent-foreground: #0f766e;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #0f766e;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+/*
+  Headings take Plus Jakarta Sans through an element selector rather than a
+  class, exactly as numerico-website does it. The face only ships 700/800, so
+  every heading is bold without carrying `font-bold` — which is why no heading
+  in either app has a weight class.
+*/
+h1:not(.font-mono),
+h2:not(.font-mono),
+h3:not(.font-mono),
+h4:not(.font-mono) {
+  font-family: var(--font-plus-jakarta-sans), sans-serif;
+}
+
+/* Visible keyboard focus indicator (WCAG 2.4.7). Mouse clicks don't trigger
+   :focus-visible, so it stays clean. teal-700 for ~3:1 on light surfaces. */
+:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Respect users who ask for reduced motion (WCAG 2.3.3). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

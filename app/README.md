@@ -1,0 +1,150 @@
+# Marketing Agent
+
+Turns a client's weekly content quota into a dated, channel-assigned schedule:
+what to post, where, when, and why. Asset generation is deliberately out of
+scope — the agent plans, a human writes.
+
+## Setup
+
+```bash
+npm install
+cp .env.example .env.local   # then fill it in
+```
+
+`.env.local` needs, at minimum:
+
+| Var | Where from |
+|---|---|
+| `NEXT_PUBLIC_FIREBASE_*` | Firebase console → Project settings → General → SDK setup |
+| `FIREBASE_PROJECT_ID` / `_CLIENT_EMAIL` / `_PRIVATE_KEY` | Project settings → Service accounts → Generate new private key |
+| `OPENAI_API_KEY` | Campaign generation and slot themes |
+
+The client and Admin values must name the **same** Firebase project. Without the
+Admin ones every API route answers `503` naming what is missing, rather than a
+misleading `401`.
+
+## Two databases, one project
+
+Firebase Auth is project-scoped, so this app shares the `numerico-app` project
+with numerico-website — one account per customer, not two. Its **data** is
+separate:
+
+| Handle | Database | Holds |
+|---|---|---|
+| `adminDb` | `marketing` (`FIREBASE_DATABASE_ID`) | everything this app writes |
+| `numericoDb` | `(default)` | `customers` and entitlements, read-only |
+
+Leave `FIREBASE_DATABASE_ID` unset and both collapse onto `(default)`; the
+`marketing_*` collection prefixes keep the two apart either way, so a first run
+is never blocked on the database existing. `npx tsx scripts/probe.ts` prints the
+`databaseId` each handle actually resolved to — the only way to tell a working
+split from a silent fallback.
+
+`firebase.json` deliberately lists **only** the `marketing` database, so a
+deploy from this repo cannot touch the website's `(default)`. The rules there
+deny everything: no browser code reads Firestore (`lib/firebase.ts` initialises
+Auth alone), and the Admin SDK bypasses rules, so the strictest ruleset costs
+nothing.
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+## Running
+
+```bash
+npm run dev        # localhost:3008
+npm run seed       # after signing in once — creates a client with a quota
+```
+
+The first person to sign in claims the agency and becomes its admin. Run the
+seed **after** that, so it attaches to the agency your sign-in created.
+
+## The loop
+
+Strategy (set a weekly quota) → Plan (generate a preview, accept it) →
+**Schedule** (what is committed; copy or download it as a Markdown plan).
+
+Cancelling or skipping a slot on the Schedule page gives its quota back, so the
+next plan run proposes a replacement — see `QUOTA_COUNTING` in
+`lib/marketing/planner/types.ts`.
+
+## Firestore indexes
+
+**None are required.** Both planner queries filter on `clientId` alone and
+apply their date range or ordering in memory, so the app runs against a fresh
+project with no Firestore setup.
+
+`firestore.indexes.json` declares two composites as a later optimisation:
+
+| Collection | Fields | Would serve |
+|---|---|---|
+| `marketing_slots` | `clientId`, `date` | the horizon range as a query |
+| `marketing_plan_runs` | `clientId`, `createdAt desc` | ordering and limiting in the query |
+
+The slots one barely matters — a client's slots are bounded. The plan-runs one
+does eventually: runs accumulate without bound and each carries a full
+observation blob, so `listPlanRuns` currently pulls them all back. Fine at MVP
+volume, worth deploying at a few hundred runs per client:
+
+```bash
+firebase deploy --only firestore:indexes
+```
+
+Both commands target the `marketing` database, per `firebase.json`.
+
+Then move the sort and limit back into the query in
+`lib/marketing/planner/plan-runs.ts`.
+
+## Checks
+
+```bash
+npm run test        # 261 tests over the pure functions
+npm run typecheck
+npm run build
+npm run lint
+```
+
+The tests cover gap arithmetic, ISO week boundaries and date assignment — where
+a bug produces a plausible-looking but wrong calendar (DST drift, a 53-week ISO
+year, posts landing on a weekend) — plus the calendar reconciler's classifier
+and the copy normaliser. Nothing is mocked anywhere: only pure functions are
+tested, so they prove the algorithms, not the Firestore or Google integration.
+Those are checked by dry-running against real data before a write path ships.
+
+## Deploying
+
+Vercel. The build is the default Next output — do **not** add
+`output: "standalone"`, which produces a tree Vercel does not serve.
+`vercel.json` pins functions to `iad1` so they sit beside Firestore rather than
+wherever the account default lands.
+
+Every variable in `.env.example` must be set in the Vercel project, with three
+that behave differently from the rest:
+
+| Var | Care needed |
+|---|---|
+| `NEXT_PUBLIC_FIREBASE_*` | All six. Read by `lib/firebase.ts` and baked into the browser bundle at build time, so changing one needs a redeploy, not a restart. |
+| `FIREBASE_PRIVATE_KEY` | Paste it with its literal `\n` escapes, in double quotes. `lib/firebase-admin.ts:40` unescapes them; a real multi-line paste also works, an unquoted one does not. |
+| `GOOGLE_OAUTH_REDIRECT_URI` | The deployed origin, e.g. `https://<domain>/api/v1/google/callback`, and the identical string listed on the OAuth client in Google Cloud. |
+
+Before the first deploy, three things live outside this repo:
+
+1. **Publish the OAuth consent screen.** While its status is "Testing", Google
+   expires refresh tokens after 7 days and only listed test users can connect —
+   calendar sync works at launch and dies the following week.
+2. **Add the production redirect URI** to the OAuth client, keeping the
+   localhost one for development.
+3. **Deploy the Firestore rules and indexes** to the `marketing` database:
+   `firebase deploy --only firestore`. The rules are deny-all by design.
+
+## What works today
+
+Dashboard, Strategy, Branding, Campaigns, Plan and Schedule, each backed by a
+route in `app/api/v1`. There is no proxy and no second backend: the FastAPI
+service this was ported from has been deleted, and its history is at `af1ea15`.
+
+The schedule pushes to a Google calendar per client and reconciles two ways —
+moves, deletions and renames made in Google are adopted rather than overwritten
+— and each piece has its own page where its brief and its finished copy are
+written. Onboarding, Runs and Assets remain unbuilt and unlinked.
