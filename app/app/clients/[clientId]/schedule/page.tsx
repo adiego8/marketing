@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -11,12 +11,11 @@ import {
   startGoogleConnect,
   syncCalendar,
   downloadPlanPdf,
-  regenerateSlot,
   writeSlotCopy,
 } from "@/lib/api";
 import { banner, btn, field, surface, table, toggle, text } from "@/lib/ui";
 import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
-import { readCopy, isCopyStale, copyWarnings } from "@/lib/marketing/copy";
+import { readCopy, isCopyStale } from "@/lib/marketing/copy";
 import { planMarkdown, planFilename } from "@/lib/marketing/export/plan-markdown";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
 import type { Slot, SlotStatus } from "@/lib/types";
@@ -71,6 +70,10 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  // Separate from savingId: a copy write can take minutes (maxDuration 300),
+  // and locking the status dropdown that long is worse than the race it would
+  // prevent — the two writes touch disjoint fields.
+  const [writingId, setWritingId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [google, setGoogle] = useState<{
     configured: boolean;
@@ -79,11 +82,6 @@ export default function SchedulePage() {
     email: string | null;
     needs_reconnect: boolean;
   } | null>(null);
-  // The copy has its own steer, deliberately: the box above drives Rewrite
-  // and New angle, which rewrite the BRIEF. One input feeding two different
-  // objects would be a trap.
-  const [copySteer, setCopySteer] = useState("");
-  const [copyNote, setCopyNote] = useState<string[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
   // What the last sync adopted FROM Google, as opposed to pushed to it. Kept
@@ -128,8 +126,19 @@ export default function SchedulePage() {
     // The OAuth callback redirects back here with its result. Read from
     // location rather than useSearchParams, which would need a Suspense
     // boundary to prerender.
-    const result = new URLSearchParams(window.location.search).get("google");
-    if (!result) return;
+    const search = new URLSearchParams(window.location.search);
+
+    // Coming back from a piece's page. Without this a 12-week view silently
+    // resets to 4, because `weeks` lives only in state and Next unmounts this
+    // page on navigation.
+    const w = Number(search.get("weeks"));
+    if (HORIZONS.includes(w)) setWeeks(w);
+
+    const result = search.get("google");
+    if (!result) {
+      if (w) window.history.replaceState({}, "", window.location.pathname);
+      return;
+    }
     if (result === "connected") setSyncNote("Google connected");
     else setError(GOOGLE_ERRORS[result] ?? `Google returned "${result}".`);
     window.history.replaceState({}, "", window.location.pathname);
@@ -177,98 +186,34 @@ export default function SchedulePage() {
     }
   };
 
-  const openEditor = (slot: Slot) => {
-    setEditingId(slot.id);
-    // A local draft, saved explicitly — the same shape as the campaign content
-    // plan, rather than saving on every keystroke.
-    setDraft({ ...slot, body: [...slot.body] });
-    setSteer("");
-    setError(null);
-  };
-
-  const patchDraft = (patch: Partial<Slot>) =>
-    setDraft((d) => (d ? { ...d, ...patch } : d));
-
-  const replaceSlot = (updated: Slot) => {
-    setSlots((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-    setDraft({ ...updated, body: [...updated.body] });
-  };
-
-  const handleSaveEdit = async () => {
-    if (!draft) return;
-    setBusyId(draft.id);
-    setError(null);
-    try {
-      replaceSlot(
-        await updateSlot(clientId, draft.id, {
-          theme: draft.theme,
-          brief: draft.brief,
-          rationale: draft.rationale,
-          hook: draft.hook,
-          body: draft.body.map((b) => b.trim()).filter(Boolean),
-          cta: draft.cta,
-        })
-      );
-      setEditingId(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save the slot");
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   /**
-   * Take an event's text back after a hand edit in Google locked it.
+   * Write the copy for one row, without opening it.
    *
-   * The way out of rule 3 — without it, one rename in Google would mean the
-   * app could never write that event's title again.
+   * The one action worth keeping in the table: filling a week's copy otherwise
+   * means opening seven pages. Everything else about a piece lives on its own
+   * page now. No steer here — that belongs where you can see what you are
+   * steering.
+   *
+   * Shares savingId with the status select, because a row should be busy as a
+   * whole rather than per control.
    */
-  const handleUnlock = async (slot: Slot) => {
-    setBusyId(slot.id);
-    setError(null);
-    try {
-      replaceSlot(
-        await updateSlot(clientId, slot.id, { google_event_locked: false })
-      );
-      setSyncNote("Taken back — sync to push the app's text over it");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not take the event back");
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   const handleWriteCopy = async (slot: Slot) => {
-    setBusyId(slot.id);
+    setWritingId(slot.id);
     setError(null);
-    setCopyNote([]);
     try {
-      const updated = await writeSlotCopy(clientId, slot.id, {
-        steer: copySteer || undefined,
-      });
-      replaceSlot(updated);
-      setCopyNote(updated.warnings ?? []);
-      setCopySteer("");
+      const updated = await writeSlotCopy(clientId, slot.id);
+      setSlots((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      if (updated.warnings?.length) {
+        setSyncNote(updated.warnings.join(" · "));
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not write the copy");
+      const why = e instanceof Error ? e.message : "Could not write the copy";
+      setError(`${dayLabel(slot.date)} · ${contentTypeLabel(slot.type)}: ${why}`);
     } finally {
-      setBusyId(null);
+      setSavingId(null);
     }
   };
 
-  const handleRegenerate = async (slot: Slot, mode: "angle" | "rewrite") => {
-    setBusyId(slot.id);
-    setError(null);
-    try {
-      replaceSlot(
-        await regenerateSlot(clientId, slot.id, { mode, steer: steer || undefined })
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not regenerate the slot");
-    } finally {
-      setBusyId(null);
-    }
-  };
 
   const handleStatus = async (slot: Slot, status: SlotStatus) => {
     if (status === slot.status) return;
@@ -298,10 +243,6 @@ export default function SchedulePage() {
   };
 
   const [pdfBusy, setPdfBusy] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Slot | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [steer, setSteer] = useState("");
 
   const handlePdf = async () => {
     setPdfBusy(true);
@@ -530,14 +471,18 @@ export default function SchedulePage() {
                     {weekSlots.map((slot) => {
                       const dropped =
                         slot.status === "cancelled" || slot.status === "skipped";
-                      const open = editingId === slot.id;
                       return (
-                        <Fragment key={slot.id}>
                         <tr
+                          key={slot.id}
                           className={`${table.row} ${dropped ? "opacity-50" : ""}`}
                         >
                           <td className={`${table.cell} font-medium whitespace-nowrap`}>
-                            {dayLabel(slot.date)}
+                            <Link
+                              href={`/clients/${clientId}/schedule/${slot.id}?weeks=${weeks}`}
+                              className="hover:text-teal-700 transition-colors"
+                            >
+                              {dayLabel(slot.date)}
+                            </Link>
                           </td>
                           <td className={table.cell}>{slot.time_local}</td>
                           <td className={table.cell}>
@@ -606,15 +551,27 @@ export default function SchedulePage() {
                                   </option>
                                 ))}
                               </select>
-                              <button
-                                onClick={() =>
-                                  open ? setEditingId(null) : openEditor(slot)
-                                }
+                              <Link
+                                href={`/clients/${clientId}/schedule/${slot.id}?weeks=${weeks}`}
                                 className="text-xs font-semibold text-slate-400 hover:text-teal-700 transition-colors"
                               >
-                                {open ? "Close" : "Edit"}
-                              </button>
+                                Open
+                              </Link>
                             </div>
+                            {/* Only where there is work to do, so the button
+                                disappears as a week fills in. */}
+                            {!dropped &&
+                              !readCopy(slot) &&
+                              !slot.needs_theme &&
+                              slot.theme && (
+                                <button
+                                  onClick={() => handleWriteCopy(slot)}
+                                  disabled={writingId === slot.id}
+                                  className={`${btn.outlineSm} mt-1`}
+                                >
+                                  {writingId === slot.id ? "Writing…" : "Write copy"}
+                                </button>
+                              )}
                             {slot.google_sync_status === "stale" && (
                               <span className="text-[10px] uppercase tracking-wide text-amber-700">
                                 changed since sync
@@ -650,271 +607,6 @@ export default function SchedulePage() {
                             )}
                           </td>
                         </tr>
-
-                        {open && draft && (
-                          <tr>
-                            <td colSpan={7} className="bg-stone-50 px-4 py-4">
-                              <div className="max-w-3xl space-y-3">
-                                <div>
-                                  <label className={field.micro}>Theme</label>
-                                  <input
-                                    className={field.inputSm}
-                                    value={draft.theme}
-                                    onChange={(e) => patchDraft({ theme: e.target.value })}
-                                  />
-                                </div>
-                                <div>
-                                  <label className={field.micro}>Hook</label>
-                                  <textarea
-                                    className={`${field.textarea} h-16`}
-                                    value={draft.hook}
-                                    onChange={(e) => patchDraft({ hook: e.target.value })}
-                                    placeholder="The first line, the first three seconds, slide 1."
-                                  />
-                                </div>
-                                <div>
-                                  <label className={field.micro}>
-                                    Body — one entry per beat, in order
-                                  </label>
-                                  <div className="space-y-2">
-                                    {draft.body.map((beat, i) => (
-                                      <div key={i} className="flex gap-2 items-start">
-                                        <span className="text-xs text-slate-400 pt-2 w-4 shrink-0">
-                                          {i + 1}
-                                        </span>
-                                        <textarea
-                                          className={`${field.textarea} h-14`}
-                                          value={beat}
-                                          onChange={(e) => {
-                                            const body = [...draft.body];
-                                            body[i] = e.target.value;
-                                            patchDraft({ body });
-                                          }}
-                                        />
-                                        <button
-                                          onClick={() =>
-                                            patchDraft({
-                                              body: draft.body.filter((_, j) => j !== i),
-                                            })
-                                          }
-                                          aria-label={`Remove beat ${i + 1}`}
-                                          className="text-slate-400 hover:text-red-600 transition-colors pt-2"
-                                        >
-                                          &#215;
-                                        </button>
-                                      </div>
-                                    ))}
-                                    {draft.body.length < 8 && (
-                                      <button
-                                        onClick={() =>
-                                          patchDraft({ body: [...draft.body, ""] })
-                                        }
-                                        className={btn.outlineSm}
-                                      >
-                                        + Beat
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className={field.micro}>CTA</label>
-                                  <input
-                                    className={field.inputSm}
-                                    value={draft.cta}
-                                    onChange={(e) => patchDraft({ cta: e.target.value })}
-                                    placeholder="The ask, written as it would be said."
-                                  />
-                                </div>
-                                <div>
-                                  <label className={field.micro}>In one line</label>
-                                  <input
-                                    className={field.inputSm}
-                                    value={draft.brief}
-                                    onChange={(e) => patchDraft({ brief: e.target.value })}
-                                  />
-                                </div>
-
-                                <div className="flex flex-wrap gap-2 items-center pt-1">
-                                  <button
-                                    onClick={handleSaveEdit}
-                                    disabled={busyId === slot.id}
-                                    className={btn.primarySm}
-                                  >
-                                    {busyId === slot.id ? "Saving…" : "Save"}
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingId(null)}
-                                    className={btn.outlineSm}
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-
-                                {slot.google_event_locked && (
-                                  <div className="border-t border-slate-200 pt-3">
-                                    <p className="text-sm text-amber-700">
-                                      This event&rsquo;s title and notes were edited in
-                                      Google, so syncing no longer rewrites them. Only
-                                      its date and time still follow the plan.
-                                    </p>
-                                    <button
-                                      onClick={() => handleUnlock(slot)}
-                                      disabled={busyId === slot.id}
-                                      className={`${btn.outlineSm} mt-2`}
-                                    >
-                                      {busyId === slot.id ? "Working…" : "Take it back"}
-                                    </button>
-                                  </div>
-                                )}
-
-                                <div className="border-t border-slate-200 pt-3 space-y-2">
-                                  <label className={field.micro}>
-                                    Or have the agent try again
-                                  </label>
-                                  <input
-                                    className={field.inputSm}
-                                    value={steer}
-                                    onChange={(e) => setSteer(e.target.value)}
-                                    placeholder="Optional: what to change — e.g. make the hook blunter"
-                                  />
-                                  <div className="flex flex-wrap gap-2">
-                                    <button
-                                      onClick={() => handleRegenerate(slot, "rewrite")}
-                                      disabled={busyId === slot.id}
-                                      className={btn.outlineSm}
-                                    >
-                                      {busyId === slot.id ? "Working…" : "Rewrite"}
-                                    </button>
-                                    <button
-                                      onClick={() => handleRegenerate(slot, "angle")}
-                                      disabled={busyId === slot.id}
-                                      className={btn.outlineSm}
-                                    >
-                                      New angle
-                                    </button>
-                                    <span className="text-xs text-slate-400 self-center">
-                                      Rewrite keeps the theme. New angle replaces it.
-                                      The date, time and channel never move.
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {(() => {
-                                  const copy = readCopy(slot);
-                                  const stale = isCopyStale(slot);
-                                  const warnings = copy ? copyWarnings(copy, slot) : [];
-                                  return (
-                                    <div className="border-t border-slate-200 pt-3 space-y-2">
-                                      <label className={field.micro}>
-                                        {copy ? "The finished copy" : "Write the finished copy"}
-                                      </label>
-
-                                      {stale && (
-                                        <p className="text-xs text-amber-700">
-                                          The brief above changed after this was
-                                          written, so the two no longer match.
-                                        </p>
-                                      )}
-
-                                      {copy && (
-                                        <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
-                                          {copy.headline && (
-                                            <p className="text-sm font-semibold text-slate-800">
-                                              {copy.headline}
-                                            </p>
-                                          )}
-                                          {copy.blocks.map((block, i) => (
-                                            <div key={i}>
-                                              <p className="text-[10px] uppercase tracking-wide text-slate-400">
-                                                {block.label}
-                                              </p>
-                                              <p className="text-sm text-slate-800 whitespace-pre-wrap">
-                                                {block.text}
-                                              </p>
-                                              {block.onScreen && (
-                                                <p className="text-xs text-slate-500">
-                                                  on screen: {block.onScreen}
-                                                </p>
-                                              )}
-                                              {block.note && (
-                                                <p className="text-xs text-slate-400 italic">
-                                                  {block.note}
-                                                </p>
-                                              )}
-                                            </div>
-                                          ))}
-                                          {copy.caption && (
-                                            <div>
-                                              <p className="text-[10px] uppercase tracking-wide text-slate-400">
-                                                Caption
-                                              </p>
-                                              <p className="text-sm text-slate-700 whitespace-pre-wrap">
-                                                {copy.caption}
-                                              </p>
-                                            </div>
-                                          )}
-                                          {copy.hashtags.length > 0 && (
-                                            <p className="text-xs text-teal-700">
-                                              {copy.hashtags.join(" ")}
-                                            </p>
-                                          )}
-                                        </div>
-                                      )}
-
-                                      {warnings.length > 0 && (
-                                        <div className={banner.warn}>
-                                          {warnings.map((w) => (
-                                            <p key={w}>{w}</p>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {copyNote.length > 0 && busyId !== slot.id && (
-                                        <div className={banner.warn}>
-                                          {copyNote.map((w) => (
-                                            <p key={w}>{w}</p>
-                                          ))}
-                                        </div>
-                                      )}
-
-                                      {slot.google_event_locked && copy && (
-                                        <p className="text-xs text-amber-700">
-                                          This event&rsquo;s text is Google&rsquo;s, so the
-                                          copy above will not appear on the calendar
-                                          until you take it back.
-                                        </p>
-                                      )}
-
-                                      <input
-                                        className={field.inputSm}
-                                        value={copySteer}
-                                        onChange={(e) => setCopySteer(e.target.value)}
-                                        placeholder="Optional: how to write it — e.g. shorter slides, no questions"
-                                      />
-                                      <div className="flex flex-wrap gap-2">
-                                        <button
-                                          onClick={() => handleWriteCopy(slot)}
-                                          disabled={busyId === slot.id}
-                                          className={btn.primarySm}
-                                        >
-                                          {busyId === slot.id
-                                            ? "Writing…"
-                                            : copy
-                                              ? "Write it again"
-                                              : "Write the copy"}
-                                        </button>
-                                        <span className="text-xs text-slate-400 self-center">
-                                          Writes the words from the brief above. The
-                                          brief itself is not changed.
-                                        </span>
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                        </Fragment>
                       );
                     })}
                   </tbody>
