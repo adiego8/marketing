@@ -129,7 +129,7 @@ that behave differently from the rest:
 | Var | Care needed |
 |---|---|
 | `NEXT_PUBLIC_FIREBASE_*` | All six. Read by `lib/firebase.ts` and baked into the browser bundle at build time, so changing one needs a redeploy, not a restart. |
-| `FIREBASE_PRIVATE_KEY` | Paste it with its literal `\n` escapes, in double quotes. `lib/firebase-admin.ts:40` unescapes them; a real multi-line paste also works, an unquoted one does not. |
+| `FIREBASE_PRIVATE_KEY` | Paste it **without** the surrounding double quotes, keeping the literal `\n` escapes; `lib/firebase-admin.ts:40` unescapes them. `.env.local` needs the quotes because dotenv strips them, and Vercel does not — leave them in and the key begins with a `"`, `cert()` throws at module load, and *every* route importing firebase-admin returns a 500 HTML page. The symptom is the login screen saying "You do not have access to this app.", which is the client's fallback for a response that was not JSON. |
 | `GOOGLE_OAUTH_REDIRECT_URI` | The deployed origin, e.g. `https://<domain>/api/v1/google/callback`, and the identical string listed on the OAuth client in Google Cloud. |
 
 Before the first deploy, three things live outside this repo:
