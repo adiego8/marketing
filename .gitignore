@@ -1,12 +1,4 @@
-__pycache__/
-*.py[cod]
-*.egg-info/
-dist/
-build/
 .env
-.venv/
-venv/
-*.db
 
 # Local secrets — Google OAuth client JSON, service account keys.
 # Values live in .env (GOOGLE_OAUTH_CLIENT_ID / _SECRET); these files are the
