@@ -90,13 +90,28 @@ async function main() {
     businessName: "Example Client",
     icp: {
       description: "Define your ideal customer profile",
-      demographics: {},
+      // Every key DEMOGRAPHIC_FIELDS renders, so the ICP tab opens with a form
+      // rather than a blank grid the operator has to guess the shape of.
+      demographics: {
+        customer_type: "",
+        industry: "",
+        role: "",
+        location: "",
+        age_range: "",
+        language: "",
+        company_size: "",
+        income_or_revenue: "",
+      },
       pain_points: [],
-      goals: [],
+      desired_outcomes: [],
+      objections: [],
+      trigger_events: [],
     },
     voice: {
       personality: "Define your brand personality",
       traits: [],
+      tone: "conversational, direct, practical",
+      communication_style: "",
       words_to_use: [],
       words_to_avoid: [
         "revolutionary",
@@ -106,17 +121,27 @@ async function main() {
         "synergy",
         "unlock your potential",
       ],
-      tone: "conversational, direct, practical",
     },
-    positioning: { angles: [], anti_positioning: "" },
-    messaging: { value_props: [], key_messages: [], tagline: "" },
-    goals: { primary: "awareness", secondary: "leads", metrics: [] },
+    // primary_angle / secondary_angles, NOT the `angles` this used to seed —
+    // nothing has ever read `angles`, so the seeded positioning was invisible
+    // in the editor.
+    positioning: {
+      primary_angle: { type: "", statement: "", why: "" },
+      secondary_angles: [],
+      anti_positioning: "",
+      differentiation: "",
+    },
+    messaging: { tagline: "", value_props: [], key_messages: [], proof_points: [] },
+    goals: { primary: "awareness", secondary: "leads", focus_90_days: "", metrics: [] },
     contentStrategy: { platforms: [], content_pillars: [] },
+    // Publishable formats only. This used to seed `hook` and `cta`, which are
+    // retired (see content-types.ts) — the quota table flags them and tells you
+    // to delete the row, so the seed was writing rows to be undone.
     contentQuota: {
       weekly: {
         post: { count: 3, channels: ["linkedin"] },
-        hook: { count: 2, channels: ["linkedin", "twitter"] },
-        cta: { count: 1, channels: ["linkedin"] },
+        carousel: { count: 1, channels: ["linkedin", "instagram"] },
+        newsletter: { count: 1, channels: ["email"] },
       },
       rationale: "Seeded default. Adjust in Strategy > Content Quota.",
     },

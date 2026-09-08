@@ -17,6 +17,12 @@ import {
   isRetiredType,
 } from "@/lib/marketing/content-types";
 import { CHANNELS, MAX_SLOTS_PER_DAY } from "@/lib/marketing/posting-windows";
+import {
+  DEMOGRAPHIC_FIELDS,
+  customDemographicKeys,
+  demographicLabel,
+  slugify,
+} from "@/lib/marketing/demographics";
 
 // The Strategy fields that hold a nested object. Naming them lets updateNested
 // index Strategy directly instead of casting it to a record it isn't.
@@ -67,6 +73,8 @@ export default function StrategyPage() {
   const [isNew, setIsNew] = useState(false);
   const [tab, setTab] = useState("icp");
   const [error, setError] = useState<string | null>(null);
+  const [newDemographic, setNewDemographic] = useState("");
+  const [demographicError, setDemographicError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,6 +177,34 @@ export default function StrategyPage() {
   const primaryAngle = (positioning.primary_angle || {}) as Record<string, string>;
   const secondaryAngles = (positioning.secondary_angles || []) as Record<string, string>[];
   const contentStrategy = (strategy.content_strategy || {}) as Record<string, unknown>;
+  const customDemographics = customDemographicKeys(demographics);
+
+  const setDemographic = (key: string, value: string) =>
+    updateNested("icp", "demographics", { ...demographics, [key]: value });
+
+  // Removing has to delete the key, not blank it: a key left behind with an
+  // empty value would come back as a custom row on the next load.
+  const removeDemographic = (key: string) => {
+    const next = { ...demographics };
+    delete next[key];
+    updateNested("icp", "demographics", next);
+  };
+
+  const addDemographic = () => {
+    const key = slugify(newDemographic);
+    if (!key) return;
+    if (DEMOGRAPHIC_FIELDS.some((f) => f.key === key)) {
+      setDemographicError(`${demographicLabel(key)} is already one of the fields above.`);
+      return;
+    }
+    if (key in demographics) {
+      setDemographicError(`${demographicLabel(key)} has already been added.`);
+      return;
+    }
+    setDemographicError(null);
+    setNewDemographic("");
+    setDemographic(key, "");
+  };
 
   // Rebuild the whole weekly map from the edited rows. Spreading contentQuota
   // preserves `rationale`.
@@ -240,18 +276,57 @@ export default function StrategyPage() {
                   className={`${field.textarea} h-20`}
                 />
               </Field>
-            <Field label="Demographics" className="grid grid-cols-2 gap-3">
-                {["industry", "company_size", "role", "revenue_range"].map((key) => (
-                  <div key={key}>
-                    <label className={`${field.micro} capitalize`}>{key.replace(/_/g, " ")}</label>
-                    <input className={field.inputSm}
-                      value={demographics[key] || ""}
-                      onChange={(e) =>
-                        updateNested("icp", "demographics", { ...demographics, [key]: e.target.value })
-                      }
-                    />
+            <Field label="Demographics" className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  {DEMOGRAPHIC_FIELDS.map((f) => (
+                    <div key={f.key}>
+                      <label className={field.micro}>{f.label}</label>
+                      <input className={field.inputSm}
+                        value={demographics[f.key] || ""}
+                        onChange={(e) => setDemographic(f.key, e.target.value)}
+                      />
+                      {f.hint && <p className="mt-1 text-xs text-slate-400">{f.hint}</p>}
+                    </div>
+                  ))}
+                </div>
+                {customDemographics.length > 0 && (
+                  <div className="grid grid-cols-2 gap-3 border-t border-slate-200 pt-4">
+                    {customDemographics.map((key) => (
+                      <div key={key}>
+                        <div className="flex items-baseline justify-between gap-2">
+                          <label className={field.micro}>{demographicLabel(key)}</label>
+                          <button className={btn.ghost} onClick={() => removeDemographic(key)}>
+                            Remove
+                          </button>
+                        </div>
+                        <input className={field.inputSm}
+                          value={demographics[key] || ""}
+                          onChange={(e) => setDemographic(key, e.target.value)}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+                <div className="flex items-center gap-2">
+                  <input
+                    className={`${field.inputSm} max-w-xs`}
+                    value={newDemographic}
+                    onChange={(e) => setNewDemographic(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addDemographic();
+                      }
+                    }}
+                    placeholder="Add a field, e.g. Tax complexity"
+                  />
+                  <button className={btn.outlineSm} onClick={addDemographic}>
+                    Add field
+                  </button>
+                </div>
+                {demographicError && (
+                  <p className="text-xs text-amber-700">{demographicError}</p>
+                )}
               </Field>
             <Field label="Pain Points">
                 <EditableList
@@ -260,11 +335,11 @@ export default function StrategyPage() {
                   placeholder="Add pain point..."
                 />
               </Field>
-            <Field label="Goals">
+            <Field label="Desired Outcomes">
                 <EditableList
-                  items={(icp.goals as string[]) || []}
-                  onChange={(items) => updateNested("icp", "goals", items)}
-                  placeholder="Add goal..."
+                  items={(icp.desired_outcomes as string[]) || []}
+                  onChange={(items) => updateNested("icp", "desired_outcomes", items)}
+                  placeholder="Add outcome..."
                 />
               </Field>
             <Field label="Objections">
@@ -397,6 +472,15 @@ export default function StrategyPage() {
                         updateNested("positioning", "secondary_angles", updated);
                       }}
                     />
+                    <input className={field.inputSm}
+                      placeholder="Why this works"
+                      value={angle.why || ""}
+                      onChange={(e) => {
+                        const updated = [...secondaryAngles];
+                        updated[i] = { ...updated[i], why: e.target.value };
+                        updateNested("positioning", "secondary_angles", updated);
+                      }}
+                    />
                   </div>
                 ))}
                 <button
@@ -478,8 +562,8 @@ export default function StrategyPage() {
               </Field>
             <Field label="90-Day Focus">
                 <textarea
-                  value={(goals["90_day_focus"] as string) || ""}
-                  onChange={(e) => updateNested("goals", "90_day_focus", e.target.value)}
+                  value={(goals.focus_90_days as string) || ""}
+                  onChange={(e) => updateNested("goals", "focus_90_days", e.target.value)}
                   className={`${field.textarea} h-16`}
                 />
               </Field>
@@ -494,7 +578,7 @@ export default function StrategyPage() {
                 <EditableList
                   items={(contentStrategy.platforms as string[]) || []}
                   onChange={(items) =>
-                    updateNested("goals", "content_strategy", { ...contentStrategy, platforms: items })
+                    update("content_strategy", { ...contentStrategy, platforms: items })
                   }
                   placeholder="Add platform..."
                 />
@@ -503,7 +587,7 @@ export default function StrategyPage() {
                 <EditableList
                   items={(contentStrategy.content_pillars as string[]) || []}
                   onChange={(items) =>
-                    updateNested("goals", "content_strategy", { ...contentStrategy, content_pillars: items })
+                    update("content_strategy", { ...contentStrategy, content_pillars: items })
                   }
                   placeholder="Add pillar..."
                 />
@@ -513,11 +597,20 @@ export default function StrategyPage() {
         {/* Content Quota */}
         <TabPanel value="quota" active={tab === "quota"}>
           <div className="grid gap-4">
-            {quotaRationale && (
-              <Field label="Recommendation">
-                  <p className="text-sm text-slate-600">{quotaRationale}</p>
-                </Field>
-            )}
+            <Field label="Rationale">
+                <p className={`${field.micro} normal-case tracking-normal`}>
+                  Why this mix and this volume — what capacity it assumes. Read
+                  by whoever reviews the week, not by the planner.
+                </p>
+                <textarea
+                  value={quotaRationale}
+                  onChange={(e) =>
+                    updateNested("content_quota", "rationale", e.target.value)
+                  }
+                  className={`${field.textarea} h-20`}
+                  placeholder="Five pieces a week, weighted to the channel with the audience..."
+                />
+              </Field>
             <Field label="Weekly Content Budget" className="space-y-4">
                 <p className={field.micro}>
                   How much of each content type to publish per week, and which
