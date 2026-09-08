@@ -79,6 +79,79 @@ export function hostsOf(urls: string[]): Set<string> {
   return hosts;
 }
 
+/* ----------------------------------------------------------------- steer -- */
+
+const MAX_STEER = 500;
+const MAX_COMPETITOR = 80;
+const MAX_NAMED_COMPETITORS = 6;
+
+export interface Steer {
+  /** What the operator wants the research to focus on. May be empty. */
+  steer: string;
+  /** Companies to look at by name. May be empty. */
+  competitors: string[];
+}
+
+/**
+ * Read the operator's direction off a request body.
+ *
+ * Caps rather than rejects, matching the steer on slot copy and regenerate
+ * (slots/[slotId]/copy/route.ts:30) — a steer that is too long is a person
+ * typing, not an attack, and truncating it keeps their intent.
+ *
+ * Competitors arrive as the raw text of a textarea, one per line, because that
+ * is what a person types. An array is accepted too so the API is usable
+ * directly.
+ */
+export function parseSteer(body: unknown): Steer {
+  const b = obj(body);
+  const raw = b.competitors;
+  const lines = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.split(/[\n,]/)
+      : [];
+
+  const competitors: string[] = [];
+  const seen = new Set<string>();
+  for (const line of lines) {
+    const name = str(line, MAX_COMPETITOR);
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    competitors.push(name);
+    if (competitors.length === MAX_NAMED_COMPETITORS) break;
+  }
+
+  return { steer: str(b.steer, MAX_STEER), competitors };
+}
+
+/* ------------------------------------------------------------- staleness -- */
+
+/**
+ * How long a run may sit at "running" before it is presumed dead.
+ *
+ * The work happens in after(), which the docs cap at the route's maxDuration
+ * (300s here), so an invocation killed at the ceiling leaves a row that will
+ * never be updated by anyone. A minute of slack past the ceiling separates
+ * "still going" from "nobody is coming back for this".
+ */
+export const RUN_TIMEOUT_MS = 360_000;
+
+/** Whether a run claiming to be in flight has outlived its invocation. */
+export function isStale(
+  run: { status: string; created_at?: string | null },
+  now: number = Date.now()
+): boolean {
+  if (run.status !== "running") return false;
+  const started = run.created_at ? Date.parse(run.created_at) : NaN;
+  // An unreadable or missing timestamp cannot be defended as fresh: it would
+  // block every future run for this client forever.
+  if (Number.isNaN(started)) return true;
+  return now - started > RUN_TIMEOUT_MS;
+}
+
 /* --------------------------------------------------------------- dossier -- */
 
 export interface Evidence {

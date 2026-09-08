@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { researchClient, ResearchFailedError, type SearchFn, type DraftFn } from "./run";
+import {
+  researchClient,
+  buildSearchPayload,
+  ResearchFailedError,
+  type SearchFn,
+  type DraftFn,
+} from "./run";
 
 // The seams are parameters with defaults, as planner/run.ts does with decideFn,
 // so the orchestration is testable without mocking and without a network call.
@@ -105,5 +111,103 @@ describe("researchClient", () => {
     await expect(
       researchClient(CLIENT, { searchFn: okSearch, draftFn: boom("bad json") as DraftFn })
     ).rejects.toThrow(/strategy draft failed/i);
+  });
+});
+
+describe("buildSearchPayload", () => {
+  const base = { business_name: "MyWellTax", website: "https://mywelltax.com", notes: null };
+
+  it("always carries steer and competitors, normalised to empty", () => {
+    // Present-but-empty, matching write-copy.ts:72, is what lets the prompt say
+    // "may be empty" instead of handling a missing key.
+    expect(buildSearchPayload(base, { steer: "   ", competitors: [] })).toEqual({
+      ...base,
+      steer: "",
+      competitors: [],
+    });
+  });
+
+  it("passes the operator's direction through", () => {
+    expect(buildSearchPayload(base, { steer: "  bilingual filers  ", competitors: ["TurboTax"] })).toEqual({
+      ...base,
+      steer: "bilingual filers",
+      competitors: ["TurboTax"],
+    });
+  });
+
+  it("adds `known` only for the second pass", () => {
+    const empty = { steer: "", competitors: [] };
+    expect("known" in buildSearchPayload(base, empty)).toBe(false);
+    expect(buildSearchPayload(base, empty, { description: "x" })).toHaveProperty("known", {
+      description: "x",
+    });
+  });
+});
+
+describe("progress reporting", () => {
+  it("reports each slow step in order", async () => {
+    const steps: string[] = [];
+    await researchClient(CLIENT, {
+      searchFn: okSearch,
+      draftFn: okDraft,
+      onProgress: (s) => {
+        steps.push(s);
+      },
+    });
+    expect(steps).toEqual([
+      "Reading mywelltax.com",
+      "Looking at competitors and what customers say",
+      "Drafting the strategy",
+    ]);
+  });
+
+  it("still reaches the draft step when a pass failed", async () => {
+    const steps: string[] = [];
+    let call = 0;
+    const flaky: SearchFn = async (c) => {
+      if (++call === 1) throw new Error("timeout");
+      return okSearch(c);
+    };
+    const result = await researchClient(CLIENT, {
+      searchFn: flaky,
+      draftFn: okDraft,
+      onProgress: (s) => {
+        steps.push(s);
+      },
+    });
+    expect(steps).toHaveLength(3);
+    expect(result.status).toBe("degraded");
+  });
+
+  it("does not let a failing progress sink break the research", async () => {
+    // Progress is a courtesy. Losing it must never lose the run.
+    const result = await researchClient(CLIENT, {
+      searchFn: okSearch,
+      draftFn: okDraft,
+      onProgress: () => {
+        throw new Error("firestore is down");
+      },
+    });
+    expect(result.status).toBe("complete");
+  });
+
+  it("carries the steer onto the run so a re-run can start from it", async () => {
+    const result = await researchClient(CLIENT, {
+      searchFn: okSearch,
+      draftFn: okDraft,
+      steer: { steer: "bilingual filers", competitors: ["TurboTax"] },
+    });
+    expect(result.inputs.steer).toBe("bilingual filers");
+    expect(result.inputs.competitors).toEqual(["TurboTax"]);
+  });
+
+  it("reports no steps when there is nothing to research", async () => {
+    const steps: string[] = [];
+    const result = await researchClient(
+      { name: "Integral", website_url: null },
+      { onProgress: (s) => { steps.push(s); } }
+    );
+    expect(result.status).toBe("insufficient");
+    expect(steps).toEqual([]);
   });
 });

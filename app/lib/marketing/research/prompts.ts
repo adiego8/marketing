@@ -6,6 +6,12 @@
 // Relative, not "@/", so scripts run through tsx resolve it too.
 import intake from "../../../prompts/strategy-intake.json";
 
+const STEER_RULE = `
+- \`steer\` directs where to LOOK, never what to conclude. A competitor named in
+  \`competitors\` is a place to search, not a fact to assert: if you cannot find
+  it, say nothing about it. The evidence rule below outranks the steer, always.
+`.trim();
+
 const EVIDENCE_RULE = `
 ## The one rule that matters
 
@@ -30,6 +36,9 @@ whether any of it is true or how they compare to anyone else.
 ## What you are given
 
 \`business_name\`, \`website\`, and any \`notes\` the operator wrote.
+
+- \`steer\`: what the operator wants the research to focus on. May be empty.
+- \`competitors\`: companies the operator wants looked at by name. May be empty.
 
 ## What you return
 
@@ -65,6 +74,7 @@ Bare JSON. No prose around it, no code fence.
 - \`evidence\` is for things the site states outright: guarantees, prices, coverage, named certifications, counts. This is the only material that may later become a public claim, so it is the part to be strictest about.
 - \`voice_samples\` are short verbatim quotes of how they already write. Copy them exactly; do not improve them.
 - \`audience\` here is who the site says it is for. If the site does not say, leave it empty rather than inferring.
+${STEER_RULE}
 - Every string is plain text: no markdown, no emoji, no line breaks inside a value.
 
 ${EVIDENCE_RULE}`;
@@ -79,6 +89,10 @@ category is addressing.
 
 \`business_name\`, \`website\`, \`notes\`, and \`known\` — what reading their own site
 already established. Do not repeat what is already in \`known\`; add to it.
+
+- \`steer\`: what the operator wants the research to focus on. May be empty.
+- \`competitors\`: companies the operator wants looked at by name. Start with
+  these, then find the rest yourself. May be empty.
 
 ## What you return
 
@@ -118,6 +132,7 @@ Bare JSON. No prose around it, no code fence.
 - Competitors must be real companies you found, with a real URL. Three to six is plenty.
 - A gap is something you can show is missing, not something that would be nice.
 - Leave \`evidence\` empty rather than restating a claim from the company's own marketing — that is not outside verification.
+${STEER_RULE}
 - Every string is plain text: no markdown, no emoji, no line breaks inside a value.
 
 ${EVIDENCE_RULE}`;
@@ -146,7 +161,8 @@ will drive everything the company publishes.
 ## What you are given
 
 \`business_name\` and \`dossier\` — the findings, each significant claim carrying
-the page it came from in \`source\`.
+the page it came from in \`source\` — plus \`steer\`, what the operator wants
+emphasised. May be empty.
 
 ## What you return
 
@@ -172,6 +188,7 @@ disappears. So put nothing there you cannot point at.
 - Positioning should exploit the gaps the research found, not restate the company's existing marketing.
 - Voice should be recovered from \`voice_samples\`, not imposed. If there are no samples, keep \`voice\` sparse and let the human fill it.
 - The weekly quota is a guess about capacity, which research cannot see. Keep it modest and say so in \`rationale\`.
+- If \`steer\` is non-empty, weight the positioning and the pillars towards it — but only as far as the dossier supports. It changes the emphasis, not the evidence.
 
 ## The specification
 

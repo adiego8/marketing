@@ -77,6 +77,26 @@ open web, and drafts a strategy from what it found. It writes **nothing** to the
 strategy — the draft lives on a run document until someone accepts it at
 `.../research/runs/{runId}/accept`.
 
+**It returns immediately, not when the research is done.** The row is written as
+`running` before the first search and the work continues in `after()` from
+`next/server`, so the browser holds nothing open: close the tab, walk away, come
+back, and the run is still there with its current step in `progress`. The page
+polls `GET .../research` while a run is in flight rather than waiting on a
+request. One run per client at a time — a second `POST` gets a 409, because
+three silent minutes is exactly when someone clicks again.
+
+`after()` is bounded by the route's `maxDuration` (300s here), so an invocation
+killed at the ceiling would leave a row stuck at `running` forever. `isStale`
+reports any run still `running` after six minutes as interrupted, and the
+concurrency guard ignores it — nothing is written back on read.
+
+Optional `steer` and `competitors` in the POST body point the search: what to
+focus on, and which rivals to look at by name. They direct where to look and
+never what to conclude — a named competitor still has to be found before
+anything is said about it, and the evidence rule below outranks the steer. The
+last run's direction is pre-filled on the page, so re-running means adjusting it
+rather than retyping it.
+
 Two rules make it research rather than invention, and both are enforced in
 `lib/marketing/research/parse.ts` rather than asked for in the prompt:
 
@@ -135,7 +155,7 @@ Then move the sort and limit back into the query in
 ## Checks
 
 ```bash
-npm run test        # 308 tests over the pure functions
+npm run test        # 327 tests over the pure functions
 npm run typecheck
 npm run build
 npm run lint

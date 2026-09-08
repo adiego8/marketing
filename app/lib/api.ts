@@ -82,9 +82,16 @@ export const updateStrategy = (clientId: string, data: Partial<Strategy>) =>
 export const listResearchRuns = (clientId: string) =>
   request<{ runs: ResearchRun[] }>(`${c(clientId)}/research`).then((r) => r.runs);
 
-// Two web searches and a synthesis behind this one — the route budgets 300s.
-export const runResearch = (clientId: string) =>
-  request<ResearchRun>(`${c(clientId)}/research`, { method: "POST" });
+// Returns in milliseconds with a run in "running" — the work continues on the
+// server via after(), so the caller polls listResearchRuns rather than waiting.
+export const runResearch = (
+  clientId: string,
+  data: { steer?: string; competitors?: string } = {}
+) =>
+  request<ResearchRun>(`${c(clientId)}/research`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 
 export const acceptResearch = (clientId: string, runId: string) =>
   request<{ strategy: Strategy; run: ResearchRun }>(

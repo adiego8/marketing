@@ -105,6 +105,16 @@ export async function llmJson<T = Record<string, unknown>>({
 
 /* --------------------------------------------------------------- research -- */
 
+/**
+ * How long one search pass may take.
+ *
+ * The route budgets 300s for two passes and a draft, so a pass that has not
+ * answered inside this is cut off and the run degrades to the other pass —
+ * which is a result a human can use, unlike an invocation killed at the
+ * ceiling with nothing written.
+ */
+const SEARCH_TIMEOUT_MS = 120_000;
+
 export interface SearchOptions {
   systemPrompt: string;
   /** Serialized as pretty JSON into the user message, as in llmJson. */
@@ -191,21 +201,30 @@ export async function llmSearchJson<T = Record<string, unknown>>({
   allowedDomains,
   model = RESEARCH_MODEL,
 }: SearchOptions): Promise<SearchResult<T>> {
-  const response = await openai().responses.create({
-    model,
-    tools: [
-      {
-        type: "web_search",
-        ...(allowedDomains?.length
-          ? { filters: { allowed_domains: allowedDomains } }
-          : {}),
-      },
-    ],
-    input: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: JSON.stringify(payload, null, 2) },
-    ],
-  });
+  const response = await openai().responses.create(
+    {
+      model,
+      tools: [
+        {
+          type: "web_search",
+          ...(allowedDomains?.length
+            ? { filters: { allowed_domains: allowedDomains } }
+            : {}),
+        },
+      ],
+      input: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: JSON.stringify(payload, null, 2) },
+      ],
+    },
+    // maxRetries: 0 is the important half. The SDK retries twice by default
+    // (internal/request-options.d.ts:37), so a search that legitimately runs
+    // past the timeout was being killed and silently re-run twice — it could
+    // never succeed, it cost three searches instead of one, and three attempts
+    // at two minutes each blew the route's whole budget. A steered run sat at
+    // one step for eight minutes this way. One attempt, then degrade.
+    { timeout: SEARCH_TIMEOUT_MS, maxRetries: 0 }
+  );
 
   const text = response.output_text;
   if (!text) throw new Error("The research model returned an empty response.");

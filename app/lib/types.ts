@@ -305,12 +305,17 @@ export interface PlanRun {
 export interface ResearchRun {
   id: string;
   client_id: string;
-  status: "complete" | "degraded" | "insufficient";
+  status: "running" | "complete" | "degraded" | "insufficient" | "failed";
+  /** The current step, while running. Null once the run has finished. */
+  progress: string | null;
   inputs: {
     business_name?: string;
     website?: string | null;
     domain?: string | null;
     notes?: string | null;
+    /** The operator's direction, so a re-run can start from it. */
+    steer?: string;
+    competitors?: string[];
   };
   dossier: Record<string, unknown>;
   /** Shaped like Strategy, minus the server-owned client_id and updated_at. */

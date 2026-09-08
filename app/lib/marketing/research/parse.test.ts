@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   domainOf,
+  parseSteer,
+  isStale,
+  RUN_TIMEOUT_MS,
   hostsOf,
   parseDossier,
   mergeDossiers,
@@ -275,5 +278,76 @@ describe("openQuestionsFor", () => {
     const qs = openQuestionsFor(full, dossier);
     expect(qs).toHaveLength(2);
     expect(qs.join(" ")).toContain("how many pieces a week");
+  });
+});
+
+describe("parseSteer", () => {
+  it("returns empty for a missing or junk body", () => {
+    for (const bad of [undefined, null, "a string", [], 7]) {
+      expect(parseSteer(bad)).toEqual({ steer: "", competitors: [] });
+    }
+  });
+
+  it("trims and caps the note rather than rejecting it", () => {
+    // A too-long steer is a person typing, not an attack — the slot routes
+    // slice for the same reason.
+    const long = "x".repeat(900);
+    const { steer } = parseSteer({ steer: `  ${long}  ` });
+    expect(steer).toHaveLength(500);
+  });
+
+  it("splits competitors on newlines, dropping blanks", () => {
+    expect(parseSteer({ competitors: "TurboTax\n\n  H&R Block  \n" }).competitors).toEqual([
+      "TurboTax",
+      "H&R Block",
+    ]);
+  });
+
+  it("also splits on commas, because people type both", () => {
+    expect(parseSteer({ competitors: "TurboTax, TaxAct" }).competitors).toEqual([
+      "TurboTax",
+      "TaxAct",
+    ]);
+  });
+
+  it("accepts an array as well as raw text", () => {
+    expect(parseSteer({ competitors: ["TurboTax", 7, ""] }).competitors).toEqual(["TurboTax"]);
+  });
+
+  it("dedupes case-insensitively and caps the list", () => {
+    expect(parseSteer({ competitors: "TurboTax\nturbotax" }).competitors).toEqual(["TurboTax"]);
+    const many = Array.from({ length: 20 }, (_, i) => `Rival ${i}`).join("\n");
+    expect(parseSteer({ competitors: many }).competitors).toHaveLength(6);
+  });
+
+  it("caps each name", () => {
+    expect(parseSteer({ competitors: "y".repeat(200) }).competitors[0]).toHaveLength(80);
+  });
+});
+
+describe("isStale", () => {
+  const now = Date.parse("2026-09-08T12:00:00.000Z");
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+
+  it("leaves a fresh running run alone", () => {
+    expect(isStale({ status: "running", created_at: ago(60_000) }, now)).toBe(false);
+  });
+
+  it("calls a running run stale once it outlives its invocation", () => {
+    // after() dies with the request that started it, so past the ceiling
+    // nothing is coming back to finish this row.
+    expect(isStale({ status: "running", created_at: ago(RUN_TIMEOUT_MS + 1000) }, now)).toBe(true);
+  });
+
+  it("never calls a finished run stale, however old", () => {
+    for (const status of ["complete", "degraded", "insufficient", "failed"]) {
+      expect(isStale({ status, created_at: ago(10 * RUN_TIMEOUT_MS) }, now)).toBe(false);
+    }
+  });
+
+  it("treats an unreadable timestamp as stale", () => {
+    // Defending it as fresh would block every future run for this client.
+    expect(isStale({ status: "running", created_at: null }, now)).toBe(true);
+    expect(isStale({ status: "running", created_at: "not a date" }, now)).toBe(true);
   });
 });

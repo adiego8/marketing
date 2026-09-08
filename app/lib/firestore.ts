@@ -107,6 +107,9 @@ export function serializeResearchRun(id: string, d: FirebaseFirestore.DocumentDa
     id,
     client_id: d.clientId ?? null,
     status: str(d.status, "complete"),
+    // What it is doing right now, while status is "running". The work takes
+    // minutes; without this the UI can only show a spinner and hope.
+    progress: d.progress ?? null,
     // What it was told to research, so a thin run is diagnosable.
     inputs: d.inputs ?? {},
     dossier: d.dossier ?? {},

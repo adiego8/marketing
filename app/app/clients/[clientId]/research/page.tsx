@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { listResearchRuns, runResearch, acceptResearch } from "@/lib/api";
 import type { ResearchRun } from "@/lib/types";
-import { banner, btn, surface, text } from "@/lib/ui";
+import { banner, btn, field, surface, text } from "@/lib/ui";
 import { CopyButton } from "@/components/shared/copy-button";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
 
@@ -15,10 +15,15 @@ import { contentTypeLabel } from "@/lib/marketing/content-types";
 // strategy every campaign and every post is written from.
 
 const STATUS_NOTE: Record<string, string> = {
+  running: "Still working.",
   complete: "Both passes ran.",
   degraded: "One pass failed — read the warnings before trusting the gaps.",
   insufficient: "Nothing was found to work from.",
+  failed: "It did not finish.",
 };
+
+/** How often to re-read a run that is still going. */
+const POLL_MS = 4000;
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -64,15 +69,28 @@ export default function ResearchPage() {
   const { clientId } = useParams() as { clientId: string };
   const [runs, setRuns] = useState<ResearchRun[]>([]);
   const [loading, setLoading] = useState(true);
-  const [running, setRunning] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [steer, setSteer] = useState("");
+  const [namedRivals, setNamedRivals] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     listResearchRuns(clientId)
-      .then((r) => !cancelled && setRuns(r))
+      .then((r) => {
+        if (cancelled) return;
+        setRuns(r);
+        // Pick up where the last run left off, so re-running means adjusting
+        // the direction rather than retyping it. This is the one steer in the
+        // app that is not cleared after use.
+        const last = r[0];
+        if (last) {
+          setSteer(last.inputs.steer ?? "");
+          setNamedRivals((last.inputs.competitors ?? []).join("\n"));
+        }
+      })
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : "Could not load research."))
       .finally(() => !cancelled && setLoading(false));
     return () => {
@@ -81,18 +99,41 @@ export default function ResearchPage() {
   }, [clientId]);
 
   const run = runs[0] ?? null;
+  const inFlight = run?.status === "running";
+
+  // Poll only while something is actually running. The work lives on the server
+  // now, so this is re-attaching to it rather than waiting on a request — which
+  // is why leaving the page and coming back loses nothing.
+  useEffect(() => {
+    if (!inFlight) return;
+    let cancelled = false;
+    const timer = setInterval(() => {
+      listResearchRuns(clientId)
+        .then((r) => !cancelled && setRuns(r))
+        .catch(() => {
+          // A failed poll is not worth an error banner; the next one may work.
+        });
+    }, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [clientId, inFlight]);
 
   const handleRun = async () => {
-    setRunning(true);
+    setStarting(true);
     setError(null);
     setAccepted(false);
     try {
-      const fresh = await runResearch(clientId);
+      const fresh = await runResearch(clientId, {
+        steer: steer || undefined,
+        competitors: namedRivals || undefined,
+      });
       setRuns((prev) => [fresh, ...prev]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Research failed.");
     } finally {
-      setRunning(false);
+      setStarting(false);
     }
   };
 
@@ -140,20 +181,50 @@ export default function ResearchPage() {
             what it found. Nothing reaches the Strategy page until you accept it.
           </p>
         </div>
-        <button className={btn.primary} onClick={handleRun} disabled={running}>
-          {running ? "Researching…" : run ? "Run again" : "Run research"}
-        </button>
       </header>
 
-      {running && (
+      <section className={`${surface.card} ${surface.pad} space-y-3`}>
+        <input
+          className={field.inputSm}
+          value={steer}
+          onChange={(e) => setSteer(e.target.value)}
+          placeholder="Optional: what to focus on — e.g. bilingual filers, and the Second Look Review as the differentiator"
+        />
+        <textarea
+          className={`${field.textarea} h-16`}
+          value={namedRivals}
+          onChange={(e) => setNamedRivals(e.target.value)}
+          placeholder="Optional: competitors to look at, one per line"
+        />
+        <p className={text.muted}>
+          This points the search; it never decides what it finds. A competitor
+          named here is a place to look, not a claim to repeat.
+        </p>
+        <button
+          className={btn.primary}
+          onClick={handleRun}
+          disabled={starting || inFlight}
+        >
+          {starting
+            ? "Starting…"
+            : inFlight
+              ? "Researching…"
+              : run
+                ? "Run again"
+                : "Run research"}
+        </button>
+      </section>
+
+      {inFlight && (
         <p className={banner.info}>
-          Two web searches and a synthesis. This usually takes a minute or two —
-          leave the tab open.
+          {run?.progress ? `${run.progress}…` : "Working…"} Two web searches and
+          a synthesis, usually two to three minutes. This runs on the server, so
+          you can leave this page — it will still be here when you come back.
         </p>
       )}
       {error && <p className={banner.error}>{error}</p>}
 
-      {!run && !running && (
+      {!run && !starting && (
         <div className={surface.empty}>
           <p>No research yet.</p>
           <p className={`${text.muted} mt-1`}>
@@ -171,6 +242,12 @@ export default function ResearchPage() {
                 {run.status} — {STATUS_NOTE[run.status] ?? ""}
               </p>
             </div>
+            {run.progress && (
+              <div>
+                <p className={text.micro}>Doing</p>
+                <p className="text-sm text-slate-800">{run.progress}</p>
+              </div>
+            )}
             <div>
               <p className={text.micro}>Ran</p>
               <p className="text-sm text-slate-800">
@@ -206,7 +283,7 @@ export default function ResearchPage() {
             </div>
           )}
 
-          {run.status !== "insufficient" && (
+          {run.status !== "insufficient" && run.status !== "running" && run.status !== "failed" && (
             <>
               <Section title="What it found">
                 <div className="space-y-4">
@@ -351,6 +428,7 @@ export default function ResearchPage() {
             </>
           )}
 
+          {run.open_questions.length > 0 && (
           <Section title="Ask the client">
             <div className="flex items-start justify-between gap-4">
               <p className={`${text.muted} mb-3`}>
@@ -370,6 +448,7 @@ export default function ResearchPage() {
               ))}
             </ul>
           </Section>
+          )}
 
           {run.sources.length > 0 && (
             <Section title="Pages read">
