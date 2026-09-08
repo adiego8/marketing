@@ -62,12 +62,68 @@ seed **after** that, so it attaches to the agency your sign-in created.
 
 ## The loop
 
-Strategy (set a weekly quota) → Plan (generate a preview, accept it) →
-**Schedule** (what is committed; copy or download it as a Markdown plan).
+Research (draft a strategy from the client's site, accept it) → Strategy (set a
+weekly quota) → Plan (generate a preview, accept it) → **Schedule** (what is
+committed; copy or download it as a Markdown plan).
 
 Cancelling or skipping a slot on the Schedule page gives its quota back, so the
 next plan run proposes a replacement — see `QUOTA_COUNTING` in
 `lib/marketing/planner/types.ts`.
+
+## Research
+
+`POST /api/v1/clients/{id}/research` reads the client's website and then the
+open web, and drafts a strategy from what it found. It writes **nothing** to the
+strategy — the draft lives on a run document until someone accepts it at
+`.../research/runs/{runId}/accept`.
+
+**It returns immediately, not when the research is done.** The row is written as
+`running` before the first search and the work continues in `after()` from
+`next/server`, so the browser holds nothing open: close the tab, walk away, come
+back, and the run is still there with its current step in `progress`. The page
+polls `GET .../research` while a run is in flight rather than waiting on a
+request. One run per client at a time — a second `POST` gets a 409, because
+three silent minutes is exactly when someone clicks again.
+
+`after()` is bounded by the route's `maxDuration` (300s here), so an invocation
+killed at the ceiling would leave a row stuck at `running` forever. `isStale`
+reports any run still `running` after six minutes as interrupted, and the
+concurrency guard ignores it — nothing is written back on read.
+
+Optional `steer` and `competitors` in the POST body point the search: what to
+focus on, and which rivals to look at by name. They direct where to look and
+never what to conclude — a named competitor still has to be found before
+anything is said about it, and the evidence rule below outranks the steer. The
+last run's direction is pre-filled on the page, so re-running means adjusting it
+rather than retyping it.
+
+Two rules make it research rather than invention, and both are enforced in
+`lib/marketing/research/parse.ts` rather than asked for in the prompt:
+
+- **A claim survives only if it names a page the search actually read.** The
+  model citing a URL is not evidence it read one, so `messaging.proof_points` is
+  filtered against the URLs the `web_search` tool annotated. Proof points are the
+  field that becomes a public claim about the client's business, so they get no
+  benefit of the doubt.
+- **No website, no run.** The status comes back `insufficient` with a reason
+  instead of a strategy assembled from whatever the model half-remembers about a
+  small business.
+
+The site pass is scoped with `allowed_domains`, so **OpenAI fetches the pages and
+this app never requests a URL a user supplied** — `website_url` is stored
+unvalidated, and fetching it here would be an SSRF.
+
+What research cannot see — real numbers, why deals are lost, who can actually
+make content each week — comes back as `open_questions`: the agenda for the call
+where you check the draft with the client.
+
+To try it against a real client without writing anything:
+
+```bash
+npx tsx scripts/research-dry-run.ts <clientId>
+```
+
+Budget about three minutes a run; the route allows five.
 
 ## Firestore indexes
 
@@ -99,7 +155,7 @@ Then move the sort and limit back into the query in
 ## Checks
 
 ```bash
-npm run test        # 261 tests over the pure functions
+npm run test        # 327 tests over the pure functions
 npm run typecheck
 npm run build
 npm run lint
@@ -163,11 +219,11 @@ Before the first deploy, three things live outside this repo:
 
 ## What works today
 
-Dashboard, Strategy, Branding, Campaigns, Plan and Schedule, each backed by a
-route in `app/api/v1`. There is no proxy and no second backend: the FastAPI
+Dashboard, Research, Strategy, Branding, Campaigns, Plan and Schedule, each
+backed by a route in `app/api/v1`. There is no proxy and no second backend: the FastAPI
 service this was ported from has been deleted, and its history is at `efc3748`.
 
 The schedule pushes to a Google calendar per client and reconciles two ways —
 moves, deletions and renames made in Google are adopted rather than overwritten
 — and each piece has its own page where its brief and its finished copy are
-written. Onboarding, Runs and Assets remain unbuilt and unlinked.
+written. Runs and Assets remain unbuilt and unlinked.

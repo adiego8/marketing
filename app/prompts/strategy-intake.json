@@ -1,0 +1,278 @@
+{
+  "name": "Strategy intake — Handy Set Go marketing agent",
+  "version": 1,
+  "purpose": "Turn raw facts about a company into the strategy document this app stores for a client. Everything the agent writes — campaigns, the schedule, the copy on each slot — reads from that document, so it is the source of truth and worth getting right.",
+
+  "how_to_use": [
+    "1. Fill in `company_input` below with whatever you know about the company. Blanks are fine — say 'unknown' rather than inventing.",
+    "2. Paste this whole file into ChatGPT along with anything else you have: the website, a deck, a sales call transcript, competitor pages, real customer quotes.",
+    "3. ChatGPT returns ONE JSON object matching `output.schema` — nothing else, no prose, no code fence.",
+    "4. Paste that object into the client's Strategy page in the app, or PUT it to /api/v1/clients/{clientId}/strategy."
+  ],
+
+  "task": "You are a positioning and brand-voice strategist. Read `company_input` and any material the user pastes alongside it, then produce the strategy JSON described in `output`. Work from evidence: prefer the company's own words, its customers' words, and observable facts over generic marketing language. Where `company_input` is thin, say so in the field rather than filling the gap with something plausible-sounding — an honest blank is more useful than a confident guess, because a human reviews this before it drives anything. Before you answer, ask up to five clarifying questions if the answers would materially change the positioning; otherwise answer directly.",
+
+  "company_input": {
+    "_note": "Fill this in. Free text everywhere — no formatting rules. 'unknown' is a valid answer.",
+
+    "basics": {
+      "business_name": "",
+      "website": "",
+      "what_they_sell": "",
+      "how_they_make_money": "pricing model, typical deal size, one-off vs recurring",
+      "years_in_business": "",
+      "team_size": "",
+      "geography": "where they operate and where they sell",
+      "languages": ""
+    },
+
+    "customers": {
+      "who_buys": "the person, not the company — job title, situation, what their day looks like",
+      "who_they_do_NOT_serve": "just as important as who they do",
+      "best_customers": "describe two or three real ones, by type",
+      "why_customers_came": "the moment that made them start looking",
+      "why_deals_are_lost": "",
+      "how_customers_describe_the_problem": "their words, verbatim if you have them — from calls, reviews, emails, support tickets"
+    },
+
+    "offer": {
+      "what_changes_for_the_customer": "the before and the after, concretely",
+      "how_it_works": "the mechanism — the actual thing they do differently",
+      "what_competitors_do_instead": "",
+      "proof": "numbers, results, named clients, certifications, guarantees, years, volume",
+      "objections_heard": "what people say right before they don't buy",
+      "guarantee_or_risk_reversal": ""
+    },
+
+    "voice_and_brand": {
+      "who_writes_today": "founder, agency, nobody",
+      "samples": "paste two or three things they have published that sound right",
+      "words_they_use": "industry terms, product names, phrases the founder repeats",
+      "words_they_would_never_use": "",
+      "formality": "how a customer would expect to be spoken to",
+      "any_compliance_limits": "regulated claims, disclaimers, things legal will not allow"
+    },
+
+    "goals_and_capacity": {
+      "business_goal_next_90_days": "",
+      "what_success_looks_like": "the number that would make this quarter a win",
+      "current_channels": "where they already post, and what already works",
+      "audience_size_per_channel": "",
+      "email_list_size": "",
+      "who_can_actually_make_content": "who films, who designs, who approves",
+      "realistic_output_per_week": "be honest — a quota nobody can meet is worse than a small one",
+      "seasonality": "busy months, dead months, deadlines their customers care about"
+    }
+  },
+
+  "reference": {
+    "_note": "The app validates against these. Values outside them are dropped on save.",
+
+    "channels": ["linkedin", "instagram", "twitter", "email"],
+
+    "content_types": {
+      "post": { "label": "Post", "what": "Text or single image. The default unit on every channel.", "channels": ["linkedin", "instagram", "twitter"] },
+      "carousel": { "label": "Carousel", "what": "Multi-slide. Carries a sequence — steps, myths, a breakdown.", "channels": ["linkedin", "instagram"] },
+      "reel": { "label": "Reel", "what": "Short vertical video. Needs a script and a shoot.", "channels": ["instagram"] },
+      "story": { "label": "Story", "what": "Vertical, disappears in 24h. Behind-the-scenes and prompts.", "channels": ["instagram"] },
+      "thread": { "label": "Thread", "what": "A sequence of posts making one argument.", "channels": ["twitter"] },
+      "newsletter": { "label": "Newsletter", "what": "Long-form to the list. Usually the week's best idea, expanded.", "channels": ["email"] },
+      "post_alt": { "label": "Alt post", "what": "A second angle on the same theme, for testing.", "channels": ["linkedin", "instagram", "twitter"] }
+    },
+
+    "retired_content_types": {
+      "_note": "Do NOT put these in content_quota.weekly. A hook and a CTA are now part of every piece, not separate scheduled items.",
+      "keys": ["hook", "cta"]
+    },
+
+    "demographic_fields": {
+      "_note": "The editor renders these eight as named inputs. Extra keys are allowed and show as custom fields; keys are snake_case.",
+      "customer_type": "An individual, or a business.",
+      "industry": "The sector they work in or buy for.",
+      "role": "Their job or household role.",
+      "location": "Where they are.",
+      "age_range": "Only when it genuinely segments the audience.",
+      "language": "The language they want to be sold in.",
+      "company_size": "B2B only — headcount.",
+      "income_or_revenue": "Household income for a consumer, revenue for a business."
+    },
+
+    "positioning_angle_types": {
+      "_note": "Use one of these strings as `type`. Pick the one the evidence actually supports.",
+      "contrarian": "Challenge what everyone in the category believes.",
+      "unique_mechanism": "Lead with HOW it works, not what it is.",
+      "transformation": "The before and the after — the gap closed.",
+      "enemy": "Position against a common villain the customer already resents.",
+      "speed_ease": "Compress the time or reduce the effort it takes.",
+      "specificity": "Hyper-specific about who it is for and what it does.",
+      "social_proof": "Lead with the evidence, not the claim.",
+      "risk_reversal": "Make the guarantee the headline."
+    },
+
+    "scheduling_ceiling": {
+      "max_slots_per_day": 2,
+      "max_per_week": 14,
+      "_note": "The planner places at most 2 pieces a day. A weekly quota totalling more than 14 can never be met and shows as a permanent shortfall on every Coverage row, which buries the real warnings. Set the quota to what the team can actually produce, not to what is theoretically ideal."
+    }
+  },
+
+  "rules": [
+    "Return one JSON object and nothing else. No markdown fence, no commentary before or after.",
+    "Use exactly the keys in output.schema. Extra keys are ignored by the app; missing keys are left untouched on save, so send every key you have an answer for.",
+    "Every string is plain text. No markdown, no emoji, no line breaks inside a value.",
+    "Arrays hold short standalone phrases — one idea each, no numbering, no trailing punctuation.",
+    "Write in the company's language, not marketing language. If a sentence could sit on any competitor's site unchanged, it is not positioning — rewrite it.",
+    "Banned words, always: revolutionary, game-changing, crushing it, leverage, synergy, unlock, seamless, cutting-edge, best-in-class, delve, landscape, paradigm, tapestry, elevate, empower, robust, holistic.",
+    "Claims need backing. If `company_input.offer.proof` does not support a number, do not use a number.",
+    "content_strategy is TOP LEVEL, a sibling of goals — not nested inside it.",
+    "content_quota.weekly keys must come from reference.content_types. Each entry's channels must be a subset of that type's allowed channels.",
+    "Leave a field as \"\" or [] when the input genuinely does not say. Do not pad."
+  ],
+
+  "output": {
+    "format": "A single JSON object. This is the exact body of PUT /api/v1/clients/{clientId}/strategy.",
+
+    "schema": {
+      "business_name": {
+        "type": "string",
+        "required": true,
+        "guidance": "The trading name as customers write it. Required — a strategy cannot be created without it."
+      },
+
+      "icp": {
+        "_what": "Who this is for. The planner and the copy writer both read this to decide who they are talking to.",
+        "description": {
+          "type": "string",
+          "guidance": "Two or three sentences describing one person, not a segment. Their role, their situation, what is on their plate this week.",
+          "example": "Owner-operators of home service businesses doing $500k to $3M a year, usually 3 to 15 crew. They still answer the phone themselves. Growth has stalled not because demand dried up but because scheduling and follow-up eat the day."
+        },
+        "demographics": {
+          "type": "object of string -> string",
+          "guidance": "Flat key/value. Use the eight keys in reference.demographic_fields — the editor renders those as named inputs. Leave a key out when it does not apply (company_size for a consumer product, age_range for B2B). You may add extra keys for a dimension only this company has; they appear as custom fields. Use snake_case.",
+          "example": { "customer_type": "Owner-operated business", "industry": "Home services — HVAC, plumbing, electrical", "role": "Owner / operator", "location": "US, secondary metros", "company_size": "3-15 employees", "income_or_revenue": "$500k-$3M annual revenue" }
+        },
+        "pain_points": { "type": "string[]", "guidance": "In their words. What actually hurts, not what the product fixes.", "example": ["Quotes sit unanswered for days because nobody has time to chase them", "Double-booked crews and no way to see it coming"] },
+        "desired_outcomes": { "type": "string[]", "guidance": "What the customer is trying to achieve, independent of your product. Named `desired_outcomes` rather than `goals` because the top-level `goals` section means the MARKETING goals — a different thing.", "example": ["Take on more jobs without hiring another office person"] },
+        "objections": { "type": "string[]", "guidance": "What they say right before they don't buy.", "example": ["We already pay for software nobody uses"] },
+        "trigger_events": { "type": "string[]", "guidance": "The events that make someone start looking. These drive campaign timing.", "example": ["Lost a big job to a competitor who quoted same-day", "Office manager quits"] }
+      },
+
+      "voice": {
+        "_what": "How it sounds. The review engine checks generated copy against words_to_use and words_to_avoid, so these two lists do real work — make them specific.",
+        "personality": { "type": "string", "guidance": "One or two sentences. If the brand were a person in the room, who?", "example": "The experienced operator who has seen this before and tells you straight, without making you feel stupid for asking." },
+        "traits": { "type": "string[]", "guidance": "Three to six adjectives.", "example": ["direct", "practical", "unhurried", "specific"] },
+        "tone": { "type": "string", "guidance": "The register — how formal, how warm, how much humour.", "example": "Plainspoken and calm. Never salesy, never chummy. Short sentences." },
+        "communication_style": { "type": "string", "guidance": "Structural habits: sentence length, whether it opens with a question, uses numbers, tells stories.", "example": "Leads with the concrete situation, then the point. Uses real numbers over adjectives. No rhetorical questions as openers." },
+        "words_to_use": { "type": "string[]", "guidance": "Actual vocabulary from the industry and the founder — terms of art, product names, phrases customers say.", "example": ["job", "crew", "callback", "quote", "same-day"] },
+        "words_to_avoid": { "type": "string[]", "guidance": "Include the generic AI/marketing words AND anything specific to this brand.", "example": ["solution", "revolutionary", "leverage", "unlock", "seamless", "game-changing"] }
+      },
+
+      "positioning": {
+        "_what": "Why them and not someone else. This is the highest-leverage section — campaigns inherit the angle.",
+        "primary_angle": {
+          "type": "object",
+          "fields": {
+            "type": "One key from reference.positioning_angle_types.",
+            "statement": "One sentence a customer would recognise as true. No hedging.",
+            "why": "Why this angle works for THIS company — the evidence behind it."
+          },
+          "example": { "type": "unique_mechanism", "statement": "Every quote goes out the same day, because the estimate is written on site before the van leaves.", "why": "Their close rate is 3x on same-day quotes and competitors average four days. The mechanism is the differentiator, not the software." }
+        },
+        "secondary_angles": {
+          "type": "array of objects",
+          "guidance": "Two to four. Same shape as primary_angle; the app's editor shows type and statement, `why` is stored but not displayed. Genuinely different angles, not restatements of the primary.",
+          "example": [{ "type": "enemy", "statement": "Built for people who already tried the all-in-one platform and went back to a whiteboard.", "why": "Every discovery call mentions an abandoned platform by name." }]
+        },
+        "anti_positioning": { "type": "string", "guidance": "Who this is explicitly NOT for, and what it deliberately does not do. Say it plainly — this is what makes the rest credible.", "example": "Not for national franchises or anyone with a dedicated ops team. No inventory, no accounting, no payroll." },
+        "differentiation": { "type": "string", "guidance": "The concrete difference versus the named alternatives, as a customer would verify it.", "example": "Competitors sell a platform and charge for onboarding. Setup here is one afternoon and the price does not change with headcount." }
+      },
+
+      "messaging": {
+        "_what": "The reusable lines. The copy writer pulls from here rather than reinventing the pitch on every post.",
+        "tagline": { "type": "string", "guidance": "Under ten words. Says what it is, not how it feels.", "example": "Same-day quotes, every job." },
+        "value_props": { "type": "string[]", "guidance": "Three to five. Each names an outcome the customer gets, not a feature you shipped.", "example": ["Quote on site before you leave the driveway"] },
+        "key_messages": { "type": "string[]", "guidance": "Three to six sentences that can be repeated across a quarter without wearing out. These become content pillars in practice.", "example": ["The job is won or lost in the first 24 hours after the call"] },
+        "proof_points": { "type": "string[]", "guidance": "Only what is verifiable. Numbers, named customers, guarantees, years, volume. If the input has none, return an empty array — do not invent.", "example": ["Used by 40 home service businesses across 12 states", "Average quote turnaround: 4 hours"] }
+      },
+
+      "goals": {
+        "_what": "What the marketing is for. Keeps the agent from optimising for the wrong thing.",
+        "primary": { "type": "string", "guidance": "One measurable business outcome.", "example": "30 qualified demo requests a month" },
+        "secondary": { "type": "string", "guidance": "The supporting outcome.", "example": "Grow the email list to 2,000 owner-operators" },
+        "focus_90_days": { "type": "string", "guidance": "The one thing this quarter.", "example": "Establish the same-day quote mechanism as the thing they are known for, ahead of the spring busy season." },
+        "metrics": { "type": "string[]", "guidance": "What gets checked, with numbers.", "example": ["Demo requests per month", "Email list growth rate", "LinkedIn follower growth"] }
+      },
+
+      "content_strategy": {
+        "_what": "TOP LEVEL — a sibling of goals, not inside it. The planner reads platforms to know where things can go, and content_pillars to keep a month from becoming seven versions of the same post.",
+        "platforms": { "type": "string[]", "guidance": "Where they will actually publish. Should line up with the channels used in content_quota.", "example": ["linkedin", "instagram", "email"] },
+        "content_pillars": { "type": "string[]", "guidance": "Three to five recurring themes. Each should be able to carry a month of content on its own.", "example": ["The first 24 hours after the call", "What the whiteboard costs you", "Owner-operator field notes", "Pricing without guessing"] }
+      },
+
+      "content_quota": {
+        "_what": "How much to publish per week and where. The planner uses this to find gaps in the calendar and place each piece.",
+        "weekly": {
+          "type": "object of content_type_key -> { count: number, channels: string[] }",
+          "guidance": "Keys from reference.content_types only. Channels must be a subset of that type's allowed channels. Total count must not exceed 14 (2 a day) — and should match what the team can genuinely produce, from company_input.goals_and_capacity.realistic_output_per_week.",
+          "example": { "post": { "count": 3, "channels": ["linkedin"] }, "carousel": { "count": 1, "channels": ["linkedin", "instagram"] }, "newsletter": { "count": 1, "channels": ["email"] } }
+        },
+        "rationale": {
+          "type": "string",
+          "guidance": "One short paragraph explaining the mix — why these formats, why this volume, what capacity it assumes. Shown to the operator above the quota table.",
+          "example": "Five pieces a week, weighted to LinkedIn where the owner already has an audience. One carousel because the same-day quote mechanism needs steps to land. The newsletter carries the week's best idea. No Reels until someone can reliably film."
+        }
+      }
+    }
+  },
+
+  "example_output": {
+    "_note": "Shape reference only — a complete, valid payload. Do not copy the content.",
+    "business_name": "Ridgeline Field Ops",
+    "icp": {
+      "description": "Owner-operators of home service businesses doing $500k to $3M a year, usually 3 to 15 crew. They still answer the phone themselves.",
+      "demographics": { "customer_type": "Owner-operated business", "industry": "Home services", "role": "Owner / operator", "location": "US, secondary metros", "company_size": "3-15 employees", "income_or_revenue": "$500k-$3M revenue" },
+      "pain_points": ["Quotes sit unanswered for days", "Double-booked crews with no warning"],
+      "desired_outcomes": ["Take on more jobs without hiring office staff"],
+      "objections": ["We already pay for software nobody uses"],
+      "trigger_events": ["Lost a job to a competitor who quoted same-day"]
+    },
+    "voice": {
+      "personality": "The experienced operator who tells you straight.",
+      "traits": ["direct", "practical", "unhurried"],
+      "tone": "Plainspoken and calm. Short sentences.",
+      "communication_style": "Concrete situation first, then the point. Numbers over adjectives.",
+      "words_to_use": ["job", "crew", "callback", "quote"],
+      "words_to_avoid": ["solution", "leverage", "revolutionary", "seamless"]
+    },
+    "positioning": {
+      "primary_angle": { "type": "unique_mechanism", "statement": "Every quote goes out the same day, because the estimate is written on site.", "why": "Close rate is 3x on same-day quotes; competitors average four days." },
+      "secondary_angles": [{ "type": "enemy", "statement": "Built for people who tried the all-in-one platform and went back to a whiteboard.", "why": "Named in nearly every discovery call." }],
+      "anti_positioning": "Not for franchises or anyone with a dedicated ops team.",
+      "differentiation": "Setup is one afternoon and the price does not change with headcount."
+    },
+    "messaging": {
+      "tagline": "Same-day quotes, every job.",
+      "value_props": ["Quote on site before you leave the driveway"],
+      "key_messages": ["The job is won or lost in the first 24 hours after the call"],
+      "proof_points": ["Average quote turnaround: 4 hours"]
+    },
+    "goals": {
+      "primary": "30 qualified demo requests a month",
+      "secondary": "Grow the email list to 2,000 owner-operators",
+      "focus_90_days": "Own the same-day quote idea before the spring busy season.",
+      "metrics": ["Demo requests per month", "Email list growth rate"]
+    },
+    "content_strategy": {
+      "platforms": ["linkedin", "instagram", "email"],
+      "content_pillars": ["The first 24 hours after the call", "What the whiteboard costs you", "Owner-operator field notes"]
+    },
+    "content_quota": {
+      "weekly": {
+        "post": { "count": 3, "channels": ["linkedin"] },
+        "carousel": { "count": 1, "channels": ["linkedin", "instagram"] },
+        "newsletter": { "count": 1, "channels": ["email"] }
+      },
+      "rationale": "Five a week, weighted to LinkedIn where the owner already has an audience. No Reels until someone can reliably film."
+    }
+  }
+}

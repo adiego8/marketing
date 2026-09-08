@@ -11,6 +11,13 @@ import OpenAI from "openai";
 // response made json.loads throw, which the global handler turned into a 500.
 
 export const DEFAULT_MODEL = process.env.LLM_MODEL || "gpt-5.5";
+
+// Research reaches the model through the Responses API so it can carry the
+// hosted web_search tool, which chat.completions cannot. Not every chat model
+// accepts that tool, so the model is nameable on its own rather than inheriting
+// LLM_MODEL blindly — a research run that quietly lost its web access would
+// produce the same JSON, sourced from nothing.
+export const RESEARCH_MODEL = process.env.RESEARCH_MODEL || DEFAULT_MODEL;
 const TIMEOUT_MS = 120_000;
 
 // Newer models reject any temperature other than the default: gpt-5, gpt-5.5
@@ -94,4 +101,145 @@ export async function llmJson<T = Record<string, unknown>>({
   throw lastError instanceof Error
     ? lastError
     : new Error("LLM request failed.");
+}
+
+/* --------------------------------------------------------------- research -- */
+
+/**
+ * How long one search pass may take.
+ *
+ * The route budgets 300s for two passes and a draft, so a pass that has not
+ * answered inside this is cut off and the run degrades to the other pass —
+ * which is a result a human can use, unlike an invocation killed at the
+ * ceiling with nothing written.
+ */
+const SEARCH_TIMEOUT_MS = 120_000;
+
+export interface SearchOptions {
+  systemPrompt: string;
+  /** Serialized as pretty JSON into the user message, as in llmJson. */
+  payload: unknown;
+  /**
+   * Restrict the search to these hosts. Passing the client's own domain is how
+   * the "read their website" pass is done: OpenAI fetches the pages, so this
+   * app never makes an outbound request to a URL a user supplied. website_url
+   * is stored unvalidated, and fetching it here would be an SSRF.
+   */
+  allowedDomains?: string[];
+  model?: string;
+}
+
+export interface SearchResult<T> {
+  data: T;
+  /** URLs the tool actually cited — evidence, not the model's own claim. */
+  sources: string[];
+}
+
+/**
+ * The pages the search actually opened, deduped, in the order first seen.
+ *
+ * Two places record this and neither is sufficient alone. When the model
+ * answers in prose it annotates the text with url citations; when it answers in
+ * JSON — which is what research asks for — there are no annotations at all, and
+ * the only record is the tool's own `web_search_call` items. Reading just the
+ * annotations meant every claim looked unsourced and got dropped.
+ *
+ * An `open_page` action is a page it fetched. A `search` action is only a query
+ * it ran, so it contributes nothing: a search result the model never opened is
+ * not evidence it read anything.
+ */
+function citedUrls(response: unknown): string[] {
+  const seen = new Set<string>();
+  const output = (response as { output?: unknown }).output;
+  if (!Array.isArray(output)) return [];
+
+  for (const item of output) {
+    const action = (item as { action?: unknown }).action;
+    if (action && typeof action === "object") {
+      const url = (action as { url?: unknown }).url;
+      if (typeof url === "string" && url) seen.add(url);
+      // Some actions carry the pages behind a query rather than one url.
+      const sources = (action as { sources?: unknown }).sources;
+      if (Array.isArray(sources)) {
+        for (const source of sources) {
+          const su = typeof source === "string" ? source : (source as { url?: unknown })?.url;
+          if (typeof su === "string" && su) seen.add(su);
+        }
+      }
+    }
+
+    const content = (item as { content?: unknown }).content;
+    if (!Array.isArray(content)) continue;
+    for (const part of content) {
+      const annotations = (part as { annotations?: unknown }).annotations;
+      if (!Array.isArray(annotations)) continue;
+      for (const a of annotations) {
+        const url = (a as { url?: unknown }).url;
+        if (typeof url === "string" && url) seen.add(url);
+      }
+    }
+  }
+  return [...seen];
+}
+
+/**
+ * Ask the model a question it must look up, and return parsed JSON plus the
+ * URLs it cited.
+ *
+ * Deliberately NOT folded into llmJson: that one is the two-message,
+ * json_object, chat.completions shape every other feature depends on, and it
+ * has no way to carry a tool. Keeping them apart means the research path cannot
+ * change the behaviour of campaign generation or copywriting.
+ *
+ * No retry loop. A search call costs real time — the route budgets 300s for two
+ * of them — and the caller degrades rather than failing, so a second attempt
+ * would more often burn the budget than rescue the run.
+ */
+export async function llmSearchJson<T = Record<string, unknown>>({
+  systemPrompt,
+  payload,
+  allowedDomains,
+  model = RESEARCH_MODEL,
+}: SearchOptions): Promise<SearchResult<T>> {
+  const response = await openai().responses.create(
+    {
+      model,
+      tools: [
+        {
+          type: "web_search",
+          ...(allowedDomains?.length
+            ? { filters: { allowed_domains: allowedDomains } }
+            : {}),
+        },
+      ],
+      input: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: JSON.stringify(payload, null, 2) },
+      ],
+    },
+    // maxRetries: 0 is the important half. The SDK retries twice by default
+    // (internal/request-options.d.ts:37), so a search that legitimately runs
+    // past the timeout was being killed and silently re-run twice — it could
+    // never succeed, it cost three searches instead of one, and three attempts
+    // at two minutes each blew the route's whole budget. A steered run sat at
+    // one step for eight minutes this way. One attempt, then degrade.
+    { timeout: SEARCH_TIMEOUT_MS, maxRetries: 0 }
+  );
+
+  const text = response.output_text;
+  if (!text) throw new Error("The research model returned an empty response.");
+
+  // The Responses API has no json_object mode with tools attached, so the
+  // prompt asks for bare JSON and the model sometimes fences it anyway.
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/, "");
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end <= start) {
+    throw new Error("The research model did not return a JSON object.");
+  }
+
+  return {
+    data: JSON.parse(cleaned.slice(start, end + 1)) as T,
+    sources: citedUrls(response),
+  };
 }

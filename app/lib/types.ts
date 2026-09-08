@@ -190,8 +190,6 @@ export interface Client {
   status: "active" | "paused" | "archived";
   /** IANA zone. Every scheduling decision is made in the client's local time. */
   timezone: string;
-  research?: Record<string, unknown>;
-  research_status?: "researching" | "completed" | "failed";
   branding?: Branding;
   google_calendar_id?: string;
   created_at: string;
@@ -293,5 +291,41 @@ export interface PlanRun {
   inputs_fingerprint: string | null;
   llm: { called: boolean; degraded: boolean; durationMs: number } | null;
   committed_at: string | null;
+  created_at: string;
+}
+
+/**
+ * One research run: what was searched, what was found, and the strategy drafted
+ * from it. Stored in its own collection rather than on the client, because a
+ * dossier is sizable and listClients serializes every client document.
+ *
+ * There is no "running" status. A run document is written once the work is
+ * finished — the app has no queue and no worker that could set one.
+ */
+export interface ResearchRun {
+  id: string;
+  client_id: string;
+  status: "running" | "complete" | "degraded" | "insufficient" | "failed";
+  /** The current step, while running. Null once the run has finished. */
+  progress: string | null;
+  inputs: {
+    business_name?: string;
+    website?: string | null;
+    domain?: string | null;
+    notes?: string | null;
+    /** The operator's direction, so a re-run can start from it. */
+    steer?: string;
+    competitors?: string[];
+  };
+  dossier: Record<string, unknown>;
+  /** Shaped like Strategy, minus the server-owned client_id and updated_at. */
+  draft_strategy: Record<string, unknown>;
+  /** What research could not settle — the agenda for the call with the client. */
+  open_questions: string[];
+  /** URLs the search actually cited. Claims that named anything else were dropped. */
+  sources: string[];
+  warnings: string[];
+  llm: { model: string; searches: number; duration_ms: number } | null;
+  accepted_at: string | null;
   created_at: string;
 }

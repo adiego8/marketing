@@ -41,14 +41,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   const prefix = `/clients/${clientId}`;
 
-  // Only routes whose endpoints are ported to this app. Onboarding, Runs and
-  // Assets still proxy to the FastAPI backend, so linking them would hand you a
-  // 500. Their pages are left in place: Onboarding returns when research is
-  // ported, Runs/Assets are slated for deletion along with the Python. The old
-  // Calendar page is gone — Schedule replaces it, and gains Google sync in
-  // Phase 4.
+  // Only routes whose endpoints are ported to this app. Runs and Assets are
+  // slated for deletion along with the Python. The old Calendar page is gone —
+  // Schedule replaces it.
+  //
+  // Research comes before Strategy because that is the order the work happens
+  // in: research drafts the strategy, a human accepts it, everything else reads
+  // from it.
   const NAV_ITEMS = [
     { href: prefix, label: "Dashboard", icon: "◻" },
+    { href: `${prefix}/research`, label: "Research", icon: "◍" },
     { href: `${prefix}/strategy`, label: "Strategy", icon: "◎" },
     { href: `${prefix}/branding`, label: "Branding", icon: "◐" },
     { href: `${prefix}/campaigns`, label: "Campaigns", icon: "◈" },

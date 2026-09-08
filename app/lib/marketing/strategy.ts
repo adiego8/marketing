@@ -118,7 +118,17 @@ export async function upsertStrategy(clientId: string, update: Record<string, un
       updatedAt: FieldValue.serverTimestamp(),
     });
   } else {
-    await ref.set({ ...update, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    // mergeFields, not merge:true. `merge: true` merges nested maps RECURSIVELY,
+    // so a key the caller deliberately left out of a section survives the write
+    // — removing a demographic field or a content-quota row looked like it
+    // worked and then came back on the next load. mergeFields overwrites each
+    // named field whole, which is the actual contract here: an absent SECTION
+    // is untouched, a present one replaces what was there.
+    const fields = [...Object.keys(update), "updatedAt"];
+    await ref.set(
+      { ...update, updatedAt: FieldValue.serverTimestamp() },
+      { mergeFields: fields }
+    );
   }
 
   const snap = await ref.get();

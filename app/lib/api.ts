@@ -7,6 +7,7 @@ import type {
   Slot,
   SlotStatus,
   PlanRun,
+  ResearchRun,
 } from "./types";
 
 import { auth } from "./firebase";
@@ -76,6 +77,27 @@ export const updateStrategy = (clientId: string, data: Partial<Strategy>) =>
     method: "PUT",
     body: JSON.stringify(data),
   });
+
+// Research
+export const listResearchRuns = (clientId: string) =>
+  request<{ runs: ResearchRun[] }>(`${c(clientId)}/research`).then((r) => r.runs);
+
+// Returns in milliseconds with a run in "running" — the work continues on the
+// server via after(), so the caller polls listResearchRuns rather than waiting.
+export const runResearch = (
+  clientId: string,
+  data: { steer?: string; competitors?: string } = {}
+) =>
+  request<ResearchRun>(`${c(clientId)}/research`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const acceptResearch = (clientId: string, runId: string) =>
+  request<{ strategy: Strategy; run: ResearchRun }>(
+    `${c(clientId)}/research/runs/${runId}/accept`,
+    { method: "POST" }
+  );
 
 // Campaigns
 export const listCampaigns = (clientId: string, status?: string) => {
