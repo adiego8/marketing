@@ -24,8 +24,14 @@ import { daysInSpan, horizonWeeks, weekdayOf, todayIn, type WeekSpan } from "./w
 // OBSERVE — the deterministic half of the planner.
 //
 // Answers "how many pieces of each type is each week short?" without any LLM
-// involvement. Quota decides HOW MANY slots exist. Campaigns only decide which
-// one each slot draws from — campaign deficit never creates extra slots.
+// involvement.
+//
+// The demand is the CAMPAIGNS': what each active campaign's content plan still
+// owes, after subtracting what is already scheduled against it. The quota is
+// only a pace limit on top of that — how much of a type may be scheduled in one
+// week — plus a channel preference. A type no campaign asked for is never
+// planned however large its quota; a type with no quota entry is planned at the
+// campaign's own pace rather than not at all. See the demand loop below.
 
 export interface ObserveInput {
   timezone: string;

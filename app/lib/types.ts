@@ -274,7 +274,7 @@ export interface PlanObservation {
 export interface PlanRun {
   id: string;
   client_id: string;
-  /** proposed = ready to commit · noop = quota already met · degraded = themes missing */
+  /** proposed = ready to commit · noop = every campaign plan already scheduled · degraded = themes missing */
   status: "proposed" | "noop" | "degraded" | "committed";
   horizon: {
     weeks: string[];

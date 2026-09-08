@@ -184,20 +184,21 @@ export default function PlanPage() {
               {planning ? "Planning…" : "Generate a fresh plan"}
             </button>
           </div>
-        ) : /quota/i.test(error) ? (
-          // The planner's one hard precondition. Reaching it means the run was
+        ) : /campaign/i.test(error) ? (
+          // The planner's one hard precondition — an active campaign, since a
+          // campaign's content plan IS the demand. Reaching it means the run was
           // refused before anything was computed, so point at the fix rather
           // than leaving a raw API message on screen.
           <div className={`${banner.warn} mb-4 flex flex-wrap items-center justify-between gap-3`}>
             <span>
-              No weekly content quota set. The planner needs to know how much of
-              each content type to schedule.
+              No active campaign. The planner schedules what a campaign&rsquo;s
+              content plan asks for, so there is nothing for it to do yet.
             </span>
             <Link
-              href={`/clients/${clientId}/strategy`}
+              href={`/clients/${clientId}/campaigns`}
               className={`${btn.primarySm} shrink-0`}
             >
-              Set quota →
+              Accept a campaign →
             </Link>
           </div>
         ) : (
@@ -211,8 +212,8 @@ export default function PlanPage() {
         <div className={`${banner.warn} mb-4 flex flex-wrap items-center justify-between gap-3`}>
           <span>
             {campaigns.length} campaign{campaigns.length === 1 ? "" : "s"}, but
-            none are active — the planner can only draw themes from an accepted
-            campaign, so it is working from your content pillars instead.
+            none are active — and an active campaign&rsquo;s content plan is the
+            only thing the planner schedules, so it cannot run yet.
           </span>
           <Link
             href={`/clients/${clientId}/campaigns`}

@@ -62,9 +62,16 @@ seed **after** that, so it attaches to the agency your sign-in created.
 
 ## The loop
 
-Research (draft a strategy from the client's site, accept it) → Strategy (set a
-weekly quota) → Plan (generate a preview, accept it) → **Schedule** (what is
-committed; copy or download it as a Markdown plan).
+Research (draft a strategy from the client's site, accept it) → Strategy
+(positioning, pillars, and a weekly quota) → **Campaigns** (accept one) → Plan
+(generate a preview, accept it) → **Schedule** (what is committed; copy or
+download it as a Markdown plan).
+
+The campaign is the demand: the planner schedules what an *active* campaign's
+`content_plan.breakdown` still owes, so with no accepted campaign it refuses to
+run. The quota only paces that — how much of a type may land in one week, and on
+which channel. A type no campaign asked for is never scheduled however large its
+quota; a type with no quota entry is scheduled at the campaign's own pace.
 
 Cancelling or skipping a slot on the Schedule page gives its quota back, so the
 next plan run proposes a replacement — see `QUOTA_COUNTING` in

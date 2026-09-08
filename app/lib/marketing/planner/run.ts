@@ -40,15 +40,6 @@ export class NoActiveCampaignsError extends Error {
   }
 }
 
-export class EmptyQuotaError extends Error {
-  constructor() {
-    super(
-      "This client has no weekly content quota. Set one in Strategy > Content Quota before planning."
-    );
-    this.name = "EmptyQuotaError";
-  }
-}
-
 export class NoStrategyError extends Error {
   constructor() {
     super("No strategy configured for this client.");
@@ -133,14 +124,8 @@ export async function planFromInputs(
     };
   }
 
-  if (inputs.campaigns.length === 0) {
-    warnings.push("No active campaigns — planning from content pillars.");
-  }
-  if (inputs.campaigns.length === 0 && inputs.pillars.length === 0) {
-    warnings.push(
-      "No campaigns and no content pillars, so themes will be generic. Add pillars in Strategy."
-    );
-  }
+  // No campaign-less branch here on purpose: campaigns ARE the demand, so with
+  // none there is no deficit and the noop return above has already fired.
 
   const request = buildDecideRequest(observation, inputs.campaigns, observation.campaigns, {
     business: inputs.business,
