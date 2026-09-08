@@ -7,6 +7,7 @@ import type {
   Slot,
   SlotStatus,
   PlanRun,
+  ResearchRun,
 } from "./types";
 
 import { auth } from "./firebase";
@@ -76,6 +77,20 @@ export const updateStrategy = (clientId: string, data: Partial<Strategy>) =>
     method: "PUT",
     body: JSON.stringify(data),
   });
+
+// Research
+export const listResearchRuns = (clientId: string) =>
+  request<{ runs: ResearchRun[] }>(`${c(clientId)}/research`).then((r) => r.runs);
+
+// Two web searches and a synthesis behind this one — the route budgets 300s.
+export const runResearch = (clientId: string) =>
+  request<ResearchRun>(`${c(clientId)}/research`, { method: "POST" });
+
+export const acceptResearch = (clientId: string, runId: string) =>
+  request<{ strategy: Strategy; run: ResearchRun }>(
+    `${c(clientId)}/research/runs/${runId}/accept`,
+    { method: "POST" }
+  );
 
 // Campaigns
 export const listCampaigns = (clientId: string, status?: string) => {

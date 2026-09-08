@@ -154,8 +154,6 @@ export async function createClient(session: Session, data: ClientWrite) {
     timezone: data.timezone,
     branding: data.branding,
     status: "active",
-    researchStatus: null,
-    research: null,
     googleCalendarId: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),

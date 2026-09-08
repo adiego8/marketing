@@ -32,6 +32,7 @@ export const COLLECTIONS = {
   campaigns: "marketing_campaigns",
   slots: "marketing_slots",
   planRuns: "marketing_plan_runs",
+  researchRuns: "marketing_research_runs",
   googleCredentials: "marketing_google_credentials",
 } as const;
 
@@ -77,10 +78,6 @@ export function serializeClient(id: string, d: FirebaseFirestore.DocumentData) {
     status: str(d.status, "active"),
     // IANA zone. Every week boundary and local->UTC conversion depends on it.
     timezone: str(d.timezone, "UTC"),
-    // Written by the onboarding/research flow, which is not ported yet. Kept in
-    // the contract because the branding page reads them.
-    research: d.research ?? null,
-    research_status: d.researchStatus ?? null,
     branding: d.branding ?? null,
     google_calendar_id: d.googleCalendarId ?? null,
     google_synced_at: toISO(d.googleSyncedAt),
@@ -102,6 +99,27 @@ export function serializeStrategy(clientId: string, d: FirebaseFirestore.Documen
     content_quota: d.contentQuota ?? {},
     content_strategy: d.contentStrategy ?? {},
     updated_at: toISO(d.updatedAt),
+  };
+}
+
+export function serializeResearchRun(id: string, d: FirebaseFirestore.DocumentData) {
+  return {
+    id,
+    client_id: d.clientId ?? null,
+    status: str(d.status, "complete"),
+    // What it was told to research, so a thin run is diagnosable.
+    inputs: d.inputs ?? {},
+    dossier: d.dossier ?? {},
+    draft_strategy: d.draftStrategy ?? {},
+    open_questions: Array.isArray(d.openQuestions) ? d.openQuestions : [],
+    // URLs the search actually cited. Every claim in the dossier points at one
+    // of these; anything that did not was dropped before the run was stored.
+    sources: Array.isArray(d.sources) ? d.sources : [],
+    warnings: Array.isArray(d.warnings) ? d.warnings : [],
+    llm: d.llm ?? null,
+    // Set once, when a human accepts the draft into the strategy.
+    accepted_at: toISO(d.acceptedAt),
+    created_at: toISO(d.createdAt),
   };
 }
 

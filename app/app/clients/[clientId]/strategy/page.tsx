@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { Tabs, TabPanel } from "@/components/shared/tabs";
 import { EditableList } from "@/components/shared/editable-list";
 import { banner, btn, field, surface, toggle, text } from "@/lib/ui";
@@ -241,11 +242,20 @@ export default function StrategyPage() {
       </div>
 
       {isNew && (
-        <p className={`${banner.warn} mb-6`}>
-          No strategy saved for this client yet. Fill in what you have — the
-          planner only needs a <strong>weekly quota</strong> under Content to
-          produce a schedule — then save to create it.
-        </p>
+        <div className={`${banner.warn} mb-6`}>
+          <p>
+            No strategy saved for this client yet. Fill in what you have — the
+            planner only needs a <strong>weekly quota</strong> under Content to
+            produce a schedule — then save to create it.
+          </p>
+          <p className="mt-2">
+            Or let{" "}
+            <Link href={`/clients/${clientId}/research`} className="underline">
+              Research
+            </Link>{" "}
+            draft it from the client&apos;s website first, and edit it here.
+          </p>
+        </div>
       )}
 
       {error && (

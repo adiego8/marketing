@@ -77,8 +77,6 @@ async function main() {
     timezone: "America/New_York",
     branding: null,
     status: "active",
-    researchStatus: null,
-    research: null,
     googleCalendarId: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
