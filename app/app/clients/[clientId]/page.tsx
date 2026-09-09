@@ -109,12 +109,10 @@ export default function ClientDashboard() {
           <p className="text-2xl text-slate-900 mt-1">{slots}</p>
         </div>
         <div className={surface.tile}>
-          <p className={text.label}>Horizon</p>
+          <p className={text.label}>Campaigns</p>
           <p className="text-sm text-slate-800 mt-2">
-            {latest
-              ? `${shortDate(latest.horizon.startDate)} – ${shortDate(
-                  latest.horizon.endDate
-                )}`
+            {latest?.demand?.length
+              ? latest.demand.map((c) => c.title).join(", ")
               : "—"}
           </p>
         </div>
@@ -162,7 +160,7 @@ export default function ClientDashboard() {
               <tr className="bg-stone-50">
                 <th className={table.head}>Created</th>
                 <th className={table.head}>Status</th>
-                <th className={table.head}>Horizon</th>
+                <th className={table.head}>Campaigns</th>
                 <th className={`${table.head} text-right`}>Slots</th>
                 <th className={`${table.head} text-right`}>Warnings</th>
                 <th className={table.head}></th>
@@ -178,8 +176,13 @@ export default function ClientDashboard() {
                     <span className={statusPill(run.status)}>{run.status}</span>
                   </td>
                   <td className={table.cell}>
-                    {shortDate(run.horizon.startDate)} –{" "}
-                    {shortDate(run.horizon.endDate)}
+                    {/* Runs from before dating became a human step still carry
+                        a horizon; newer ones carry the campaigns instead. */}
+                    {run.demand?.length
+                      ? run.demand.map((c) => c.title).join(", ")
+                      : run.horizon
+                        ? `${shortDate(run.horizon.startDate)} – ${shortDate(run.horizon.endDate)}`
+                        : "—"}
                   </td>
                   <td className={`${table.cell} text-right`}>
                     {run.proposed_slots.length}

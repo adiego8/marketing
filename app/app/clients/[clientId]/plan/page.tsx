@@ -9,36 +9,33 @@ import {
   commitPlan,
   listCampaigns,
   deletePlanRun,
+  dropPlanSlots,
+  restorePlanSlots,
+  replaceDroppedSlots,
 } from "@/lib/api";
 import type { CampaignListItem } from "@/lib/types";
-import { banner, btn, surface, table, toggle, text } from "@/lib/ui";
+import { banner, btn, field, surface, table, text } from "@/lib/ui";
 import { channelPill, PILL } from "@/lib/ui-status";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
 import type { PlanRun, ProposedSlot } from "@/lib/types";
-
-const HORIZONS = [1, 2, 4];
-
-function dayLabel(date: string) {
-  // The date is already local to the client; parse as UTC so the browser's own
-  // timezone cannot shift it a day either way.
-  return new Date(`${date}T00:00:00Z`).toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-}
 
 export default function PlanPage() {
   const { clientId } = useParams() as { clientId: string };
   const [run, setRun] = useState<PlanRun | null>(null);
   const [loading, setLoading] = useState(true);
   const [planning, setPlanning] = useState(false);
-  const [weeks, setWeeks] = useState(2);
   const [error, setError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [campaigns, setCampaigns] = useState<CampaignListItem[]>([]);
+  // The slot currently being dropped or restored, so only its own button goes
+  // busy rather than the whole table.
+  const [busySlot, setBusySlot] = useState<string | null>(null);
+  const [replacing, setReplacing] = useState(false);
+  // Reason boxes are edited locally and saved on blur; the stored reason is the
+  // fallback, so a reload shows what was saved rather than an empty box.
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,7 +62,7 @@ export default function PlanPage() {
     setPlanning(true);
     setError(null);
     try {
-      setRun(await previewPlan(clientId, weeks));
+      setRun(await previewPlan(clientId));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Planning failed");
     } finally {
@@ -87,6 +84,64 @@ export default function PlanPage() {
       setError(e instanceof Error ? e.message : "Commit failed");
     } finally {
       setCommitting(false);
+    }
+  };
+
+  // All three edit endpoints answer with the whole run, so the page swaps its
+  // state rather than patching it — the same habit as handleCommit.
+  const applyEdit = (next: PlanRun & { drop_warnings?: string[] }) => {
+    setRun(next);
+    setNotes(next.drop_warnings ?? []);
+  };
+
+  const handleDrop = async (slotId: string) => {
+    if (!run) return;
+    setBusySlot(slotId);
+    setError(null);
+    try {
+      applyEdit(await dropPlanSlots(clientId, run.id, [{ slotId }]));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not drop that idea");
+    } finally {
+      setBusySlot(null);
+    }
+  };
+
+  const handleRestore = async (slotId: string) => {
+    if (!run) return;
+    setBusySlot(slotId);
+    setError(null);
+    try {
+      applyEdit(await restorePlanSlots(clientId, run.id, [slotId]));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not restore that idea");
+    } finally {
+      setBusySlot(null);
+    }
+  };
+
+  /** Save on blur, and only when the text actually changed. */
+  const handleReason = async (slotId: string, saved: string) => {
+    if (!run) return;
+    const reason = (reasons[slotId] ?? saved).trim();
+    if (reason === saved.trim()) return;
+    try {
+      applyEdit(await dropPlanSlots(clientId, run.id, [{ slotId, reason }]));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save that reason");
+    }
+  };
+
+  const handleReplace = async () => {
+    if (!run) return;
+    setReplacing(true);
+    setError(null);
+    try {
+      applyEdit(await replaceDroppedSlots(clientId, run.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not generate replacements");
+    } finally {
+      setReplacing(false);
     }
   };
 
@@ -120,9 +175,13 @@ export default function PlanPage() {
     }
   };
 
-  const byWeek = (run?.proposed_slots ?? []).reduce<Record<string, ProposedSlot[]>>(
+  // Only the drops still waiting for a replacement are actionable; the rest
+  // are history, kept because every dropped theme stays on the avoid-list.
+  const openDropped = (run?.dropped_slots ?? []).filter((d) => d.replacedAt === null);
+
+  const byCampaign = (run?.proposed_slots ?? []).reduce<Record<string, ProposedSlot[]>>(
     (acc, slot) => {
-      (acc[slot.weekKey] ||= []).push(slot);
+      (acc[slot.campaignTitle || "Unattributed"] ||= []).push(slot);
       return acc;
     },
     {}
@@ -136,31 +195,19 @@ export default function PlanPage() {
           <h1 className={`${text.h1} mt-1`}>Plan</h1>
           <p className="text-sm text-slate-500 mt-1">
             {run
-              ? `${run.proposed_slots.length} slot${
+              ? `${run.proposed_slots.length} piece${
                   run.proposed_slots.length === 1 ? "" : "s"
-                } proposed for ${run.horizon.startDate} to ${run.horizon.endDate}`
-              : "Propose a content schedule from the weekly quota"}
+                } written for your active campaigns`
+              : "Write the content your active campaigns still owe"}
           </p>
         </div>
         <div className="flex gap-2 items-center">
-          <div className="flex gap-1" role="group" aria-label="Planning horizon">
-            {HORIZONS.map((w) => (
-              <button
-                key={w}
-                onClick={() => setWeeks(w)}
-                aria-pressed={weeks === w}
-                className={toggle(weeks === w)}
-              >
-                {w}w
-              </button>
-            ))}
-          </div>
           <button
             onClick={handlePreview}
             disabled={planning}
             className={btn.primarySm}
           >
-            {planning ? "Planning… (20-40s)" : "Generate preview"}
+            {planning ? "Writing… (30-90s)" : "Generate preview"}
           </button>
         </div>
       </div>
@@ -234,8 +281,9 @@ export default function PlanPage() {
 
       {run?.status === "degraded" && (
         <p className={`${banner.warn} mb-4`}>
-          The theme model was unavailable. Dates and channels are correct; themes
-          are missing and marked below.
+          The theme model was unavailable. Each piece is still attached to the
+          campaign that asked for it, but the themes are missing and marked
+          below.
         </p>
       )}
 
@@ -245,8 +293,8 @@ export default function PlanPage() {
         <div className={surface.empty}>
           <p className="text-slate-700 text-lg">No plan yet.</p>
           <p className="text-slate-500 text-sm mt-1">
-            Generate a preview to see what the next {weeks} week
-            {weeks === 1 ? "" : "s"} would look like.
+            Generate a preview to write everything your active campaigns still
+            owe. Nothing is scheduled — you pick the days afterwards.
           </p>
           <button
             onClick={handlePreview}
@@ -261,15 +309,13 @@ export default function PlanPage() {
           {/* A run that placed nothing used to drop the reader straight into a
               Coverage table full of deficits. The reason is in the warnings —
               lead with it. */}
-          {run.proposed_slots.length === 0 && (
+          {run.proposed_slots.length === 0 && openDropped.length === 0 && (
             <div className={`${surface.card} ${surface.pad}`}>
-              <h2 className={`${text.cardTitle} mb-2`}>
-                Nothing to add in this window
-              </h2>
+              <h2 className={`${text.cardTitle} mb-2`}>Nothing left to write</h2>
               <p className="text-sm text-slate-600 mb-3">
-                The planner found no room between {run.horizon.startDate} and{" "}
-                {run.horizon.endDate}. Every slot it could place is already
-                there.
+                Every active campaign&rsquo;s content plan has been delivered.
+                Accept a new campaign, or raise an existing one&rsquo;s content
+                plan, to give the planner something to write.
               </p>
               {run.warnings.length > 0 && (
                 <ul className="space-y-1 mb-4">
@@ -281,78 +327,63 @@ export default function PlanPage() {
                 </ul>
               )}
               <div className="flex flex-wrap gap-2">
-                {weeks < 4 && (
-                  <button
-                    onClick={() => {
-                      setWeeks(4);
-                      setRun(null);
-                    }}
-                    className={btn.outline}
-                  >
-                    Look 4 weeks ahead instead
-                  </button>
-                )}
+                <Link
+                  href={`/clients/${clientId}/campaigns`}
+                  className={btn.outline}
+                >
+                  Review campaigns
+                </Link>
                 <Link
                   href={`/clients/${clientId}/schedule`}
                   className={btn.outline}
                 >
-                  See what is already scheduled
+                  See what is already written
                 </Link>
               </div>
             </div>
           )}
 
-          {/* Coverage — the number a human actually judges the plan by. */}
+          {/* What each campaign asked for, and how much of it this run wrote. */}
           <section>
-            <h2 className={`${text.cardTitle} mb-3`}>Coverage</h2>
+            <h2 className={`${text.cardTitle} mb-3`}>Against the content plan</h2>
             <div className={`${surface.table} overflow-x-auto`}>
               <table className="w-full">
                 <thead>
                   <tr className="bg-stone-50">
-                    <th className={`${table.head} w-32`}>Week</th>
+                    <th className={`${table.head} w-56`}>Campaign</th>
                     <th className={`${table.head} w-24`}>Type</th>
-                    <th className={`${table.head} w-24`}>Cap / week</th>
-                    <th className={`${table.head} w-24`}>Scheduled</th>
-                    <th className={`${table.head} w-24`}>Proposed</th>
+                    <th className={`${table.head} w-24`}>Asked for</th>
+                    <th className={`${table.head} w-24`}>Delivered</th>
+                    <th className={`${table.head} w-24`}>Written</th>
                     <th className={table.head}>Notes</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {run.observation.gaps.map((gap, i) => {
-                    const proposed = run.proposed_slots.filter(
-                      (s) => s.weekKey === gap.weekKey && s.type === gap.type
+                  {run.observation.demand.map((row, i) => {
+                    const written = run.proposed_slots.filter(
+                      (s) => s.campaignId === row.campaignId && s.type === row.type
                     ).length;
                     return (
                       <tr key={i} className={table.row}>
                         <td className={`${table.cell} font-medium`}>
-                          {gap.weekKey}
-                          {gap.partialWeek && (
-                            <span
-                              className={`${PILL} ml-2 bg-slate-100 text-slate-500`}
-                            >
-                              partial
-                            </span>
-                          )}
+                          {row.campaignTitle}
                         </td>
                         <td className={table.cell}>
-                          {contentTypeLabel(gap.type)}
+                          {contentTypeLabel(row.type)}
                         </td>
-                        <td className={table.cell}>
-                          {gap.quotaCount > 0 ? gap.quotaCount : "—"}
-                        </td>
-                        <td className={table.cell}>{gap.existing}</td>
+                        <td className={table.cell}>{row.planned}</td>
+                        <td className={table.cell}>{row.delivered}</td>
                         <td
                           className={`${table.cell} ${
-                            proposed < gap.deficit
+                            written < row.outstanding
                               ? "text-amber-700 font-medium"
                               : ""
                           }`}
                         >
-                          +{proposed}
+                          +{written}
                         </td>
                         <td className="px-4 py-3 text-xs text-slate-500">
-                          {gap.surplus > 0 && `${gap.surplus} over quota. `}
-                          {gap.notes.join(" ")}
+                          {row.notes.join(" ")}
                         </td>
                       </tr>
                     );
@@ -362,11 +393,12 @@ export default function PlanPage() {
             </div>
           </section>
 
-          {/* Proposed slots, grouped by week. */}
-          {Object.entries(byWeek).map(([weekKey, slots]) => (
-            <section key={weekKey}>
+          {/* Written pieces, grouped by the campaign that asked for them —
+              which is the only grouping there is until someone picks days. */}
+          {Object.entries(byCampaign).map(([campaignTitle, slots]) => (
+            <section key={campaignTitle}>
               <div className="flex items-center gap-2 mb-3">
-                <h2 className={text.cardTitle}>{weekKey}</h2>
+                <h2 className={text.cardTitle}>{campaignTitle}</h2>
                 <span className={`${PILL} bg-slate-100 text-slate-500`}>
                   {slots.length}
                 </span>
@@ -375,21 +407,17 @@ export default function PlanPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="bg-stone-50">
-                      <th className={`${table.head} w-36`}>Date</th>
-                      <th className={`${table.head} w-20`}>Time</th>
                       <th className={`${table.head} w-28`}>Channel</th>
                       <th className={`${table.head} w-24`}>Type</th>
                       <th className={table.head}>Theme</th>
-                      <th className={`${table.head} w-40`}>Campaign</th>
+                      <th className={`${table.head} w-20`}>
+                        <span className="sr-only">Actions</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {slots.map((slot) => (
                       <tr key={slot.slotId} className={table.row}>
-                        <td className={`${table.cell} font-medium whitespace-nowrap`}>
-                          {dayLabel(slot.date)}
-                        </td>
-                        <td className={table.cell}>{slot.timeLocal}</td>
                         <td className={table.cell}>
                           <span className={channelPill(slot.channel)}>
                             {slot.channel}
@@ -435,8 +463,17 @@ export default function PlanPage() {
                             </>
                           )}
                         </td>
-                        <td className={table.cellMuted}>
-                          {slot.campaignTitle ?? "—"}
+                        <td className="px-4 py-3 text-right">
+                          {/* Nothing is committed yet, so this is not a
+                              destructive action and asks for no confirmation.
+                              Restore is one click away below. */}
+                          <button
+                            onClick={() => handleDrop(slot.slotId)}
+                            disabled={busySlot === slot.slotId || !!run.committed_at}
+                            className={btn.ghost}
+                          >
+                            {busySlot === slot.slotId ? "…" : "Drop"}
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -445,6 +482,121 @@ export default function PlanPage() {
               </div>
             </section>
           ))}
+
+          {/* Dropped ideas. The reason box is the point of the whole panel: it
+              is what the replacement is steered by, and without it a second
+              attempt is just a reroll. */}
+          {run.dropped_slots.length > 0 && (
+            <section className={`${surface.card} ${surface.pad}`}>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+                <h2 className={text.cardTitle}>
+                  Dropped
+                  <span className={`${PILL} ml-2 bg-slate-100 text-slate-500`}>
+                    {openDropped.length}
+                  </span>
+                </h2>
+                {openDropped.length > 0 && !run.committed_at && (
+                  <button
+                    onClick={handleReplace}
+                    disabled={replacing}
+                    className={btn.primarySm}
+                  >
+                    {replacing
+                      ? "Rethinking… (15-30s)"
+                      : `Regenerate ${openDropped.length} idea${
+                          openDropped.length === 1 ? "" : "s"
+                        }`}
+                  </button>
+                )}
+              </div>
+              <p className="text-sm text-slate-500 mb-4">
+                Kept out of the plan. Say what was wrong and regenerate to get a
+                different idea for the same slot — one model call for all of
+                them — or just accept the rest and leave the gaps for the next
+                run.
+              </p>
+
+              <div className="space-y-3">
+                {run.dropped_slots.map((entry) => {
+                  const replaced = entry.replacedAt !== null;
+                  return (
+                    <div
+                      key={`${entry.slotId}-${entry.droppedAt}`}
+                      className={`rounded-lg border p-3 ${
+                        replaced
+                          ? "border-slate-100 bg-stone-50/60"
+                          : "border-slate-200"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs text-slate-400">
+                            {entry.campaignTitle} · {contentTypeLabel(entry.type)}{" "}
+                            · {entry.channel}
+                          </p>
+                          <p
+                            className={`font-medium ${
+                              replaced
+                                ? "text-slate-400 line-through"
+                                : "text-slate-700"
+                            }`}
+                          >
+                            {entry.theme || "(no theme)"}
+                          </p>
+                        </div>
+                        {replaced ? (
+                          <span className={`${PILL} bg-teal-50 text-teal-700 shrink-0`}>
+                            replaced
+                          </span>
+                        ) : (
+                          !run.committed_at && (
+                            <button
+                              onClick={() => handleRestore(entry.slotId)}
+                              disabled={busySlot === entry.slotId}
+                              className={`${btn.outlineSm} shrink-0`}
+                            >
+                              {busySlot === entry.slotId ? "…" : "Restore"}
+                            </button>
+                          )
+                        )}
+                      </div>
+
+                      {!replaced && !run.committed_at && (
+                        <input
+                          value={reasons[entry.slotId] ?? entry.reason}
+                          onChange={(e) =>
+                            setReasons((r) => ({
+                              ...r,
+                              [entry.slotId]: e.target.value,
+                            }))
+                          }
+                          onBlur={() => handleReason(entry.slotId, entry.reason)}
+                          maxLength={300}
+                          placeholder="Optional: what was wrong? — e.g. too salesy, we said this in March"
+                          className={`${field.inputSm} mt-2`}
+                        />
+                      )}
+                      {replaced && entry.reason && (
+                        <p className="text-xs text-slate-400 mt-1">
+                          Rejected: {entry.reason}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {notes.length > 0 && (
+            <div className={banner.warn}>
+              {notes.map((n, i) => (
+                <p key={i} className="text-sm">
+                  {n}
+                </p>
+              ))}
+            </div>
+          )}
 
           {/* Why the plan is thinner than the quota. The most useful panel here:
               it turns "I asked for 9 and got 6" into an understood constraint. */}
@@ -456,8 +608,8 @@ export default function PlanPage() {
                   <p key={i} className="text-sm text-slate-600">
                     <span className="font-medium text-slate-800">
                       {contentTypeLabel(d.type)}
-                    </span>{" "}
-                    in {d.weekKey}: {d.reason}
+                    </span>
+                    : {d.reason}
                   </p>
                 ))}
                 {run.warnings.map((w, i) => (

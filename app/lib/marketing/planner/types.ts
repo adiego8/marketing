@@ -32,11 +32,16 @@ export function isKnownStatus(status: string): boolean {
   return (SLOT_STATUSES as readonly string[]).includes(status);
 }
 
+/**
+ * A slot that already exists, as the planner needs to see it.
+ *
+ * No time or week key: the planner no longer reasons about the calendar, and
+ * `date` is here only so callers can tell scheduled from unscheduled. Both
+ * count identically against what a campaign is owed.
+ */
 export interface ExistingSlot {
   id: string;
-  date: IsoDate;
-  timeLocal: LocalTime;
-  weekKey: WeekKey;
+  date: IsoDate | null;
   type: string;
   channel: string;
   status: string;
@@ -60,26 +65,30 @@ export interface CampaignWindow {
 }
 
 /**
- * One gap record per (week, type) carrying a deficit — NOT one per slot.
- * It expands into `deficit` individual gap ids for the LLM so it can vary the
- * theme across them; a single gap yielding a single theme would produce three
+ * One demand record per (campaign, type) — NOT one per piece.
+ *
+ * It expands into `outstanding` individual gap ids for the LLM so it can vary
+ * the theme across them; one gap yielding one theme would produce three
  * identical posts.
+ *
+ * The campaign is part of the identity, not a candidate the model picks from.
+ * That is the whole point of the shape: a piece exists because one campaign
+ * asked for it, so it can never come back attributed to nothing.
  */
-export interface Gap {
-  weekKey: WeekKey;
+export interface Demand {
+  campaignId: string;
+  campaignTitle: string;
   type: string;
-  quotaCount: number;
-  /** After proration and capacity apportionment. */
-  wanted: number;
-  existing: number;
-  existingPast: number;
-  deficit: number;
-  surplus: number;
+  /** From the campaign's content_plan.breakdown. */
+  planned: number;
+  /** Already accepted against this campaign, dated or not. */
+  delivered: number;
+  outstanding: number;
   allowedChannels: Channel[];
   /** Computed deterministically; the LLM may override within allowedChannels. */
   defaultChannel: Channel;
-  eligibleCampaignIds: string[];
-  partialWeek: boolean;
+  /** The quota's weekly cap for this type, 0 when uncapped. Advisory only now. */
+  weeklyCap: number;
   notes: string[];
 }
 
@@ -87,37 +96,18 @@ export interface CampaignStatus {
   campaignId: string;
   title: string;
   plannedTotal: number;
-  assigned: number;
-  deficit: number;
-  daysRemaining: number;
-  /** Pieces per remaining day — the ranking signal. */
-  urgency: number;
-  activeWeeks: WeekKey[];
+  delivered: number;
+  outstanding: number;
   typesNeeded: string[];
 }
 
-export interface WeekCapacity {
-  weekKey: WeekKey;
-  eligibleDays: number;
-  maxSlots: number;
-  used: number;
-  remaining: number;
-  oversubscribed: boolean;
-}
-
 export interface Observation {
-  timezone: string;
-  today: IsoDate;
-  weeks: WeekKey[];
-  startDate: IsoDate;
-  endDate: IsoDate;
   quota: Record<string, QuotaEntry>;
-  gaps: Gap[];
+  demand: Demand[];
   campaigns: CampaignStatus[];
-  capacity: Record<WeekKey, WeekCapacity>;
   /** Phase 3's commit must never touch these. */
   pinnedSlotIds: string[];
-  totalDeficit: number;
+  totalOutstanding: number;
   warnings: string[];
 }
 
@@ -150,18 +140,26 @@ export interface Fill extends PieceStructure {
   needsTheme: boolean;
 }
 
+/**
+ * A piece a campaign asked for, with no date.
+ *
+ * The four scheduling fields are null until a human gives it a day on the
+ * Schedule page. They travel together — a slot has all four or none — which is
+ * why scheduleSlot writes them in one update rather than one at a time.
+ */
 export interface ProposedSlot extends PieceStructure {
   slotId: string;
   gapId: string;
-  weekKey: WeekKey;
-  date: IsoDate;
-  timeLocal: LocalTime;
+  weekKey: WeekKey | null;
+  date: IsoDate | null;
+  timeLocal: LocalTime | null;
   timezone: string;
-  scheduledAt: string;
+  scheduledAt: string | null;
   type: string;
   channel: Channel;
-  campaignId: string | null;
-  campaignTitle: string | null;
+  /** Never null now: a piece exists because one campaign asked for it. */
+  campaignId: string;
+  campaignTitle: string;
   theme: string;
   brief: string;
   rationale: string;
@@ -170,16 +168,12 @@ export interface ProposedSlot extends PieceStructure {
 
 export interface Deferred {
   gapId: string;
-  weekKey: WeekKey;
   type: string;
   channel: Channel | null;
   reason: string;
 }
 
 export type PlanStatus = "proposed" | "noop" | "degraded";
-
-/** Minutes of lead time before a slot may be scheduled. */
-export const LEAD_TIME_MINUTES = 60;
 
 /** Caps on LLM-authored text, keeping plan-run documents well under 1 MiB. */
 export const MAX_THEME_CHARS = 120;
@@ -193,6 +187,3 @@ export const MAX_CTA_CHARS = 200;
 export const MAX_BODY_ITEMS = 8;
 export const MAX_BODY_ITEM_CHARS = 300;
 
-/** Horizon bounds. */
-export const MIN_HORIZON_WEEKS = 1;
-export const MAX_HORIZON_WEEKS = 8;

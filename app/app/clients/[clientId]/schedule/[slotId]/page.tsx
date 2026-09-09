@@ -175,7 +175,9 @@ export default function SlotDetailPage() {
     const iso = (d: Date) => d.toISOString().slice(0, 10);
     const lo = iso(new Date());
     const hi = iso(new Date(Date.now() + weeks * 7 * 86400_000));
-    const within = all.filter((s) => s.date >= lo && s.date <= hi);
+    // An unscheduled piece is in no window; it is reachable by deep link and
+    // from the Schedule page's own unscheduled list, not by these arrows.
+    const within = all.filter((s) => s.date !== null && s.date >= lo && s.date <= hi);
     // Never strand the piece being viewed: an older slot reached by a direct
     // link falls outside the window, and the arrows should still work.
     return within.some((s) => s.id === slotId) ? within : all;
@@ -328,7 +330,9 @@ export default function SlotDetailPage() {
 
       <div className="mb-8">
         <p className={text.eyebrow}>
-          {dayLabel(slot.date)} · {slot.time_local} · times in {timezone}
+          {slot.date
+            ? `${dayLabel(slot.date)} · ${slot.time_local} · times in ${timezone}`
+            : "Not scheduled — pick a day on the Schedule page"}
         </p>
         <h1 className={`${text.h1} mt-1`}>
           {slot.needs_theme || !slot.theme ? "Theme not set" : slot.theme}

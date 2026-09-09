@@ -1,26 +1,24 @@
-import type { IsoDate } from "./types";
-
 // Deterministic slot document ids.
 //
-// WHAT THIS DOES AND DOES NOT BUY YOU — read before "improving" it.
+// The id is (client, campaign, type, n) — all INPUTS to planning, taken from
+// the campaign's content plan. It used to be (client, date, type, channel, n),
+// which were outputs of the assign stage, so the same intent produced a
+// different id on every run and the id deduped nothing across runs.
 //
-// The id contains `date` and `channel`, and both are OUTPUTS of the assign
-// stage: they depend on the LLM's channel pick and on the slot set at the
-// moment of the run. So re-running the preview tomorrow legitimately produces
-// different ids for the same intent, and this id does NOT dedupe across two
-// preview runs.
+// Being derived from the demand buys two things:
 //
-// What it does buy: within-preview idempotency. A double-clicked commit, a
-// retried write, or a partially-failed batch cannot create a second copy,
-// because Firestore's create() refuses an id that already exists.
+//  1. Within-preview idempotency, as before. A double-clicked commit or a
+//     retried write cannot create a second copy, because Firestore's create()
+//     refuses an id that already exists.
+//  2. Cross-run idempotency, which is new. Re-proposing a piece a campaign
+//     still owes yields the id it would have had, so committing the same piece
+//     twice fails loudly instead of silently doubling the campaign's delivery.
 //
-// Cross-run duplication is prevented somewhere else entirely: the observe
-// stage re-counts existing slots, so a second run sees the first run's
-// committed slots against quota and finds no gap to fill. Do not try to fix
-// cross-run dedupe here by hashing the theme into the id — that makes the id
-// change whenever the wording changes, which is strictly worse.
+// Do NOT hash the theme into the id: that makes the id change whenever the
+// wording changes, which breaks the drop/replace flow — a replacement has to
+// keep the id of the piece it replaces.
 
-/** Firestore document ids cannot contain "/", and free-form quota keys can. */
+/** Firestore document ids cannot contain "/", and free-form type keys can. */
 export function slugSegment(value: string): string {
   const slug = value
     .toLowerCase()
@@ -32,35 +30,32 @@ export function slugSegment(value: string): string {
 
 export function slotId(
   clientId: string,
-  date: IsoDate,
+  campaignId: string,
   type: string,
-  channel: string,
   n: number
 ): string {
-  return `${clientId}__${date}__${slugSegment(type)}__${slugSegment(channel)}__${n}`;
+  return `${clientId}__${slugSegment(campaignId)}__${slugSegment(type)}__${n}`;
 }
 
 /**
- * Mint the next free id for a (date, type, channel) triple.
+ * Mint the next free id for a (campaign, type) pair.
  *
- * `taken` must be seeded with the ids of existing slots in the horizon, so a
- * human-created slot that already owns `..._0` is never clobbered. Mutates
- * `taken` so repeated calls in one run keep advancing.
+ * `taken` must be seeded with the ids of the client's existing slots, so a
+ * piece already delivered against this campaign never has its id reused.
+ * Mutates `taken` so repeated calls in one run keep advancing.
  */
 export function mintSlotId(
   taken: Set<string>,
   clientId: string,
-  date: IsoDate,
-  type: string,
-  channel: string
+  campaignId: string,
+  type: string
 ): string {
-  for (let n = 0; n < 100; n++) {
-    const id = slotId(clientId, date, type, channel, n);
+  for (let n = 0; n < 500; n++) {
+    const id = slotId(clientId, campaignId, type, n);
     if (!taken.has(id)) {
       taken.add(id);
       return id;
     }
   }
-  // Unreachable in practice: MAX_SLOTS_PER_DAY caps a day long before 100.
-  throw new Error(`Could not mint a slot id for ${date} ${type}/${channel}`);
+  throw new Error(`Could not mint a slot id for ${campaignId}/${type}`);
 }

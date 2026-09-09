@@ -11,10 +11,9 @@ import { parseFills, type GapRequest } from "./decide";
 function oneGap(channel: "linkedin" | "instagram" | "twitter" | "email"): GapRequest {
   return {
     gap_id: "regen__slot1",
-    week: "2026-W37",
     type: "reel",
-    index_in_week: 0,
-    of_in_week: 1,
+    index_in_set: 0,
+    of_in_set: 1,
     allowed_channels: [channel],
     default_channel: channel,
     eligible_campaign_ids: ["c1"],

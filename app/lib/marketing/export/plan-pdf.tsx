@@ -182,7 +182,9 @@ function PlanDoc({ slots, meta }: { slots: Slot[]; meta: PlanDocMeta }) {
                 <View key={slot.id} style={s.slot} minPresenceAhead={60}>
                   <View style={s.slotTop}>
                     <Text style={s.when}>
-                      {dayLabel(slot.date)} · {slot.time_local}
+                      {slot.date
+                        ? `${dayLabel(slot.date)} · ${slot.time_local}`
+                        : "Not scheduled"}
                     </Text>
                     <Text style={s.chip}>{slot.channel}</Text>
                     <Text style={s.chip}>{contentTypeLabel(slot.type)}</Text>

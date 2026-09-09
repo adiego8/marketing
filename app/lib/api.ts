@@ -140,11 +140,9 @@ export const getAuthMe = () =>
   request<{ user_email: string; agency_id: string; google_connected: boolean }>("/auth/me");
 
 // Planner
-export const previewPlan = (clientId: string, weeks = 2) =>
-  request<PlanRun>(`${c(clientId)}/plan/preview`, {
-    method: "POST",
-    body: JSON.stringify({ weeks }),
-  });
+/** Writes everything the active campaigns still owe. Undated; no horizon. */
+export const previewPlan = (clientId: string) =>
+  request<PlanRun>(`${c(clientId)}/plan/preview`, { method: "POST" });
 
 export const listPlanRuns = (clientId: string, limit = 20) =>
   request<PlanRun[]>(`${c(clientId)}/plan/runs?limit=${limit}`);
@@ -238,15 +236,38 @@ export const syncCalendar = (
 // Slots
 export const listSlots = (
   clientId: string,
-  params?: { start?: string; end?: string; status?: string }
+  params?: {
+    start?: string;
+    end?: string;
+    status?: string;
+    /** "unscheduled" for accepted pieces still waiting for a day. */
+    dated?: "scheduled" | "unscheduled";
+  }
 ) => {
   const q = new URLSearchParams();
   if (params?.start) q.set("start", params.start);
   if (params?.end) q.set("end", params.end);
   if (params?.status) q.set("status", params.status);
+  if (params?.dated) q.set("dated", params.dated);
   const qs = q.toString();
   return request<Slot[]>(`${c(clientId)}/slots${qs ? `?${qs}` : ""}`);
 };
+
+/**
+ * Give a piece a day, or move it.
+ *
+ * The response carries `quota_warning` when the week goes over its cap — the
+ * write still happened; the warning is advice, not a rejection.
+ */
+export const scheduleSlot = (
+  clientId: string,
+  slotId: string,
+  schedule: { date: string; timeLocal?: string }
+) =>
+  request<Slot & { quota_warning: string | null }>(
+    `${c(clientId)}/slots/${slotId}/schedule`,
+    { method: "PATCH", body: JSON.stringify(schedule) }
+  );
 
 export interface SlotEdit {
   status?: SlotStatus;
@@ -298,3 +319,39 @@ export const deletePlanRun = (clientId: string, runId: string) =>
 
 export const commitPlan = (clientId: string, runId: string) =>
   request<PlanRun>(`${c(clientId)}/plan/runs/${runId}/commit`, { method: "POST" });
+
+/**
+ * Editing a preview before it is committed.
+ *
+ * All three return the whole run, so the page replaces its state rather than
+ * patching it — the same habit as commitPlan. `drop_warnings` carries what
+ * could not be done (a slot already replaced, say) without failing the call.
+ */
+type PlanRunEdit = PlanRun & { drop_warnings?: string[]; replaced?: number };
+
+export const dropPlanSlots = (
+  clientId: string,
+  runId: string,
+  drops: { slotId: string; reason?: string }[]
+) =>
+  request<PlanRunEdit>(`${c(clientId)}/plan/runs/${runId}/drop`, {
+    method: "POST",
+    body: JSON.stringify({ drops }),
+  });
+
+export const restorePlanSlots = (clientId: string, runId: string, slotIds: string[]) =>
+  request<PlanRunEdit>(`${c(clientId)}/plan/runs/${runId}/restore`, {
+    method: "POST",
+    body: JSON.stringify({ slotIds }),
+  });
+
+/** One model call for every dropped slot. Empty `slotIds` means all of them. */
+export const replaceDroppedSlots = (
+  clientId: string,
+  runId: string,
+  slotIds: string[] = []
+) =>
+  request<PlanRunEdit>(`${c(clientId)}/plan/runs/${runId}/replace`, {
+    method: "POST",
+    body: JSON.stringify({ slotIds }),
+  });

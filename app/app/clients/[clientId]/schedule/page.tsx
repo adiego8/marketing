@@ -12,6 +12,7 @@ import {
   syncCalendar,
   downloadPlanPdf,
   writeSlotCopy,
+  scheduleSlot,
 } from "@/lib/api";
 import { banner, btn, field, surface, table, toggle, text } from "@/lib/ui";
 import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
@@ -92,14 +93,25 @@ export default function SchedulePage() {
   const [syncWarnings, setSyncWarnings] = useState<string[]>([]);
   const [calendarUrl, setCalendarUrl] = useState<string | null>(null);
 
+  // Accepted pieces with no day yet. Loaded separately because they match no
+  // date range — the ranged call below cannot see them by construction.
+  const [unscheduled, setUnscheduled] = useState<Slot[]>([]);
+  const [dates, setDates] = useState<Record<string, string>>({});
+  const [datingId, setDatingId] = useState<string | null>(null);
+  const [quotaNote, setQuotaNote] = useState<string | null>(null);
+
   const start = isoDate(new Date());
   const end = isoDate(new Date(Date.now() + weeks * 7 * 86400_000));
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listSlots(clientId, { start, end });
+      const [data, waiting] = await Promise.all([
+        listSlots(clientId, { start, end }),
+        listSlots(clientId, { dated: "unscheduled" }),
+      ]);
       setSlots(data);
+      setUnscheduled(waiting);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load the schedule");
@@ -107,6 +119,34 @@ export default function SchedulePage() {
       setLoading(false);
     }
   }, [clientId, start, end]);
+
+  /**
+   * Give a piece a day.
+   *
+   * The quota warning rides back on the response and is shown, not enforced —
+   * going over a weekly cap is the operator's call, and refusing it would only
+   * strand the piece.
+   */
+  const handleSchedule = async (slot: Slot) => {
+    const date = dates[slot.id];
+    if (!date) return;
+    setDatingId(slot.id);
+    setError(null);
+    try {
+      const updated = await scheduleSlot(clientId, slot.id, { date });
+      setQuotaNote(updated.quota_warning ?? null);
+      setDates((d) => {
+        const next = { ...d };
+        delete next[slot.id];
+        return next;
+      });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not set that day");
+    } finally {
+      setDatingId(null);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -213,7 +253,9 @@ export default function SchedulePage() {
       }
     } catch (e) {
       const why = e instanceof Error ? e.message : "Could not write the copy";
-      setError(`${dayLabel(slot.date)} · ${contentTypeLabel(slot.type)}: ${why}`);
+      setError(
+        `${slot.date ? dayLabel(slot.date) : "Unscheduled"} · ${contentTypeLabel(slot.type)}: ${why}`
+      );
     } finally {
       setSavingId(null);
     }
@@ -436,14 +478,76 @@ export default function SchedulePage() {
       )}
 
       {error && <p className={`${banner.error} mb-4`}>{error}</p>}
+      {quotaNote && <p className={`${banner.warn} mb-4`}>{quotaNote}</p>}
+
+      {/* Accepted, waiting for a day. Above the calendar because it is the work
+          in front of you — a piece with no date reaches nobody, and it is
+          invisible to Google until it has one. */}
+      {!loading && unscheduled.length > 0 && (
+        <section className={`${surface.card} ${surface.pad} mb-8`}>
+          <div className="flex items-center gap-2 mb-1">
+            <h2 className={text.cardTitle}>Not scheduled yet</h2>
+            <span className={`${PILL} bg-amber-50 text-amber-700`}>
+              {unscheduled.length}
+            </span>
+          </div>
+          <p className="text-sm text-slate-500 mb-4">
+            Accepted content with no day. Pick one and it moves onto the
+            calendar below; the time comes from the channel&rsquo;s usual
+            posting window unless you change it afterwards.
+          </p>
+
+          <div className="space-y-2">
+            {unscheduled.map((slot) => (
+              <div
+                key={slot.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs text-slate-400">
+                    {slot.campaign_title ?? "No campaign"} ·{" "}
+                    {contentTypeLabel(slot.type)} · {slot.channel}
+                  </p>
+                  <Link
+                    href={`/clients/${clientId}/schedule/${slot.id}`}
+                    className="font-medium text-slate-800 hover:text-teal-700 transition-colors"
+                  >
+                    {slot.needs_theme || !slot.theme ? "Theme not set" : slot.theme}
+                  </Link>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <input
+                    type="date"
+                    value={dates[slot.id] ?? ""}
+                    onChange={(e) =>
+                      setDates((d) => ({ ...d, [slot.id]: e.target.value }))
+                    }
+                    className={field.select}
+                    aria-label={`Date for ${slot.theme || slot.type}`}
+                  />
+                  <button
+                    onClick={() => handleSchedule(slot)}
+                    disabled={!dates[slot.id] || datingId === slot.id}
+                    className={btn.primarySm}
+                  >
+                    {datingId === slot.id ? "Setting…" : "Schedule"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {loading ? (
         <p className={text.muted}>Loading…</p>
       ) : slots.length === 0 ? (
         <div className={surface.empty}>
-          <p className="text-slate-700 text-lg">Nothing scheduled yet.</p>
+          <p className="text-slate-700 text-lg">Nothing on the calendar yet.</p>
           <p className="text-slate-500 text-sm mt-1">
-            Generate a plan and accept it, and the slots land here.
+            {unscheduled.length > 0
+              ? "Give the pieces above a day and they land here."
+              : "Generate a plan and accept it, and the pieces land here waiting for a day."}
           </p>
           <Link href={`/clients/${clientId}/plan`} className={`${btn.primary} mt-6`}>
             Open the planner
@@ -486,7 +590,7 @@ export default function SchedulePage() {
                               href={`/clients/${clientId}/schedule/${slot.id}?weeks=${weeks}`}
                               className="hover:text-teal-700 transition-colors"
                             >
-                              {dayLabel(slot.date)}
+                              {slot.date ? dayLabel(slot.date) : "—"}
                             </Link>
                           </td>
                           <td className={table.cell}>{slot.time_local}</td>

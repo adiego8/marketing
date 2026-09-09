@@ -228,8 +228,23 @@ function sameInstant(a: string | null | undefined, b: string | null | undefined)
  *    sync rewriting the title between our list and our classify is not read as
  *    a human edit.
  */
+/**
+ * A slot that has been given a day.
+ *
+ * Everything in this module reconciles a slot against its Google event, and an
+ * unscheduled piece has no event — syncSlots filters those out before any of
+ * this runs. Narrowing the parameter keeps that guarantee visible, rather than
+ * defaulting a null date to "" and quietly reconciling against a date nobody
+ * chose.
+ */
+export type DatedSlot = Slot & { date: string; time_local: string };
+
+export function isDated(slot: Slot): slot is DatedSlot {
+  return Boolean(slot.date && slot.time_local);
+}
+
 export function classify(
-  slot: Slot,
+  slot: DatedSlot,
   remote: RemoteEvent | undefined,
   ctx: ClassifyContext
 ): Divergence {
@@ -320,7 +335,7 @@ export function classify(
  * (assign.ts:93 and :123), so the wording matches what a plan run would say.
  */
 export function plannerWarnings(
-  slot: Slot,
+  slot: DatedSlot,
   schedule: SlotSchedule,
   siblings: Slot[]
 ): string[] {
@@ -339,11 +354,12 @@ export function plannerWarnings(
   const crowding = sameDay.find(
     (s) =>
       s.channel === slot.channel &&
+      isDated(s) &&
       Math.abs(minutesOf(s.time_local) - minutesOf(schedule.timeLocal)) < MIN_GAP_MINUTES
   );
   if (crowding) {
     const gap = Math.abs(
-      minutesOf(crowding.time_local) - minutesOf(schedule.timeLocal)
+      minutesOf(crowding.time_local ?? "00:00") - minutesOf(schedule.timeLocal)
     );
     warnings.push(
       `${gap} min from another ${slot.channel} piece (the planner keeps ${MIN_GAP_MINUTES})`
@@ -362,7 +378,7 @@ export function plannerWarnings(
 
 /* -------------------------------------------------------------- copy ----- */
 
-function label(slot: Slot): string {
+function label(slot: DatedSlot): string {
   const channel = slot.channel.charAt(0).toUpperCase() + slot.channel.slice(1);
   const format = contentTypeLabel(slot.type).toLowerCase();
   // Older slots carry types that already name the channel — "instagram_reel" —
@@ -386,7 +402,7 @@ function when(date: string, time: string, tz: string): string {
  * and the quota consequence spelled out, because a cancelled slot frees its gap
  * and the replacement appearing later would otherwise look like a bug.
  */
-export function describeChange(slot: Slot, divergence: Divergence): string | null {
+export function describeChange(slot: DatedSlot, divergence: Divergence): string | null {
   const tz = slot.timezone || "UTC";
   const from = when(slot.date, slot.time_local, tz);
 

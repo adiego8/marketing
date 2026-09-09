@@ -9,10 +9,9 @@ import {
   MAX_HOOK_CHARS,
   MAX_RATIONALE_CHARS,
   MAX_THEME_CHARS,
-  type CampaignStatus,
   type CampaignWindow,
+  type Demand,
   type Fill,
-  type Gap,
   type Observation,
 } from "./types";
 
@@ -21,7 +20,7 @@ import {
 // correct dates and channels, which is a degraded product rather than a dead
 // one, so the failure path returns a skeleton instead of an error.
 
-/** How many gaps to send in one call before splitting by week. */
+/** How many gaps to send in one call before splitting by campaign. */
 const MAX_GAPS_PER_CALL = 40;
 
 /** Constrained selection, not ideation — much lower than campaign generation's 0.8. */
@@ -29,18 +28,22 @@ const TEMPERATURE = 0.4;
 
 export interface GapRequest {
   gap_id: string;
-  week: string;
   type: string;
-  index_in_week: number;
-  of_in_week: number;
+  /** Position within this campaign+type set, so the model varies the pieces. */
+  index_in_set: number;
+  of_in_set: number;
   allowed_channels: Channel[];
   default_channel: Channel;
+  /**
+   * Always exactly one campaign — the one that asked for this piece.
+   *
+   * It stays a list because parseFills validates the model's pick against it,
+   * and a one-element list is what makes an unattributed piece impossible.
+   */
   eligible_campaign_ids: string[];
 }
 
 export interface DecideRequest {
-  today: string;
-  timezone: string;
   business: Record<string, unknown>;
   content_pillars: string[];
   campaigns: Record<string, unknown>[];
@@ -57,25 +60,24 @@ export interface DecideResult {
 export type DecideFn = (request: DecideRequest) => Promise<DecideResult>;
 
 /**
- * Expand each (week, type) gap into one request entry per missing piece.
+ * Expand each (campaign, type) demand into one request entry per owed piece.
  *
- * A gap of "post × 3" must become three ids, not one: the model needs
- * index_in_week / of_in_week to make the three genuinely different. One gap
+ * A demand of "post × 3" must become three ids, not one: the model needs
+ * index_in_set / of_in_set to make the three genuinely different. One gap
  * yielding one theme produces three identical posts.
  */
-export function expandGapIds(gaps: Gap[]): GapRequest[] {
+export function expandGapIds(demand: Demand[]): GapRequest[] {
   const out: GapRequest[] = [];
-  for (const gap of gaps) {
-    for (let i = 0; i < gap.deficit; i++) {
+  for (const row of demand) {
+    for (let i = 0; i < row.outstanding; i++) {
       out.push({
-        gap_id: `${gap.weekKey}__${gap.type}__${i}`,
-        week: gap.weekKey,
-        type: gap.type,
-        index_in_week: i,
-        of_in_week: gap.deficit,
-        allowed_channels: gap.allowedChannels,
-        default_channel: gap.defaultChannel,
-        eligible_campaign_ids: gap.eligibleCampaignIds,
+        gap_id: `${row.campaignId}__${row.type}__${i}`,
+        type: row.type,
+        index_in_set: i,
+        of_in_set: row.outstanding,
+        allowed_channels: row.allowedChannels,
+        default_channel: row.defaultChannel,
+        eligible_campaign_ids: [row.campaignId],
       });
     }
   }
@@ -85,7 +87,6 @@ export function expandGapIds(gaps: Gap[]): GapRequest[] {
 export function buildDecideRequest(
   observation: Observation,
   campaigns: CampaignWindow[],
-  statuses: CampaignStatus[],
   context: {
     business: Record<string, unknown>;
     pillars: string[];
@@ -95,42 +96,51 @@ export function buildDecideRequest(
   const byId = new Map(campaigns.map((c) => [c.id, c]));
 
   return {
-    today: observation.today,
-    timezone: observation.timezone,
     business: context.business,
     content_pillars: context.pillars,
-    campaigns: statuses.map((s) => {
-      const c = byId.get(s.campaignId);
-      return {
-        campaign_id: s.campaignId,
-        title: s.title,
-        description: c?.description ?? "",
-        goal: c?.goal ?? "",
-        key_message: c?.keyMessage ?? "",
-        active_weeks: s.activeWeeks,
-        window: { start: c?.startDate ?? null, end: c?.endDate ?? null },
-        types_needed: c?.plannedByType ?? {},
-        deficit: s.deficit,
-        urgency: Number(s.urgency.toFixed(2)),
-        timeline: c?.timeline ?? [],
-      };
-    }),
+    // Only campaigns that still owe something. A fully delivered campaign in
+    // this list is context the model cannot act on, and a piece it might
+    // wrongly reach for.
+    campaigns: observation.campaigns
+      .filter((s) => s.outstanding > 0)
+      .map((s) => {
+        const c = byId.get(s.campaignId);
+        return {
+          campaign_id: s.campaignId,
+          title: s.title,
+          description: c?.description ?? "",
+          goal: c?.goal ?? "",
+          key_message: c?.keyMessage ?? "",
+          types_needed: c?.plannedByType ?? {},
+          delivered: s.delivered,
+          outstanding: s.outstanding,
+          timeline: c?.timeline ?? [],
+        };
+      }),
     recent_themes: context.recentThemes,
-    gaps: expandGapIds(observation.gaps),
+    gaps: expandGapIds(observation.demand),
   };
 }
 
-/** Split a large request by week so one failed chunk degrades only its own gaps. */
+/**
+ * Split a large request by campaign so one failed chunk degrades only its own
+ * gaps.
+ *
+ * Splitting matters more than it used to: a preview now generates everything
+ * every active campaign owes, so two campaigns of twenty pieces is exactly the
+ * per-call ceiling.
+ */
 export function chunkRequest(request: DecideRequest, maxGaps = MAX_GAPS_PER_CALL): DecideRequest[] {
   if (request.gaps.length <= maxGaps) return [request];
 
-  const byWeek = new Map<string, GapRequest[]>();
+  const byCampaign = new Map<string, GapRequest[]>();
   for (const gap of request.gaps) {
-    const list = byWeek.get(gap.week) ?? [];
+    const key = gap.eligible_campaign_ids[0] ?? "";
+    const list = byCampaign.get(key) ?? [];
     list.push(gap);
-    byWeek.set(gap.week, list);
+    byCampaign.set(key, list);
   }
-  return Array.from(byWeek.values()).map((gaps) => ({ ...request, gaps }));
+  return Array.from(byCampaign.values()).map((gaps) => ({ ...request, gaps }));
 }
 
 /** A fully-formed fill with no theme, used whenever the model gives us nothing usable. */

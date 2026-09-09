@@ -90,7 +90,7 @@ export function planMarkdown(slots: Slot[], meta: PlanDocMeta): string {
       lines.push("");
       for (const slot of weekSlots) {
         const heading =
-          `**${dayLabel(slot.date)} · ${slot.time_local}** — ` +
+          `**${slot.date ? `${dayLabel(slot.date)} · ${slot.time_local}` : "Not scheduled"}** — ` +
           `${titleCase(slot.channel)} · ${contentTypeLabel(slot.type)}` +
           statusNote(slot.status);
         lines.push(`### ${heading}`);

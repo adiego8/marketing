@@ -73,10 +73,9 @@ export async function regenerateSlot(
   // single-element list guarantees the channel comes back unchanged.
   const gap: GapRequest = {
     gap_id: `regen__${slot.id}`,
-    week: slot.week_key,
     type: slot.type,
-    index_in_week: 0,
-    of_in_week: 1,
+    index_in_set: 0,
+    of_in_set: 1,
     allowed_channels: [channel],
     default_channel: channel,
     eligible_campaign_ids: slot.campaign_id ? [slot.campaign_id] : [],

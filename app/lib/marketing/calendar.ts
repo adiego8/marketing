@@ -20,6 +20,7 @@ import {
   describeChange,
   deterministicEventId,
   hashBody,
+  isDated,
   plannerWarnings,
   type Divergence,
   type RemoteEvent,
@@ -365,6 +366,9 @@ async function reconcileSlots(
   for (const slot of slots) {
     if (!slot.google_event_id) continue;
     if (slot.status === "cancelled" || slot.status === "skipped") continue;
+    // An unscheduled piece has no event to reconcile against. Belt and braces:
+    // the caller already filters them, and this is what narrows the type.
+    if (!isDated(slot)) continue;
 
     const remote = events.get(slot.google_event_id);
     const divergence = classify(slot, remote, {
@@ -500,6 +504,9 @@ export async function syncSlots(
   const slots = snap.docs
     .map((d) => serializeSlot(d.id, d.data()) as Slot)
     .filter((s) => {
+      // Accepted but not yet given a day. There is no instant to write, so it
+      // is not "pending sync" — it is not a calendar event at all yet.
+      if (!s.date) return false;
       if (opts.start && s.date < opts.start) return false;
       if (opts.end && s.date > opts.end) return false;
       return true;

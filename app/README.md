@@ -1,8 +1,8 @@
 # Marketing Agent
 
-Turns a client's weekly content quota into a dated, channel-assigned schedule:
-what to post, where, when, and why. Asset generation is deliberately out of
-scope — the agent plans, a human writes.
+Writes the content a client's active campaigns still owe — the hook, the beats
+and the ask for each piece — and leaves the scheduling to a person. The agent
+decides WHAT gets made; you decide when it goes out.
 
 ## Setup
 
@@ -64,17 +64,65 @@ seed **after** that, so it attaches to the agency your sign-in created.
 
 Research (draft a strategy from the client's site, accept it) → Strategy
 (positioning, pillars, and a weekly quota) → **Campaigns** (accept one) → Plan
-(generate a preview, accept it) → **Schedule** (what is committed; copy or
-download it as a Markdown plan).
+(write everything it owes, accept what you like) → **Schedule** (give each piece
+a day; copy or download the plan as Markdown).
 
-The campaign is the demand: the planner schedules what an *active* campaign's
-`content_plan.breakdown` still owes, so with no accepted campaign it refuses to
-run. The quota only paces that — how much of a type may land in one week, and on
-which channel. A type no campaign asked for is never scheduled however large its
-quota; a type with no quota entry is scheduled at the campaign's own pace.
+The campaign is the demand: a preview writes what every *active* campaign's
+`content_plan.breakdown` still owes, minus what has already been accepted
+against it. With no accepted campaign it refuses to run. Nothing you drop or
+leave unaccepted is lost — it is still owed, so the next run writes it again.
 
-Cancelling or skipping a slot on the Schedule page gives its quota back, so the
-next plan run proposes a replacement — see `QUOTA_COUNTING` in
+**Nothing is dated until you date it.** A piece is written for a campaign,
+accepted, and only then given a day on the Schedule page, where it sits under
+"Not scheduled yet" until you do. The time comes from the channel's posting
+window. Undated pieces are skipped by the Google sync — there is no instant to
+put on a calendar — and are invisible to any query with a date range, which is
+why `listSlots` takes an explicit `dated: "unscheduled"`.
+
+The quota moved with the dates. It no longer decides how much gets written; it
+warns when a week goes over its weekly cap as you schedule, and never refuses —
+going over is a call you are entitled to make, and a hard cap would only strand
+the piece.
+
+### Why planning stopped placing dates
+
+The planner used to observe, decide and assign in one pass. Demand was paced
+across the planning *horizon* while a campaign was only eligible in the weeks
+inside its own *window*, and the two disagreed in the weeks before a campaign
+started: pieces were generated because a campaign asked for them, then landed in
+a week that campaign was not running in, where nothing could carry them. They
+came out attributed to nothing, counted as delivered, with no warning anywhere —
+`parseFills` only warns about an *ineligible* campaign, and there was none to be
+ineligible.
+
+Removing the calendar from generation removes the class: a gap's
+`eligible_campaign_ids` now holds exactly one campaign, the one that asked, so
+there is no week for a piece to be outside of. Slot ids follow — they are
+`(client, campaign, type, n)`, derived from the demand rather than from a date
+the assign stage picked, which also makes them stable across runs.
+
+A preview is editable before it is committed. **Drop** takes an idea out of the
+plan, with an optional reason; **Regenerate** asks for a different idea for
+every dropped slot in one model call, keeping each one's date, time, channel and
+campaign — only the idea changes, so nothing is re-scheduled. Accepting commits
+whatever is left, and a hole you leave is simply re-proposed by the next run.
+
+Two things make the reject loop work rather than just reroll:
+
+- **The reason is a steer.** It is passed per slot and outranks everything but
+  the format, following the same convention as slot copy and regenerate.
+- **Every dropped theme joins the avoid-list**, including ones already replaced.
+  The planner's own avoid-list (`loadRecentThemes`) reads *committed* slots, so
+  without this the model hands straight back the idea you rejected a minute ago.
+
+Dropping does not invalidate the commit: `fingerprintInputs` hashes the quota,
+each campaign's content plan and every slot id — none of which a drop touches.
+A campaign's start and end dates are deliberately not hashed, since they no
+longer affect what gets written. Restoring a drop is refused once it has been replaced, because
+both carry the same deterministic slot id.
+
+Cancelling or skipping a piece puts it back on what its campaign is owed, so the
+next run writes a replacement — see `QUOTA_COUNTING` in
 `lib/marketing/planner/types.ts`.
 
 ## Research
@@ -142,7 +190,7 @@ project with no Firestore setup.
 
 | Collection | Fields | Would serve |
 |---|---|---|
-| `marketing_slots` | `clientId`, `date` | the horizon range as a query |
+| `marketing_slots` | `clientId`, `date` | the Schedule page's date range as a query |
 | `marketing_plan_runs` | `clientId`, `createdAt desc` | ordering and limiting in the query |
 
 The slots one barely matters — a client's slots are bounded. The plan-runs one

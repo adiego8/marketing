@@ -14,13 +14,20 @@ export interface Slot {
   campaign_title: string | null;
   plan_run_id: string | null;
   gap_id: string;
-  /** Calendar date in the client's timezone, not UTC. */
-  date: string;
-  time_local: string;
+  /**
+   * Calendar date in the client's timezone, not UTC.
+   *
+   * Null until a human schedules it. A piece is generated for a campaign and
+   * accepted first; the day is chosen afterwards, on the Schedule page. These
+   * four fields travel together — a slot has all of them or none — which is
+   * why scheduleSlot writes them in one update.
+   */
+  date: string | null;
+  time_local: string | null;
   timezone: string;
   /** The UTC instant derived from date + time_local + timezone. */
   scheduled_at: string | null;
-  week_key: string;
+  week_key: string | null;
   type: string;
   channel: string;
   theme: string;
@@ -211,15 +218,17 @@ export interface ClientListItem {
 export interface ProposedSlot {
   slotId: string;
   gapId: string;
-  weekKey: string;
-  date: string;
-  timeLocal: string;
+  /** Null until a human schedules it. See Slot.date above. */
+  weekKey: string | null;
+  date: string | null;
+  timeLocal: string | null;
   timezone: string;
-  scheduledAt: string;
+  scheduledAt: string | null;
   type: string;
   channel: string;
-  campaignId: string | null;
-  campaignTitle: string | null;
+  /** Never null: a piece exists because one campaign asked for it. */
+  campaignId: string;
+  campaignTitle: string;
   theme: string;
   brief: string;
   rationale: string;
@@ -229,45 +238,60 @@ export interface ProposedSlot {
   body: string[];
   /** The ask at the end. */
   cta: string;
-  /** The model gave no theme; the date and channel are still correct. */
+  /** The model gave no theme; the campaign and channel are still correct. */
   needsTheme: boolean;
+}
+
+/**
+ * A proposed slot a human rejected before it was ever committed.
+ *
+ * It keeps the whole slot rather than just its id, for two reasons: the page
+ * can show what was turned down, and every dropped theme becomes part of the
+ * avoid-list, so a replacement can never hand back the idea you just refused.
+ * Camel-cased like ProposedSlot — these arrays are stored and served as-is.
+ */
+export interface DroppedSlot extends ProposedSlot {
+  /** Why, in the operator's words. Optional, and steers the replacement. */
+  reason: string;
+  droppedAt: string;
+  /** Set once a replacement has been generated; null while the hole is open. */
+  replacedAt: string | null;
 }
 
 export interface DeferredGap {
   gapId: string;
-  weekKey: string;
   type: string;
   channel: string | null;
   reason: string;
 }
 
-export interface PlanGap {
-  weekKey: string;
+/** One row of what a campaign still owes. Mirrors Demand in planner/types.ts. */
+export interface PlanDemand {
+  campaignId: string;
+  campaignTitle: string;
   type: string;
-  quotaCount: number;
-  wanted: number;
-  existing: number;
-  deficit: number;
-  surplus: number;
+  planned: number;
+  delivered: number;
+  outstanding: number;
   allowedChannels: string[];
-  partialWeek: boolean;
+  /** The quota's weekly cap, 0 when uncapped. Advisory: applied when scheduling. */
+  weeklyCap: number;
   notes: string[];
 }
 
+export interface PlanCampaignStatus {
+  campaignId: string;
+  title: string;
+  plannedTotal: number;
+  delivered: number;
+  outstanding: number;
+  typesNeeded: string[];
+}
+
 export interface PlanObservation {
-  timezone: string;
-  today: string;
-  weeks: string[];
-  startDate: string;
-  endDate: string;
-  gaps: PlanGap[];
-  campaigns: {
-    campaignId: string;
-    title: string;
-    deficit: number;
-    urgency: number;
-  }[];
-  totalDeficit: number;
+  demand: PlanDemand[];
+  campaigns: PlanCampaignStatus[];
+  totalOutstanding: number;
   warnings: string[];
 }
 
@@ -276,7 +300,15 @@ export interface PlanRun {
   client_id: string;
   /** proposed = ready to commit · noop = every campaign plan already scheduled · degraded = themes missing */
   status: "proposed" | "noop" | "degraded" | "committed";
-  horizon: {
+  /**
+   * What each campaign owed when this ran.
+   *
+   * Replaces `horizon`, which stopped meaning anything once planning no longer
+   * placed dates. Runs made before that still carry `horizon`, so it is kept
+   * optional rather than migrated.
+   */
+  demand: PlanCampaignStatus[];
+  horizon?: {
     weeks: string[];
     startDate: string;
     endDate: string;
@@ -284,7 +316,9 @@ export interface PlanRun {
     horizonWeeks: number;
   };
   observation: PlanObservation;
+  /** What would be committed. Dropping a slot removes it from here. */
   proposed_slots: ProposedSlot[];
+  dropped_slots: DroppedSlot[];
   deferred: DeferredGap[];
   warnings: string[];
   created_slot_ids: string[];

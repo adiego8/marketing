@@ -8,9 +8,10 @@
  * it the agency is created but has no members, and the first person to sign in
  * claims it (see ensureMember in lib/auth.ts).
  *
- * Unlike the Python seed, this writes a POPULATED content quota. An empty quota
- * makes the planner produce nothing, which reads as a broken planner rather
- * than as missing configuration.
+ * It writes a populated content quota, which now paces SCHEDULING rather than
+ * generation — an empty one is workable. What the planner actually needs is an
+ * active campaign with a content plan: with none it refuses to run, because a
+ * campaign's plan is the demand.
  */
 import { config } from "dotenv";
 import { resolve } from "path";

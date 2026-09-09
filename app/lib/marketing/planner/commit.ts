@@ -60,25 +60,19 @@ export class StalePlanError extends Error {
  * slot by hand — and committing a stale plan would silently schedule content
  * against a strategy that no longer exists.
  */
-async function currentFingerprint(
-  clientId: string,
-  horizon: { startDate: string; endDate: string; timezone: string }
-): Promise<string | null> {
+async function currentFingerprint(clientId: string): Promise<string | null> {
   const strategy = await getStrategy(clientId);
   if (!strategy) return null;
 
   const [campaigns, slots] = await Promise.all([
     listCampaigns(clientId, "active"),
-    loadPlannerSlots(clientId, horizon.startDate, horizon.endDate),
+    loadPlannerSlots(clientId),
   ]);
 
   return fingerprintInputs({
     quota: (strategy.content_quota?.weekly ?? {}) as Record<string, QuotaEntry>,
     campaigns: campaigns.map(toCampaignWindow),
     slots,
-    startDate: horizon.startDate,
-    endDate: horizon.endDate,
-    timezone: horizon.timezone,
   });
 }
 
@@ -95,6 +89,8 @@ export function slotDoc(clientId: string, runId: string, slot: ProposedSlot) {
     clientId,
     planRunId: runId,
     gapId: slot.gapId,
+    // Null on every slot this creates: a piece is accepted first and given a
+    // day afterwards, by a person, through scheduleSlot.
     date: slot.date,
     timeLocal: slot.timeLocal,
     timezone: slot.timezone,
@@ -154,7 +150,7 @@ export async function commitPlan(clientId: string, runId: string) {
   // Only meaningful if the run recorded one. Runs predating the fingerprint
   // are committed without the check rather than being made uncommittable.
   if (run.inputs_fingerprint) {
-    const now = await currentFingerprint(clientId, run.horizon);
+    const now = await currentFingerprint(clientId);
     if (now !== run.inputs_fingerprint) throw new StalePlanError();
   }
 

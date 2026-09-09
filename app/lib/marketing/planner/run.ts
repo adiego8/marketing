@@ -1,9 +1,7 @@
-import { DateTime } from "luxon";
 import { isChannel, type Channel } from "../posting-windows";
 import { listCampaigns } from "../campaigns";
 import { getStrategy } from "../strategy";
 import type { QuotaEntry } from "../strategy";
-import { assign } from "./assign";
 import { buildDecideRequest, decide, type DecideFn } from "./decide";
 import { observe } from "./observe";
 import {
@@ -13,9 +11,8 @@ import {
   loadRecentThemes,
   toCampaignWindow,
 } from "./plan-runs";
+import { mintSlotId } from "./slot-id";
 import {
-  MAX_HORIZON_WEEKS,
-  MIN_HORIZON_WEEKS,
   type CampaignWindow,
   type Deferred,
   type ExistingSlot,
@@ -23,18 +20,22 @@ import {
   type PlanStatus,
   type ProposedSlot,
 } from "./types";
-import { horizonWeeks, todayIn, zoneOrUTC } from "./weeks";
 
 // Orchestration. Split in two on purpose:
 //
 //   planFromInputs  — everything pre-loaded, decideFn injectable. Testable end
 //                     to end with no Firestore and no OpenAI.
 //   previewPlan     — loads from Firestore, calls the above, persists the run.
+//
+// There is no assign stage. A piece is written for a campaign and carries no
+// date; a person gives it one on the Schedule page. That is what removed the
+// class of bug where a piece was generated in a week its campaign was not
+// running in, and so arrived attributed to nothing.
 
 export class NoActiveCampaignsError extends Error {
   constructor() {
     super(
-      "No active campaigns. The planner schedules what a campaign's content plan asks for, so accept a campaign before planning."
+      "No active campaigns. The planner writes what a campaign's content plan asks for, so accept a campaign before planning."
     );
     this.name = "NoActiveCampaignsError";
   }
@@ -49,16 +50,15 @@ export class NoStrategyError extends Error {
 
 export interface PlannerInputs {
   clientId: string;
-  timezone: string;
-  now: Date;
-  horizonWeeks: number;
   quota: Record<string, QuotaEntry>;
   slots: ExistingSlot[];
   campaigns: CampaignWindow[];
   pillars: string[];
   business: Record<string, unknown>;
   strategyChannels: Channel[];
-  recentThemes: { date: string; type: string; theme: string }[];
+  recentThemes: { date: string | null; type: string; theme: string }[];
+  /** Only for stamping proposed slots; nothing here computes a date. */
+  timezone: string;
 }
 
 export interface PlanResult {
@@ -75,21 +75,9 @@ export async function planFromInputs(
   inputs: PlannerInputs,
   decideFn: DecideFn = decide
 ): Promise<PlanResult> {
-  const { zone, warning: zoneWarning } = zoneOrUTC(inputs.timezone);
-  const warnings: string[] = zoneWarning ? [zoneWarning] : [];
-
-  const weeks = Math.min(
-    MAX_HORIZON_WEEKS,
-    Math.max(MIN_HORIZON_WEEKS, Math.floor(inputs.horizonWeeks))
-  );
-  if (weeks !== inputs.horizonWeeks) {
-    warnings.push(`Horizon clamped to ${weeks} week(s).`);
-  }
+  const warnings: string[] = [];
 
   const observation = observe({
-    timezone: zone,
-    now: inputs.now,
-    horizonWeeks: weeks,
     quota: inputs.quota,
     slots: inputs.slots,
     campaigns: inputs.campaigns,
@@ -97,40 +85,32 @@ export async function planFromInputs(
   });
   warnings.push(...observation.warnings);
 
-  const spans = horizonWeeks(todayIn(zone, DateTime.fromJSDate(inputs.now).setZone(zone)), weeks, zone);
   const fingerprint = fingerprintInputs({
     quota: inputs.quota,
     campaigns: inputs.campaigns,
     slots: inputs.slots,
-    startDate: observation.startDate,
-    endDate: observation.endDate,
-    timezone: zone,
   });
 
-  // Nothing to do is a legitimate outcome, distinct from a failure: skip the
+  // Nothing owed is a legitimate outcome, distinct from a failure: skip the
   // LLM entirely and still record the run so the observation is auditable.
-  if (observation.totalDeficit === 0) {
+  if (observation.totalOutstanding === 0) {
     return {
       status: "noop",
       observation,
       proposedSlots: [],
       deferred: [],
-      // observe already explains WHY there is nothing: no active campaign, or
-      // every campaign plan delivered. Repeating "meets its quota" here would
-      // contradict it, since the quota is no longer the demand.
-      warnings: [...warnings, ...observation.warnings],
+      warnings,
       inputsFingerprint: fingerprint,
       llm: { called: false, degraded: false, durationMs: 0 },
     };
   }
 
-  // No campaign-less branch here on purpose: campaigns ARE the demand, so with
-  // none there is no deficit and the noop return above has already fired.
-
-  const request = buildDecideRequest(observation, inputs.campaigns, observation.campaigns, {
+  const request = buildDecideRequest(observation, inputs.campaigns, {
     business: inputs.business,
     pillars: inputs.pillars,
-    recentThemes: inputs.recentThemes,
+    recentThemes: inputs.recentThemes
+      .filter((t): t is { date: string; type: string; theme: string } => t.date !== null)
+      .map((t) => ({ date: t.date, type: t.type, theme: t.theme })),
   });
 
   const started = Date.now();
@@ -138,43 +118,67 @@ export async function planFromInputs(
   const durationMs = Date.now() - started;
   warnings.push(...decision.warnings);
 
-  const gapsByGapId = new Map(
-    request.gaps.map((g) => [
-      g.gap_id,
-      observation.gaps.find((gap) => gap.weekKey === g.week && gap.type === g.type)!,
-    ])
-  );
+  const byGapId = new Map(request.gaps.map((g) => [g.gap_id, g]));
+  const titles = new Map(inputs.campaigns.map((c) => [c.id, c.title]));
 
-  const { proposed, deferred } = assign({
-    clientId: inputs.clientId,
-    timezone: zone,
-    now: inputs.now,
-    spans,
-    gapsByGapId,
-    fills: decision.fills,
-    existing: inputs.slots,
-    campaigns: new Map(inputs.campaigns.map((c) => [c.id, c])),
-  });
+  // Ids are minted against everything the client already has, so a piece
+  // already delivered against this campaign never has its id reused. See
+  // slot-id.ts — the id is derived from the demand, not from a date.
+  const taken = new Set(inputs.slots.map((s) => s.id));
 
-  if (deferred.length > 0) {
-    warnings.push(
-      `${deferred.length} slot(s) could not be placed — see the deferred list for why.`
-    );
+  const proposedSlots: ProposedSlot[] = [];
+  const deferred: Deferred[] = [];
+
+  for (const fill of decision.fills) {
+    const gap = byGapId.get(fill.gapId);
+    if (!gap) continue;
+
+    // parseFills only accepts a campaign_id from eligible_campaign_ids, which
+    // holds exactly one id. A null here means the model returned something
+    // else and it was rejected, so fall back to the campaign that asked.
+    const campaignId = fill.campaignId ?? gap.eligible_campaign_ids[0];
+    if (!campaignId) {
+      deferred.push({
+        gapId: fill.gapId,
+        type: gap.type,
+        channel: fill.channel,
+        reason: "No campaign asked for this piece, so there is nothing to attribute it to.",
+      });
+      continue;
+    }
+
+    proposedSlots.push({
+      slotId: mintSlotId(taken, inputs.clientId, campaignId, gap.type),
+      gapId: fill.gapId,
+      // Undated by design. A person sets all four on the Schedule page.
+      weekKey: null,
+      date: null,
+      timeLocal: null,
+      timezone: inputs.timezone,
+      scheduledAt: null,
+      type: gap.type,
+      channel: fill.channel,
+      campaignId,
+      campaignTitle: titles.get(campaignId) ?? "",
+      theme: fill.theme,
+      brief: fill.brief,
+      rationale: fill.rationale,
+      hook: fill.hook,
+      body: fill.body,
+      cta: fill.cta,
+      needsTheme: fill.needsTheme,
+    });
   }
 
   return {
-    // Nothing placed is "noop" even when there WAS a deficit. Reaching assign
-    // and coming back empty — every eligible day full, no channel able to
-    // carry the type — is still nothing to accept, and calling it "proposed"
-    // put a blue "ready" pill on a plan with no slots in it.
     status:
-      proposed.length === 0
+      proposedSlots.length === 0
         ? "noop"
         : decision.degraded
           ? "degraded"
           : "proposed",
     observation,
-    proposedSlots: proposed,
+    proposedSlots,
     deferred,
     warnings,
     inputsFingerprint: fingerprint,
@@ -182,27 +186,18 @@ export async function planFromInputs(
   };
 }
 
-/** Load everything, plan, and persist the run. Writes NO slots — that is Phase 3. */
-export async function previewPlan(
-  clientId: string,
-  opts: { timezone: string; horizonWeeks?: number; now?: Date } = { timezone: "UTC" }
-) {
+/** Load everything, plan, and persist the run. Writes NO slots — that is commit. */
+export async function previewPlan(clientId: string, opts: { timezone: string }) {
   const strategy = await getStrategy(clientId);
   if (!strategy) throw new NoStrategyError();
 
-  // The quota is no longer the demand, only the weekly pace limit and the
-  // channel preference, so an empty one is workable — the campaign then sets
-  // its own pace. What cannot be worked around is having no campaign at all.
+  // The quota is not the demand and not a gate: it paces scheduling, which
+  // happens later and by hand. An empty one is entirely workable.
   const quota = (strategy.content_quota?.weekly ?? {}) as Record<string, QuotaEntry>;
-
-  const now = opts.now ?? new Date();
-  const weeks = opts.horizonWeeks ?? 2;
-  const { zone } = zoneOrUTC(opts.timezone);
-  const spans = horizonWeeks(todayIn(zone, DateTime.fromJSDate(now).setZone(zone)), weeks, zone);
 
   const [allCampaigns, slots, recentThemes] = await Promise.all([
     listCampaigns(clientId, "active"),
-    loadPlannerSlots(clientId, spans[0].start, spans[spans.length - 1].end),
+    loadPlannerSlots(clientId),
     loadRecentThemes(clientId),
   ]);
 
@@ -216,8 +211,6 @@ export async function previewPlan(
   const result = await planFromInputs({
     clientId,
     timezone: opts.timezone,
-    now,
-    horizonWeeks: weeks,
     quota,
     slots,
     campaigns: allCampaigns.map(toCampaignWindow),
@@ -239,15 +232,12 @@ export async function previewPlan(
 
   return createPlanRun(clientId, {
     status: result.status,
-    horizon: {
-      weeks: result.observation.weeks,
-      startDate: result.observation.startDate,
-      endDate: result.observation.endDate,
-      timezone: result.observation.timezone,
-      horizonWeeks: weeks,
-    },
+    // What each campaign owed when this ran. Replaces the horizon, which meant
+    // nothing once planning stopped placing dates.
+    demand: result.observation.campaigns,
     observation: result.observation,
     proposedSlots: result.proposedSlots,
+    droppedSlots: [],
     deferred: result.deferred,
     warnings: result.warnings,
     inputsFingerprint: result.inputsFingerprint,

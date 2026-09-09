@@ -10,13 +10,15 @@ import {
   type RemoteEvent,
 } from "./reconcile";
 import { toUtcInstant } from "./planner/weeks";
-import type { Slot } from "../types";
+import type { DatedSlot } from "./reconcile";
 
 // Two of the three reconciliation rules destroy something — a cancelled slot
 // frees its quota and gets replaced, a locked slot never takes another app
 // edit. So most of what is tested here is the refusal to act, not the action.
 
-function slot(overrides: Partial<Slot> = {}): Slot {
+// DatedSlot, not Slot: everything in reconcile.ts operates on a piece that has
+// a day, which an unscheduled one has not.
+function slot(overrides: Partial<DatedSlot> = {}): DatedSlot {
   return {
     id: "s1",
     client_id: "c1",

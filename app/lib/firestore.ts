@@ -156,13 +156,17 @@ export function serializeSlot(id: string, d: FirebaseFirestore.DocumentData) {
     plan_run_id: d.planRunId ?? null,
     gap_id: str(d.gapId),
     // Local calendar date + time in the client's timezone; scheduled_at is the
-    // derived UTC instant. week_key is denormalized so quota math needs no
+    // derived UTC instant. week_key is denormalized so the quota check needs no
     // date arithmetic at read time.
-    date: str(d.date),
-    time_local: str(d.timeLocal),
+    //
+    // All four are null on an unscheduled piece, and null rather than "" on
+    // purpose: an empty string sorts and compares as a real date, so it slips
+    // through range filters like `slot.date < start` instead of being caught.
+    date: d.date ? str(d.date) : null,
+    time_local: d.timeLocal ? str(d.timeLocal) : null,
     timezone: str(d.timezone, "UTC"),
     scheduled_at: toISO(d.scheduledAt),
-    week_key: str(d.weekKey),
+    week_key: d.weekKey ? str(d.weekKey) : null,
     type: str(d.type),
     channel: str(d.channel),
     theme: str(d.theme),
@@ -193,16 +197,52 @@ export function serializeSlot(id: string, d: FirebaseFirestore.DocumentData) {
   };
 }
 
+/**
+ * Force a stored observation into the shape callers expect.
+ *
+ * Runs made before planning stopped placing dates hold `gaps`, `capacity` and a
+ * horizon instead of `demand`, and passing that through raw is what put an
+ * `undefined.map()` on the Plan page for anyone with history. Every other field
+ * here already defends itself; this one was typed as though the store had been
+ * migrated when it had not.
+ *
+ * Old runs come back readable and empty rather than being rewritten: the plan
+ * they describe is either committed, in which case its slots are the record, or
+ * abandoned, in which case nothing is owed to it.
+ */
+function planObservation(value: unknown) {
+  const o = (value ?? {}) as Record<string, unknown>;
+  return {
+    demand: Array.isArray(o.demand) ? o.demand : [],
+    campaigns: Array.isArray(o.campaigns) ? o.campaigns : [],
+    totalOutstanding:
+      typeof o.totalOutstanding === "number"
+        ? o.totalOutstanding
+        : typeof o.totalDeficit === "number"
+          ? o.totalDeficit
+          : 0,
+    warnings: Array.isArray(o.warnings) ? o.warnings : [],
+  };
+}
+
 export function serializePlanRun(id: string, d: FirebaseFirestore.DocumentData) {
   return {
     id,
     client_id: d.clientId ?? null,
     status: str(d.status, "proposed"),
-    horizon: d.horizon ?? {},
-    // The observation snapshot and the decision, kept so a no-op run is
-    // diagnosable rather than silently empty.
-    observation: d.observation ?? {},
+    // What each campaign owed when the run was made. `horizon` is only present
+    // on runs from before planning stopped placing dates; it is passed through
+    // so those still render rather than being migrated.
+    demand: Array.isArray(d.demand) ? d.demand : [],
+    horizon: d.horizon ?? undefined,
+    // The observation snapshot, kept so a no-op run is diagnosable rather than
+    // silently empty. Normalised, because a run predating the campaign-demand
+    // model carries a completely different shape.
+    observation: planObservation(d.observation),
     proposed_slots: Array.isArray(d.proposedSlots) ? d.proposedSlots : [],
+    // Ideas a human rejected before commit. Absent on every run predating the
+    // drop feature, hence the fallback rather than a migration.
+    dropped_slots: Array.isArray(d.droppedSlots) ? d.droppedSlots : [],
     deferred: Array.isArray(d.deferred) ? d.deferred : [],
     warnings: Array.isArray(d.warnings) ? d.warnings : [],
     created_slot_ids: Array.isArray(d.createdSlotIds) ? d.createdSlotIds : [],

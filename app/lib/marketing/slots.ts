@@ -14,6 +14,16 @@ export interface ListSlotsOptions {
   end?: string;
   /** Omit to include every status, cancelled and skipped included. */
   status?: string;
+  /**
+   * "scheduled" — has a date, the default shape a range implies.
+   * "unscheduled" — accepted but not yet given a day.
+   * Omit for both.
+   *
+   * Explicit rather than implied, because an undated slot passes no date range
+   * and would otherwise be invisible to every caller that passes one — which
+   * is exactly how a piece could be accepted and then never seen again.
+   */
+  dated?: "scheduled" | "unscheduled";
 }
 
 /**
@@ -34,15 +44,26 @@ export async function listSlots(
   return snap.docs
     .map((doc) => serializeSlot(doc.id, doc.data()))
     .filter((slot) => {
-      if (opts.start && slot.date < opts.start) return false;
-      if (opts.end && slot.date > opts.end) return false;
+      if (opts.dated === "scheduled" && !slot.date) return false;
+      if (opts.dated === "unscheduled" && slot.date) return false;
+      // A date range can only ever be about scheduled slots; an undated one is
+      // in no range rather than outside every one.
+      if (slot.date) {
+        if (opts.start && slot.date < opts.start) return false;
+        if (opts.end && slot.date > opts.end) return false;
+      } else if (opts.start || opts.end) {
+        return false;
+      }
       if (opts.status && slot.status !== opts.status) return false;
       return true;
     })
     // date + time rather than scheduled_at: a slot whose UTC instant failed to
-    // resolve still sorts sensibly instead of sinking to the top.
+    // resolve still sorts sensibly instead of sinking to the top. Undated ones
+    // sort first, which is where they belong — they are the work waiting.
     .sort((a, b) =>
-      `${a.date} ${a.time_local}`.localeCompare(`${b.date} ${b.time_local}`)
+      `${a.date ?? ""} ${a.time_local ?? ""}`.localeCompare(
+        `${b.date ?? ""} ${b.time_local ?? ""}`
+      )
     );
 }
 
@@ -203,6 +224,51 @@ export async function adoptSlotSchedule(
       weekKey: schedule.weekKey,
       scheduledAt: schedule.scheduledAt,
       googleAdoptedAt: FieldValue.serverTimestamp(),
+      lastHumanEditAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  return getSlot(clientId, slotId);
+}
+
+/**
+ * Give a slot a day, or move it to another one.
+ *
+ * The counterpart to adoptSlotSchedule: same four fields, written together,
+ * different provenance. That one records a move that already happened in
+ * Google; this one is a person choosing a day in this app, so googleAdoptedAt
+ * stays put and the next sync sees a slot whose event needs creating or moving.
+ *
+ * updateSlot still refuses these fields. Scheduling is not a field edit — it is
+ * the step that turns an accepted piece into a calendar entry — and routing it
+ * through its own function is what keeps that visible.
+ *
+ * The caller derives weekKey and scheduledAt from the date, since both need the
+ * client's timezone: weekKeyOf and toUtcInstant in planner/weeks.ts.
+ */
+export async function scheduleSlot(
+  clientId: string,
+  slotId: string,
+  schedule: {
+    date: string;
+    timeLocal: string;
+    weekKey: string;
+    scheduledAt: string | null;
+  }
+) {
+  const existing = await getSlot(clientId, slotId);
+  if (!existing) return null;
+
+  await db()
+    .collection(COLLECTIONS.slots)
+    .doc(slotId)
+    .update({
+      date: schedule.date,
+      timeLocal: schedule.timeLocal,
+      weekKey: schedule.weekKey,
+      scheduledAt: schedule.scheduledAt,
+      // Whatever was pushed before is now wrong. Marking it stale rather than
+      // leaving it "synced" is what makes the next sync move the event.
+      googleSyncStatus: existing.google_event_id ? "stale" : "pending",
       lastHumanEditAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });

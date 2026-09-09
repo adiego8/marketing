@@ -3,17 +3,18 @@ import { slotDoc } from "./commit";
 import type { ProposedSlot } from "./types";
 
 const SLOT: ProposedSlot = {
-  slotId: "c1__2026-09-08__post__linkedin__0",
-  gapId: "2026-W37::post",
-  weekKey: "2026-W37",
-  date: "2026-09-08",
-  timeLocal: "09:00",
+  slotId: "c1__camp1__post__0",
+  gapId: "camp1__post__0",
+  // Undated: a piece is accepted first and given a day afterwards.
+  weekKey: null,
+  date: null,
+  timeLocal: null,
   timezone: "America/New_York",
-  scheduledAt: "2026-09-08T13:00:00.000Z",
+  scheduledAt: null,
   type: "post",
   channel: "linkedin",
-  campaignId: null,
-  campaignTitle: null,
+  campaignId: "camp1",
+  campaignTitle: "Launch",
   theme: "Why quarterly filing slips",
   brief: "Open with the deadline nobody tracks.",
   rationale: "Pillar: process",
@@ -133,10 +134,20 @@ describe("slotDoc", () => {
     expect(doc.planRunId).toBe("run1");
   });
 
-  it("keeps a null campaign null rather than dropping it", () => {
-    // The Admin SDK throws on undefined; ignoreUndefinedProperties would
-    // silently drop it. Either way the field must be an explicit null.
-    expect(doc.campaignId).toBeNull();
-    expect(doc.campaignTitle).toBeNull();
+  it("carries the campaign that asked for the piece", () => {
+    // Attribution is the reason the whole planner was restructured: a
+    // committed piece with no campaign is content nothing asked for.
+    expect(doc.campaignId).toBe("camp1");
+    expect(doc.campaignTitle).toBe("Launch");
+  });
+
+  it("writes the scheduling fields as explicit nulls", () => {
+    // The Admin SDK throws on undefined and ignoreUndefinedProperties would
+    // drop the keys, either of which leaves a slot that reads as scheduled to
+    // nowhere. Null is what listSlots and syncSlots test for.
+    expect(doc.date).toBeNull();
+    expect(doc.timeLocal).toBeNull();
+    expect(doc.weekKey).toBeNull();
+    expect(doc.scheduledAt).toBeNull();
   });
 });

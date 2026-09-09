@@ -1,12 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { DateTime } from "luxon";
 import { planFromInputs, type PlannerInputs } from "./run";
 import { skeletonFills, type DecideFn } from "./decide";
-import type { CampaignWindow } from "./types";
+import type { CampaignWindow, ExistingSlot } from "./types";
+
+// The date-arithmetic half of this suite is gone with the assign stage: the
+// planner no longer decides when anything goes out, so there are no posting
+// days, no UTC instants and no golden calendar to regress against. What is left
+// is the part that still matters — how much a campaign is owed, and that every
+// piece carries the campaign that asked for it.
 
 const NY = "America/New_York";
-/** Saturday 2026-09-05, 10:00 local. */
-const NOW = DateTime.fromISO("2026-09-05T10:00", { zone: NY }).toJSDate();
 
 /** Stands in for the model: themes every gap, picks the default channel. */
 const stubDecide: DecideFn = async (request) => ({
@@ -47,12 +50,23 @@ const CAMPAIGN: CampaignWindow = {
   timeline: [{ week: 1, focus: "Problem" }],
 };
 
+function delivered(n: number, over: Partial<ExistingSlot> = {}): ExistingSlot[] {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `s${i}`,
+    date: null,
+    type: "post",
+    channel: "linkedin",
+    status: "planned",
+    campaignId: "c1",
+    pinned: false,
+    ...over,
+  }));
+}
+
 function inputs(over: Partial<PlannerInputs> = {}): PlannerInputs {
   return {
     clientId: "cli",
     timezone: NY,
-    now: NOW,
-    horizonWeeks: 2,
     quota: { post: { count: 3, channels: ["linkedin"] } },
     slots: [],
     campaigns: [CAMPAIGN],
@@ -65,81 +79,92 @@ function inputs(over: Partial<PlannerInputs> = {}): PlannerInputs {
 }
 
 describe("planFromInputs", () => {
-  it("plans a full future week and defers the exhausted current one", async () => {
+  it("writes everything the campaign still owes, in one go", async () => {
     const result = await planFromInputs(inputs(), stubDecide);
-
-    // 2026-W36 has only Sat/Sun left and LinkedIn posts Tue-Thu, so everything
-    // lands in W37.
     expect(result.status).toBe("proposed");
-    expect(result.proposedSlots).toHaveLength(3);
-    expect(result.proposedSlots.every((s) => s.weekKey === "2026-W37")).toBe(true);
+    expect(result.proposedSlots).toHaveLength(6);
   });
 
-  it("only proposes days the channel actually posts on", async () => {
+  it("leaves every piece undated", async () => {
     const { proposedSlots } = await planFromInputs(inputs(), stubDecide);
     for (const slot of proposedSlots) {
-      const weekday = DateTime.fromISO(slot.date, { zone: NY }).weekday;
-      expect([2, 3, 4]).toContain(weekday); // Tue, Wed, Thu
+      expect(slot.date).toBeNull();
+      expect(slot.timeLocal).toBeNull();
+      expect(slot.weekKey).toBeNull();
+      expect(slot.scheduledAt).toBeNull();
     }
   });
 
-  it("spreads across distinct days and carries correct UTC instants", async () => {
-    const { proposedSlots } = await planFromInputs(inputs(), stubDecide);
-    expect(new Set(proposedSlots.map((s) => s.date)).size).toBe(3);
-    for (const slot of proposedSlots) {
-      // September in New York is UTC-4, so a 09:00 local slot is 13:00Z.
-      expect(slot.scheduledAt.endsWith("Z")).toBe(true);
-      expect(new Date(slot.scheduledAt).getUTCHours()).toBe(
-        Number(slot.timeLocal.split(":")[0]) + 4
-      );
-    }
+  // The regression test for pieces arriving attributed to nothing. A campaign
+  // whose window is nowhere near "now" is owed exactly the same content, and
+  // every piece of it carries that campaign.
+  it("attributes every piece to the campaign that asked for it", async () => {
+    const future = await planFromInputs(
+      inputs({ campaigns: [{ ...CAMPAIGN, startDate: "2099-01-01", endDate: "2099-03-01" }] }),
+      stubDecide
+    );
+    expect(future.proposedSlots).toHaveLength(6);
+    expect(future.proposedSlots.every((s) => s.campaignId === "c1")).toBe(true);
+    expect(future.proposedSlots.every((s) => s.campaignTitle === "Q4 Push")).toBe(true);
   });
 
-  it("attaches the eligible campaign", async () => {
-    const { proposedSlots } = await planFromInputs(inputs(), stubDecide);
-    expect(proposedSlots.every((s) => s.campaignId === "c1")).toBe(true);
-    expect(proposedSlots[0].campaignTitle).toBe("Q4 Push");
+  it("falls back to the asking campaign when the model returns none", async () => {
+    const result = await planFromInputs(
+      inputs(),
+      async (request) => ({
+        fills: request.gaps.map((gap) => ({
+          gapId: gap.gap_id,
+          campaignId: null,
+          channel: gap.default_channel,
+          theme: "Theme",
+          brief: "",
+          rationale: "",
+          hook: "",
+          body: [],
+          cta: "",
+          needsTheme: false,
+        })),
+        warnings: [],
+        degraded: false,
+      })
+    );
+    expect(result.proposedSlots.every((s) => s.campaignId === "c1")).toBe(true);
+    expect(result.deferred).toHaveLength(0);
   });
 
-  it("reports noop rather than failing when the campaign plan is delivered", async () => {
-    // Delivery is counted per campaign now, so these slots have to be
-    // attributed to it — an unattributed slot is not the campaign's work.
-    const met = inputs({
-      campaigns: [{ ...CAMPAIGN, plannedByType: { post: 3 }, plannedTotal: 3 }],
-      slots: ["a", "b", "c"].map((id, i) => ({
-        id,
-        date: `2026-09-0${8 + i}`,
-        timeLocal: "09:00",
-        weekKey: "2026-W37",
-        type: "post",
-        channel: "linkedin" as const,
-        status: "planned",
-        campaignId: "c1",
-        pinned: false,
-      })),
-    });
-    const result = await planFromInputs(met, stubDecide);
+  it("subtracts what has been delivered, dated or not", async () => {
+    const result = await planFromInputs(inputs({ slots: delivered(4) }), stubDecide);
+    expect(result.proposedSlots).toHaveLength(2);
+  });
+
+  it("mints ids that skip the ones already taken", async () => {
+    const taken = delivered(2).map((s, i) => ({
+      ...s,
+      id: `cli__c1__post__${i}`,
+    }));
+    const result = await planFromInputs(inputs({ slots: taken }), stubDecide);
+    expect(result.proposedSlots.map((s) => s.slotId)).toEqual([
+      "cli__c1__post__2",
+      "cli__c1__post__3",
+      "cli__c1__post__4",
+      "cli__c1__post__5",
+    ]);
+  });
+
+  it("reports noop when the campaign plan is fully delivered", async () => {
+    const result = await planFromInputs(
+      inputs({
+        campaigns: [{ ...CAMPAIGN, plannedByType: { post: 3 }, plannedTotal: 3 }],
+        slots: delivered(3),
+      }),
+      stubDecide
+    );
     expect(result.status).toBe("noop");
     expect(result.proposedSlots).toHaveLength(0);
-    expect(result.warnings.join(" ")).toContain("already fully scheduled");
-  });
-
-  // The degradation guarantee: dates and channels are computed in code, so a
-  // dead model costs themes and nothing else.
-  it("still produces a fully dated plan when the model fails", async () => {
-    const result = await planFromInputs(inputs(), failingDecide);
-
-    expect(result.status).toBe("degraded");
-    expect(result.proposedSlots).toHaveLength(3);
-    expect(result.proposedSlots.every((s) => s.needsTheme)).toBe(true);
-    expect(result.proposedSlots.every((s) => s.scheduledAt !== "")).toBe(true);
-    expect(result.warnings.join(" ")).toContain("connection refused");
+    expect(result.warnings.join(" ")).toContain("fully delivered");
   });
 
   it("plans nothing when no campaign is active", async () => {
-    // The demand is the campaigns' content plans. With none active there is
-    // nothing to schedule, and saying so beats inventing evergreen filler the
-    // quota happened to list.
     const result = await planFromInputs(inputs({ campaigns: [] }), stubDecide);
     expect(result.proposedSlots).toHaveLength(0);
     expect(result.status).toBe("noop");
@@ -147,32 +172,28 @@ describe("planFromInputs", () => {
   });
 
   it("plans only what the campaign's content plan asks for", async () => {
-    // The quota lists post; the campaign asks for carousel. The campaign wins
-    // on WHAT, and the quota only caps how fast.
+    // The quota lists post; the campaign asks for carousel. The campaign
+    // decides WHAT, and the quota now only paces scheduling.
     const result = await planFromInputs(
       inputs({
         quota: { post: { count: 3, channels: ["linkedin"] } },
-        campaigns: [
-          { ...CAMPAIGN, plannedByType: { carousel: 2 }, plannedTotal: 2 },
-        ],
+        campaigns: [{ ...CAMPAIGN, plannedByType: { carousel: 2 }, plannedTotal: 2 }],
       }),
       stubDecide
     );
     const types = new Set(result.proposedSlots.map((s) => s.type));
-    expect(types).toContain("carousel");
-    expect(types).not.toContain("post");
+    expect(types).toEqual(new Set(["carousel"]));
   });
 
-  it("clamps an out-of-range horizon", async () => {
-    const result = await planFromInputs(inputs({ horizonWeeks: 99 }), stubDecide);
-    expect(result.observation.weeks.length).toBe(8);
-    expect(result.warnings.join(" ")).toContain("clamped");
-  });
-
-  it("falls back to UTC for an invalid client timezone", async () => {
-    const result = await planFromInputs(inputs({ timezone: "Not/AZone" }), stubDecide);
-    expect(result.observation.timezone).toBe("UTC");
-    expect(result.warnings.join(" ")).toContain("not a valid IANA zone");
+  // A dead model costs themes and nothing else: the pieces still exist, still
+  // carry their campaign, and are still acceptable.
+  it("still produces attributed pieces when the model fails", async () => {
+    const result = await planFromInputs(inputs(), failingDecide);
+    expect(result.status).toBe("degraded");
+    expect(result.proposedSlots).toHaveLength(6);
+    expect(result.proposedSlots.every((s) => s.needsTheme)).toBe(true);
+    expect(result.proposedSlots.every((s) => s.campaignId === "c1")).toBe(true);
+    expect(result.warnings.join(" ")).toContain("connection refused");
   });
 
   it("produces a fingerprint that changes when the inputs change", async () => {
@@ -187,25 +208,29 @@ describe("planFromInputs", () => {
     expect(c.inputsFingerprint).not.toBe(a.inputsFingerprint);
   });
 
-  // The regression net for greedy ordering: a refactor that silently changes
-  // every date will fail here.
-  it("is deterministic — the golden plan", async () => {
-    const result = await planFromInputs(inputs(), stubDecide);
-    expect(
-      result.proposedSlots.map((s) => `${s.date} ${s.timeLocal} ${s.channel} ${s.type}`)
-    ).toEqual([
-      "2026-09-08 09:00 linkedin post",
-      "2026-09-09 09:00 linkedin post",
-      "2026-09-10 09:00 linkedin post",
-    ]);
+  // Moving a campaign's window no longer changes what is generated, so it must
+  // no longer invalidate an open preview.
+  it("does not change the fingerprint when a campaign's window moves", async () => {
+    const a = await planFromInputs(inputs(), stubDecide);
+    const b = await planFromInputs(
+      inputs({ campaigns: [{ ...CAMPAIGN, startDate: "2027-01-01", endDate: "2027-02-01" }] }),
+      stubDecide
+    );
+    expect(b.inputsFingerprint).toBe(a.inputsFingerprint);
+  });
+
+  it("does change it when the campaign's content plan changes", async () => {
+    const a = await planFromInputs(inputs(), stubDecide);
+    const b = await planFromInputs(
+      inputs({ campaigns: [{ ...CAMPAIGN, plannedByType: { post: 5 }, plannedTotal: 5 }] }),
+      stubDecide
+    );
+    expect(b.inputsFingerprint).not.toBe(a.inputsFingerprint);
   });
 });
 
-describe("status when nothing gets placed", () => {
-  it("is noop, not proposed, when assign returns no slots", async () => {
-    // A deficit existed and the model answered, but the model returned no
-    // fills, so nothing reaches the calendar. There is nothing to accept, and
-    // calling that "proposed" put a ready-looking badge on an empty plan.
+describe("status when nothing gets written", () => {
+  it("is noop, not proposed, when the model returns no fills", async () => {
     const result = await planFromInputs(inputs(), async () => ({
       fills: [],
       warnings: [],
@@ -213,13 +238,5 @@ describe("status when nothing gets placed", () => {
     }));
     expect(result.proposedSlots).toHaveLength(0);
     expect(result.status).toBe("noop");
-  });
-
-  it("still reports degraded only when something was actually placed", async () => {
-    // Degraded means "dates are right, themes are missing" — which is only
-    // meaningful if there are slots to look at.
-    const degraded = await planFromInputs(inputs(), failingDecide);
-    expect(degraded.proposedSlots.length).toBeGreaterThan(0);
-    expect(degraded.status).toBe("degraded");
   });
 });

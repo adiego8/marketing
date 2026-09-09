@@ -3,40 +3,29 @@ import { db, COLLECTIONS, FieldValue, serializePlanRun, serializeSlot } from "..
 import { deleteSlotEvents } from "../calendar";
 import type { Slot } from "../../types";
 import { isChannel, type Channel } from "../posting-windows";
-import type { CampaignWindow, ExistingSlot, IsoDate } from "./types";
+import type { CampaignWindow, ExistingSlot } from "./types";
 
 // Firestore IO for the planner. Kept apart from the algorithm so every pure
 // module stays testable without a database.
 
-/** Load the slots in the horizon that the planner needs to reason about. */
-export async function loadPlannerSlots(
-  clientId: string,
-  start: IsoDate,
-  end: IsoDate
-): Promise<ExistingSlot[]> {
-  // Filtered on clientId only, with the date range applied in memory. Adding
-  // the range to the query needs a (clientId, date) composite index, and a
-  // client's slots are bounded — a few hundred a year at any realistic quota —
-  // so this keeps the app working with zero Firestore setup. The index is still
-  // declared in firestore.indexes.json; deploy it and this can become a range
-  // query again if slot volume ever justifies it.
+/**
+ * Every slot this client has.
+ *
+ * No date range, deliberately. Demand is what a campaign still owes, and a
+ * piece accepted but not yet given a day has no date to filter on — range it
+ * and the next run proposes everything already sitting unscheduled.
+ */
+export async function loadPlannerSlots(clientId: string): Promise<ExistingSlot[]> {
   const snap = await db()
     .collection(COLLECTIONS.slots)
     .where("clientId", "==", clientId)
     .get();
 
-  return snap.docs
-    .filter((doc) => {
-      const date = String(doc.data().date ?? "");
-      return date >= start && date <= end;
-    })
-    .map((doc) => {
+  return snap.docs.map((doc) => {
     const d = doc.data();
     return {
       id: doc.id,
-      date: String(d.date ?? ""),
-      timeLocal: String(d.timeLocal ?? "09:00"),
-      weekKey: String(d.weekKey ?? ""),
+      date: d.date ? String(d.date) : null,
       type: String(d.type ?? ""),
       channel: String(d.channel ?? ""),
       status: String(d.status ?? "planned"),
@@ -59,7 +48,7 @@ export async function loadRecentThemes(clientId: string, limit = 20) {
     .sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? "")))
     .slice(0, limit)
     .map((d) => ({
-      date: String(d.date ?? ""),
+      date: d.date ? String(d.date) : null,
       type: String(d.type ?? ""),
       theme: String(d.theme ?? ""),
     }));
@@ -120,17 +109,19 @@ export function toCampaignWindow(campaign: {
 /**
  * A stable hash of everything the plan was computed from.
  *
- * Phase 3's commit recomputes this and refuses a preview whose inputs have
- * moved on, so a stale plan cannot be written over a calendar that changed
- * underneath it.
+ * The commit step recomputes this and refuses a preview whose inputs have moved
+ * on. It still matters with no horizon in it: between preview and commit
+ * someone can retire a campaign, change its content plan, or accept a piece
+ * from another run — any of which changes what is actually owed.
+ *
+ * The campaign's start and end dates are deliberately NOT hashed any more.
+ * They no longer affect what is generated, so moving a campaign's window
+ * invalidating every open preview was noise.
  */
 export function fingerprintInputs(input: {
   quota: Record<string, { count: number; channels: string[] }>;
   campaigns: CampaignWindow[];
   slots: ExistingSlot[];
-  startDate: string;
-  endDate: string;
-  timezone: string;
 }): string {
   const canonical = {
     quota: Object.keys(input.quota)
@@ -143,17 +134,13 @@ export function fingerprintInputs(input: {
     campaigns: input.campaigns
       .map((c) => ({
         id: c.id,
-        startDate: c.startDate,
-        endDate: c.endDate,
         plannedTotal: c.plannedTotal,
+        plannedByType: Object.keys(c.plannedByType)
+          .sort()
+          .map((t) => [t, c.plannedByType[t]] as const),
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
     slotIds: input.slots.map((s) => s.id).sort(),
-    horizon: {
-      startDate: input.startDate,
-      endDate: input.endDate,
-      timezone: input.timezone,
-    },
   };
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
@@ -252,6 +239,35 @@ export async function deletePlanRun(
   if (mine.length === 0) await runRef.delete();
 
   return { deletedSlots: mine.length, removedEvents, wasCommitted: true };
+}
+
+/**
+ * Rewrite a run's proposed and dropped lists.
+ *
+ * Both move together — a drop is one slot leaving the first and entering the
+ * second — so writing them in one update is what stops a failure halfway
+ * losing a slot altogether. The caller checks `committed_at` first; there is
+ * no guard here because throwing PlanAlreadyCommittedError from this module
+ * would make plan-runs depend on commit, which already depends on it.
+ *
+ * @returns the updated run, or null when it does not exist or belongs to
+ *          another client.
+ */
+export async function updatePlanRunSlots(
+  clientId: string,
+  runId: string,
+  update: { proposedSlots: unknown[]; droppedSlots: unknown[] }
+) {
+  const ref = db().collection(COLLECTIONS.planRuns).doc(runId);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data()?.clientId !== clientId) return null;
+
+  await ref.update({
+    proposedSlots: update.proposedSlots,
+    droppedSlots: update.droppedSlots,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return getPlanRun(clientId, runId);
 }
 
 export async function getPlanRun(clientId: string, runId: string) {
