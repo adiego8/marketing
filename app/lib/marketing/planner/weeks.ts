@@ -56,6 +56,53 @@ export function horizonWeeks(fromISO: string, weeks: number, tz: string): WeekSp
   return spans;
 }
 
+/**
+ * The Monday and Sunday of an ISO week key, or null if it is not one.
+ *
+ * Parsed as an ISO week DATE — "2026-W39-1" is unambiguously that Monday —
+ * rather than by doing arithmetic on the week number, for the reason spelled
+ * out above horizonWeeks: ISO years have 52 or 53 weeks, so number arithmetic
+ * invents a "2026-W54" instead of rolling into 2027-W01.
+ */
+export function weekSpanOf(weekKey: string, tz: string): WeekSpan | null {
+  const monday = DateTime.fromISO(`${weekKey}-1`, { zone: tz });
+  if (!monday.isValid) return null;
+  return {
+    weekKey,
+    start: monday.toISODate() as string,
+    end: monday.endOf("week").toISODate() as string,
+  };
+}
+
+/**
+ * A week, written for a person: "15 – 21 September".
+ *
+ * The key is storage, not language. Nobody plans content by ordinal week
+ * number, and "2026-W39" does not say whether it is next week or next quarter.
+ *
+ * Anything that is not a week key comes back unchanged rather than throwing or
+ * rendering "Invalid DateTime" — the Calendar groups undated pieces under the
+ * literal "Unscheduled", and that has to survive this function.
+ */
+export function weekLabel(weekKey: string, tz: string): string {
+  const span = weekSpanOf(weekKey, tz);
+  if (!span) return weekKey;
+
+  const from = localDate(span.start, tz);
+  const to = localDate(span.end, tz);
+
+  // The year appears only when the week straddles one, where leaving it out
+  // would read as a nine-month span rather than seven days.
+  if (from.year !== to.year) {
+    return `${from.toFormat("d LLLL")} – ${to.toFormat("d LLLL yyyy")}`;
+  }
+  // Within one month the month name is said once, at the end.
+  if (from.month === to.month) {
+    return `${from.toFormat("d")} – ${to.toFormat("d LLLL")}`;
+  }
+  return `${from.toFormat("d LLLL")} – ${to.toFormat("d LLLL")}`;
+}
+
 /** Every local date in a week span, Monday through Sunday. */
 export function daysInSpan(span: WeekSpan, tz: string): string[] {
   const out: string[] = [];

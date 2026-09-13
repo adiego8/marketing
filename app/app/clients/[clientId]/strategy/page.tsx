@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Tabs, TabPanel } from "@/components/shared/tabs";
+import { useRef } from "react";
 import { EditableList } from "@/components/shared/editable-list";
 import { banner, btn, field, surface, toggle, text } from "@/lib/ui";
 import { getClient, getStrategy, updateStrategy } from "@/lib/api";
@@ -35,14 +35,77 @@ type NestedField =
   | "goals"
   | "content_quota";
 
-const STRATEGY_TABS = [
-  { value: "icp", label: "ICP" },
-  { value: "voice", label: "Voice" },
-  { value: "positioning", label: "Positioning" },
-  { value: "messaging", label: "Messaging" },
-  { value: "goals", label: "Goals" },
-  { value: "quota", label: "Content quota" },
+/**
+ * A strategy is one document.
+ *
+ * These were six tabs, which meant editing an ICP required remembering which
+ * of six drawers it lived in, hid five sixths of the document while you worked,
+ * and made switching feel like it might lose unsaved edits. They are sections
+ * now, with an index that jumps and follows the scroll.
+ */
+const SECTIONS = [
+  { id: "icp", label: "Who it's for" },
+  { id: "voice", label: "Voice" },
+  { id: "positioning", label: "Positioning" },
+  { id: "messaging", label: "Messaging" },
+  { id: "goals", label: "Goals" },
+  { id: "quota", label: "Weekly pace" },
 ];
+
+const SECTION_IDS = SECTIONS.map((s) => s.id);
+
+/** One section of the document, addressable by the index beside it. */
+function Section({
+  id,
+  title,
+  children,
+}: {
+  id: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section id={id} className="scroll-mt-6">
+      <h2 className={`${text.h3} font-semibold pb-2 mb-4 border-b border-slate-200`}>
+        {title}
+      </h2>
+      <div className="grid gap-4">{children}</div>
+    </section>
+  );
+}
+
+/**
+ * Highlights whichever section is currently on screen.
+ *
+ * rootMargin pins the trigger line near the top of the viewport, so the index
+ * marks the section you are reading rather than the one merely visible at the
+ * bottom edge.
+ */
+function useActiveSection(ids: string[]) {
+  const [active, setActive] = useState(ids[0]);
+  const seen = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) seen.current.add(entry.target.id);
+          else seen.current.delete(entry.target.id);
+        }
+        const first = ids.find((id) => seen.current.has(id));
+        if (first) setActive(first);
+      },
+      { rootMargin: "0px 0px -70% 0px" }
+    );
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, [ids]);
+
+  return active;
+}
 
 /**
  * One labelled card. This page is ~29 of them, so the recipe lives here rather
@@ -72,7 +135,7 @@ export default function StrategyPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [isNew, setIsNew] = useState(false);
-  const [tab, setTab] = useState("icp");
+  const active = useActiveSection(SECTION_IDS);
   const [error, setError] = useState<string | null>(null);
   const [newDemographic, setNewDemographic] = useState("");
   const [demographicError, setDemographicError] = useState<string | null>(null);
@@ -219,11 +282,10 @@ export default function StrategyPage() {
   };
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-5xl">
       <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
-          <p className={text.eyebrow}>Foundation</p>
-          <h1 className={`${text.h1} mt-1`}>Strategy</h1>
+          <h1 className={text.h1}>Strategy</h1>
           <p className="text-sm text-slate-500 mt-1">{strategy.business_name}</p>
         </div>
         <button
@@ -262,16 +324,35 @@ export default function StrategyPage() {
         <p className={`${banner.error} mb-6`}>{error}</p>
       )}
 
-      <Tabs
-        tabs={STRATEGY_TABS}
-        value={tab}
-        onChange={setTab}
-        label="Strategy sections"
-        className="mb-4"
-      />
+      <div className="lg:grid lg:grid-cols-[170px_1fr] lg:gap-10 items-start">
+        <nav
+          aria-label="Strategy sections"
+          className="hidden lg:block sticky top-6"
+        >
+          <p className={`${text.label} mb-2`}>On this page</p>
+          <ul className="space-y-0.5">
+            {SECTIONS.map((section) => (
+              <li key={section.id}>
+                <a
+                  href={`#${section.id}`}
+                  aria-current={active === section.id ? "true" : undefined}
+                  className={`block px-2 py-1 rounded text-sm transition-colors ${
+                    active === section.id
+                      ? "bg-teal-50 text-teal-700 font-semibold"
+                      : "text-slate-500 hover:text-slate-800 hover:bg-stone-100"
+                  }`}
+                >
+                  {section.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="space-y-10 min-w-0">
 
         {/* ICP */}
-        <TabPanel value="icp" active={tab === "icp"}>
+        <Section id="icp" title="Who it's for">
           <div className="grid gap-4">
             <Field label="Business Name">
                 <input className={field.inputSm}
@@ -367,10 +448,10 @@ export default function StrategyPage() {
                 />
               </Field>
           </div>
-        </TabPanel>
+        </Section>
 
         {/* Voice */}
-        <TabPanel value="voice" active={tab === "voice"}>
+        <Section id="voice" title="Voice">
           <div className="grid gap-4">
             <Field label="Personality">
                 <textarea
@@ -413,10 +494,10 @@ export default function StrategyPage() {
                 />
               </Field>
           </div>
-        </TabPanel>
+        </Section>
 
         {/* Positioning */}
-        <TabPanel value="positioning" active={tab === "positioning"}>
+        <Section id="positioning" title="Positioning">
           <div className="grid gap-4">
             <Field label="Primary Angle" className="space-y-3">
                 <div>
@@ -520,10 +601,10 @@ export default function StrategyPage() {
                 />
               </Field>
           </div>
-        </TabPanel>
+        </Section>
 
         {/* Messaging */}
-        <TabPanel value="messaging" active={tab === "messaging"}>
+        <Section id="messaging" title="Messaging">
           <div className="grid gap-4">
             <Field label="Tagline">
                 <input className={field.inputSm}
@@ -553,10 +634,10 @@ export default function StrategyPage() {
                 />
               </Field>
           </div>
-        </TabPanel>
+        </Section>
 
         {/* Goals */}
-        <TabPanel value="goals" active={tab === "goals"}>
+        <Section id="goals" title="Goals">
           <div className="grid gap-4">
             <Field label="Primary Goal">
                 <input className={field.inputSm}
@@ -603,9 +684,9 @@ export default function StrategyPage() {
                 />
               </Field>
           </div>
-        </TabPanel>
+        </Section>
         {/* Content Quota */}
-        <TabPanel value="quota" active={tab === "quota"}>
+        <Section id="quota" title="Weekly pace">
           <div className="grid gap-4">
             <Field label="Rationale">
                 <p className={`${field.micro} normal-case tracking-normal`}>
@@ -791,7 +872,9 @@ export default function StrategyPage() {
                 })()}
               </Field>
           </div>
-        </TabPanel>
+        </Section>
+        </div>
+      </div>
     </div>
   );
 }

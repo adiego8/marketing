@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   weekKeyOf,
+  weekSpanOf,
+  weekLabel,
   horizonWeeks,
   daysInSpan,
   weekdayOf,
@@ -155,5 +157,65 @@ describe("time helpers", () => {
   it("converts to minutes since midnight for comparison", () => {
     expect(minutesOf("00:00")).toBe(0);
     expect(minutesOf("09:30")).toBe(570);
+  });
+});
+
+describe("weekSpanOf", () => {
+  it("resolves a key to its Monday and Sunday", () => {
+    expect(weekSpanOf("2026-W38", "UTC")).toEqual({
+      weekKey: "2026-W38",
+      start: "2026-09-14",
+      end: "2026-09-20",
+    });
+  });
+
+  // The regression guard for doing arithmetic on the week number instead: 2026
+  // has a W53, so a naive +1 would produce a "2026-W54" that does not exist.
+  it("resolves the last week of a 53-week ISO year", () => {
+    const span = weekSpanOf("2026-W53", "UTC");
+    expect(span?.start).toBe("2026-12-28");
+    expect(span?.end).toBe("2027-01-03");
+  });
+
+  it("round-trips with weekKeyOf", () => {
+    const span = weekSpanOf("2026-W38", "America/New_York");
+    expect(weekKeyOf(span!.start, "America/New_York")).toBe("2026-W38");
+    expect(weekKeyOf(span!.end, "America/New_York")).toBe("2026-W38");
+  });
+
+  it("returns null for anything that is not a week key", () => {
+    for (const junk of ["Unscheduled", "", "2026-09-14", "nonsense", "2026-W99"]) {
+      expect(weekSpanOf(junk, "UTC"), junk).toBeNull();
+    }
+  });
+});
+
+describe("weekLabel", () => {
+  it("says the month once when the week sits inside one", () => {
+    expect(weekLabel("2026-W38", "UTC")).toBe("14 – 20 September");
+  });
+
+  it("says both months when the week crosses one", () => {
+    // 2026-W40 is 28 Sep – 4 Oct.
+    expect(weekLabel("2026-W40", "UTC")).toBe("28 September – 4 October");
+  });
+
+  // Without the year this reads as a nine-month span rather than seven days.
+  it("adds the year when the week crosses one", () => {
+    expect(weekLabel("2026-W53", "UTC")).toBe("28 December – 3 January 2027");
+  });
+
+  // The Calendar groups undated pieces under the literal "Unscheduled", so a
+  // non-key has to survive rather than becoming "Invalid DateTime".
+  it("passes anything that is not a week key straight through", () => {
+    expect(weekLabel("Unscheduled", "UTC")).toBe("Unscheduled");
+    expect(weekLabel("", "UTC")).toBe("");
+  });
+
+  // A week key names the same seven days everywhere; only the instants differ.
+  it("names the same days in any timezone", () => {
+    expect(weekLabel("2026-W38", "Pacific/Kiritimati")).toBe(
+      weekLabel("2026-W38", "Pacific/Midway")
+    );
   });
 });

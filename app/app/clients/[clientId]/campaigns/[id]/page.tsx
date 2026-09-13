@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Tabs, TabPanel } from "@/components/shared/tabs";
-import { banner, btn, field, surface, table, text } from "@/lib/ui";
+import { StageRail, type Stage } from "@/components/shared/stage-rail";
+import { PieceCard, fromProposed, fromSlot } from "@/components/shared/piece-card";
+import { backLink, banner, btn, field, surface, table, text } from "@/lib/ui";
+import { ChevronLeft } from "lucide-react";
 import { PILL, statusColor, statusLabel } from "@/lib/ui-status";
 import {
   getCampaign,
@@ -16,17 +18,51 @@ import {
   deleteCampaign,
   updateCampaign,
   getStrategy,
+  listPlanRuns,
+  listSlots,
+  previewPlan,
+  commitPlan,
+  dropPlanSlots,
+  restorePlanSlots,
+  replaceDroppedSlots,
+  scheduleSlot,
+  getClient,
+  getGoogleStatus,
+  startGoogleConnect,
+  syncCalendar,
 } from "@/lib/api";
-import type { Campaign, QuotaEntry } from "@/lib/types";
+import { calendarOpenUrl } from "@/lib/marketing/calendar-links";
+import type {
+  Campaign,
+  QuotaEntry,
+  PlanRun,
+  Slot,
+  ProposedSlot,
+  DroppedSlot,
+} from "@/lib/types";
 import { CONTENT_TYPES, contentTypeLabel } from "@/lib/marketing/content-types";
 
-const CAMPAIGN_TABS = [
-  { value: "strategy", label: "Strategy" },
-  { value: "content", label: "Content plan" },
-  { value: "review", label: "Review & improve" },
-];
+/**
+ * The campaign workspace.
+ *
+ * This page used to be three tabs — Strategy, Content plan, Review & improve —
+ * with a "Plan content" button that navigated AWAY to a client-wide planner. So
+ * a campaign had no page showing what had been written for it, and answering
+ * "where is this campaign up to" meant clicking all three tabs and then leaving.
+ *
+ * It is now the whole job, as the sequence it actually is:
+ *
+ *   ① Brief     what it is for, what it owes, and accepting it
+ *   ② Content   the pieces written for it — drop, regenerate, accept
+ *   ③ Schedule  its accepted pieces, and giving them days
+ *   ④ Calendar  pushing those days to Google, and what came back
+ *
+ * One caveat is live while the planner is still client-wide: generating and
+ * accepting act on every active campaign at once. Stage ② says so in as many
+ * words rather than pretending to be scoped.
+ */
 
-export default function CampaignDetailPage() {
+export default function CampaignWorkspace() {
   const params = useParams();
   const router = useRouter();
   const clientId = params.clientId as string;
@@ -35,13 +71,67 @@ export default function CampaignDetailPage() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [accountQuota, setAccountQuota] = useState<Record<string, QuotaEntry>>({});
   const [loading, setLoading] = useState(true);
+  const [stage, setStage] = useState("brief");
+
+  // ?stage=schedule is how a piece's "back" link returns you to the stage you
+  // left from. Read once on mount, the house idiom for search params here.
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("stage");
+    if (wanted && ["brief", "content", "schedule", "calendar"].includes(wanted)) {
+      setStage(wanted);
+    }
+  }, []);
+
+  // ① Brief
   const [feedback, setFeedback] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [improving, setImproving] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [planSaving, setPlanSaving] = useState(false);
   const [planSaved, setPlanSaved] = useState(false);
-  const [tab, setTab] = useState("strategy");
+
+  // ② Content
+  const [run, setRun] = useState<PlanRun | null>(null);
+  const [planning, setPlanning] = useState(false);
+  const [committing, setCommitting] = useState(false);
+  const [busySlot, setBusySlot] = useState<string | null>(null);
+  const [replacing, setReplacing] = useState(false);
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+
+  // ③ Schedule
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [dates, setDates] = useState<Record<string, string>>({});
+  const [datingId, setDatingId] = useState<string | null>(null);
+  const [quotaNote, setQuotaNote] = useState<string | null>(null);
+
+  // ④ Calendar
+  const [google, setGoogle] = useState<{
+    configured: boolean;
+    missing: string[];
+    connected: boolean;
+    email: string | null;
+    needs_reconnect: boolean;
+  } | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
+  // What the last sync adopted FROM Google rather than pushed to it. These are
+  // changes a person made in their own calendar, so they are read, not counted.
+  const [syncChanges, setSyncChanges] = useState<string[]>([]);
+  const [syncWarnings, setSyncWarnings] = useState<string[]>([]);
+  const [calendarUrl, setCalendarUrl] = useState<string | null>(null);
+
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getGoogleStatus().then(setGoogle).catch(() => setGoogle(null));
+    getClient(clientId)
+      .then((c) => {
+        // The id is on the client the moment the calendar exists, so the link
+        // works before the first push rather than only after one.
+        if (c.google_calendar_id) setCalendarUrl(calendarOpenUrl(c.google_calendar_id));
+      })
+      .catch(() => {});
+  }, [clientId]);
 
   useEffect(() => {
     Promise.all([
@@ -54,18 +144,42 @@ export default function CampaignDetailPage() {
           setAccountQuota(strategy.content_quota.weekly);
         }
       })
-      .catch(console.error)
+      .catch((e) => setError(e instanceof Error ? e.message : "Could not load"))
       .finally(() => setLoading(false));
   }, [clientId, campaignId]);
 
+  const loadRun = useCallback(() => {
+    listPlanRuns(clientId, 1)
+      .then((runs) => setRun(runs[0] ?? null))
+      .catch(() => {});
+  }, [clientId]);
+
+  const loadSlots = useCallback(() => {
+    listSlots(clientId)
+      .then((all) => setSlots(all.filter((s) => s.campaign_id === campaignId)))
+      .catch(() => {});
+  }, [clientId, campaignId]);
+
+  useEffect(() => {
+    loadRun();
+    loadSlots();
+  }, [loadRun, loadSlots]);
+
+  /* ------------------------------------------------------------- ① brief -- */
+
   const updateBreakdown = (newBreakdown: Array<Record<string, unknown>>) => {
     if (!campaign) return;
-    const newPlan = {
-      ...campaign.content_plan,
-      breakdown: newBreakdown,
-      total_pieces: newBreakdown.reduce((sum, item) => sum + (Number(item.count) || 0), 0),
-    };
-    setCampaign({ ...campaign, content_plan: newPlan });
+    setCampaign({
+      ...campaign,
+      content_plan: {
+        ...campaign.content_plan,
+        breakdown: newBreakdown,
+        total_pieces: newBreakdown.reduce(
+          (sum, item) => sum + (Number(item.count) || 0),
+          0
+        ),
+      },
+    });
     setPlanSaved(false);
   };
 
@@ -73,105 +187,306 @@ export default function CampaignDetailPage() {
     if (!campaign) return;
     setPlanSaving(true);
     try {
-      const updated = await updateCampaign(clientId, campaignId, { content_plan: campaign.content_plan });
-      setCampaign(updated);
+      setCampaign(
+        await updateCampaign(clientId, campaignId, {
+          content_plan: campaign.content_plan,
+        })
+      );
       setPlanSaved(true);
     } catch (e) {
-      console.error("Failed to save content plan:", e);
+      setError(e instanceof Error ? e.message : "Could not save the content plan");
     } finally {
       setPlanSaving(false);
     }
   };
 
-  const handleReview = async () => {
-    if (!feedback.trim()) return;
+  const runCampaignAction = async (fn: () => Promise<Campaign>) => {
+    setActionLoading(true);
+    setError(null);
     try {
-      const updated = await reviewCampaign(clientId, campaignId, feedback);
-      setCampaign(updated);
-      setFeedback("");
+      setCampaign(await fn());
     } catch (e) {
-      console.error("Failed to submit review:", e);
+      setError(e instanceof Error ? e.message : "That did not work");
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleImprove = async () => {
     if (!feedback.trim()) return;
     setImproving(true);
+    setError(null);
     try {
-      const updated = await improveCampaign(clientId, campaignId, feedback);
-      setCampaign(updated);
+      setCampaign(await improveCampaign(clientId, campaignId, feedback));
       setFeedback("");
     } catch (e) {
-      console.error("Failed to improve:", e);
+      setError(e instanceof Error ? e.message : "Could not improve the campaign");
     } finally {
       setImproving(false);
     }
   };
 
-  const handleAccept = async () => {
-    setActionLoading(true);
-    try {
-      const updated = await acceptCampaign(clientId, campaignId);
-      setCampaign(updated);
-    } catch (e) {
-      console.error("Failed to accept:", e);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleReject = async () => {
-    if (!rejectReason.trim()) return;
-    setActionLoading(true);
-    try {
-      const updated = await rejectCampaign(clientId, campaignId, rejectReason);
-      setCampaign(updated);
-    } catch (e) {
-      console.error("Failed to reject:", e);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleComplete = async () => {
-    setActionLoading(true);
-    try {
-      const updated = await completeCampaign(clientId, campaignId);
-      setCampaign(updated);
-    } catch (e) {
-      console.error("Failed to complete:", e);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const handleDelete = async () => {
+    if (!confirm("Delete this campaign? Its content plan goes with it.")) return;
     try {
       await deleteCampaign(clientId, campaignId);
       router.push(`/clients/${clientId}/campaigns`);
     } catch (e) {
-      console.error("Failed to delete:", e);
+      setError(e instanceof Error ? e.message : "Could not delete the campaign");
     }
   };
+
+  /* ----------------------------------------------------------- ② content -- */
+
+  const applyEdit = (next: PlanRun) => setRun(next);
+
+  const handlePreview = async () => {
+    setPlanning(true);
+    setError(null);
+    try {
+      setRun(await previewPlan(clientId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Writing failed");
+    } finally {
+      setPlanning(false);
+    }
+  };
+
+  const handleCommit = async () => {
+    if (!run) return;
+    setCommitting(true);
+    setError(null);
+    try {
+      applyEdit(await commitPlan(clientId, run.id));
+      loadSlots();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not accept the plan");
+    } finally {
+      setCommitting(false);
+    }
+  };
+
+  const handleDrop = async (slotId: string) => {
+    if (!run) return;
+    setBusySlot(slotId);
+    setError(null);
+    try {
+      applyEdit(await dropPlanSlots(clientId, run.id, [{ slotId }]));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not drop that idea");
+    } finally {
+      setBusySlot(null);
+    }
+  };
+
+  const handleRestore = async (slotId: string) => {
+    if (!run) return;
+    setBusySlot(slotId);
+    setError(null);
+    try {
+      applyEdit(await restorePlanSlots(clientId, run.id, [slotId]));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not restore that idea");
+    } finally {
+      setBusySlot(null);
+    }
+  };
+
+  /** Saved on blur, and only when the text actually changed. */
+  const handleReason = async (slotId: string, saved: string) => {
+    if (!run) return;
+    const reason = (reasons[slotId] ?? saved).trim();
+    if (reason === saved.trim()) return;
+    try {
+      applyEdit(await dropPlanSlots(clientId, run.id, [{ slotId, reason }]));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save that reason");
+    }
+  };
+
+  const handleReplace = async () => {
+    if (!run) return;
+    setReplacing(true);
+    setError(null);
+    try {
+      applyEdit(await replaceDroppedSlots(clientId, run.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not write replacements");
+    } finally {
+      setReplacing(false);
+    }
+  };
+
+  /* ---------------------------------------------------------- ③ schedule -- */
+
+  const handleSchedule = async (slot: Slot) => {
+    const date = dates[slot.id];
+    if (!date) return;
+    setDatingId(slot.id);
+    setError(null);
+    try {
+      const updated = await scheduleSlot(clientId, slot.id, { date });
+      setQuotaNote(updated.quota_warning ?? null);
+      setDates((d) => {
+        const next = { ...d };
+        delete next[slot.id];
+        return next;
+      });
+      loadSlots();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not set that day");
+    } finally {
+      setDatingId(null);
+    }
+  };
+
+  /* ---------------------------------------------------------- ④ calendar -- */
+
+  const handleConnect = async () => {
+    try {
+      const { url } = await startGoogleConnect(window.location.pathname);
+      // A full navigation, not a fetch: this is Google's own consent screen.
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start the Google connection");
+    }
+  };
+
+  /**
+   * Push this campaign's days to Google.
+   *
+   * Sync is addressed by date range, not by campaign, so the range is this
+   * campaign's own span — first dated piece to last. Anything else scheduled
+   * inside that window goes up with it, which the panel says out loud.
+   */
+  const handleSync = async (start: string, end: string) => {
+    setSyncing(true);
+    setError(null);
+    setSyncNote(null);
+    setSyncChanges([]);
+    setSyncWarnings([]);
+    try {
+      const r = await syncCalendar(clientId, { start, end });
+      setCalendarUrl(r.open_url);
+      setSyncNote(
+        [
+          `${r.synced} event${r.synced === 1 ? "" : "s"} written`,
+          r.removed > 0 ? `${r.removed} removed` : null,
+          r.adopted > 0 ? `${r.adopted} moved` : null,
+          r.cancelled > 0 ? `${r.cancelled} cancelled` : null,
+          r.locked > 0 ? `${r.locked} handed to Google` : null,
+          r.failed > 0 ? `${r.failed} failed` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      );
+      setSyncChanges(r.changes);
+      setSyncWarnings(r.warnings);
+      if (r.errors.length > 0) setError(r.errors.slice(0, 3).join(" · "));
+      loadSlots();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  /* ------------------------------------------------------------ derived -- */
 
   if (loading) return <p className={text.muted}>Loading…</p>;
   if (!campaign) return <p className={banner.error}>Campaign not found.</p>;
 
   const strategy = campaign.strategy || {};
   const contentPlan = campaign.content_plan || {};
+  const breakdown = (contentPlan.breakdown || []) as Array<Record<string, unknown>>;
   const isActionable = ["proposal", "in_review"].includes(campaign.status);
+
+  const owed = breakdown.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+
+  // This campaign's slice of the latest run. The planner is still client-wide,
+  // so a run can hold pieces for campaigns this page knows nothing about.
+  const mine = (run?.proposed_slots ?? []).filter(
+    (s: ProposedSlot) => s.campaignId === campaignId
+  );
+  const myDropped = (run?.dropped_slots ?? []).filter(
+    (d: DroppedSlot) => d.campaignId === campaignId
+  );
+  const openDropped = myDropped.filter((d) => d.replacedAt === null);
+  const otherCampaigns = new Set(
+    (run?.proposed_slots ?? [])
+      .map((s: ProposedSlot) => s.campaignId)
+      .filter((id) => id && id !== campaignId)
+  ).size;
+
+  const dated = slots
+    .filter((s) => s.date)
+    .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+  const undated = slots.filter((s) => !s.date);
+
+  // A piece is on Google once it has an event id. "pending" and "error" both
+  // mean it is not there yet; "stale" means it is, but out of date.
+  const onGoogle = dated.filter((s) => s.google_event_id);
+  const span =
+    dated.length > 0
+      ? { start: dated[0].date as string, end: dated[dated.length - 1].date as string }
+      : null;
+
+  const STAGES: Stage[] = [
+    {
+      value: "brief",
+      label: "Brief",
+      detail: owed > 0 ? `${owed} pieces owed a week` : "No content plan yet",
+      ready: true,
+    },
+    {
+      value: "content",
+      label: "Content",
+      detail:
+        mine.length === 0 && myDropped.length === 0
+          ? "Nothing written yet"
+          : [
+              `${mine.length} written`,
+              openDropped.length > 0 ? `${openDropped.length} dropped` : null,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+      ready: campaign.status === "active",
+    },
+    {
+      value: "schedule",
+      label: "Schedule",
+      detail:
+        slots.length === 0
+          ? "Nothing accepted yet"
+          : undated.length > 0
+            ? `${dated.length} of ${slots.length} dated · ${undated.length} need a day`
+            : `${dated.length} scheduled`,
+      // Always reachable. An empty stage that explains itself and offers a way
+      // forward beats a dead button you cannot interrogate.
+      ready: true,
+    },
+    {
+      value: "calendar",
+      label: "On the calendar",
+      detail:
+        dated.length === 0
+          ? "Nothing dated yet"
+          : google && !google.connected
+            ? "Google not connected"
+            : `${onGoogle.length} of ${dated.length} on Google`,
+      ready: true,
+    },
+  ];
 
   return (
     <div className="max-w-4xl">
-      <Link
-        href={`/clients/${clientId}/campaigns`}
-        className="text-sm text-slate-500 hover:text-teal-700 transition-colors mb-3 inline-block"
-      >
-        ← Back to campaigns
+      <Link href={`/clients/${clientId}/campaigns`} className={`${backLink} mb-3`}>
+        <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+        Campaigns
       </Link>
 
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div className="min-w-0">
           <div className="flex items-center gap-3 mb-1">
             <h1 className={text.h1}>{campaign.title}</h1>
             <span className={`${PILL} ${statusColor(campaign.status)}`}>
@@ -183,27 +498,19 @@ export default function CampaignDetailPage() {
           )}
           <p className="text-xs text-slate-400 mt-1">
             Created {new Date(campaign.created_at).toLocaleDateString()}
-            {campaign.start_date && ` · Starts ${campaign.start_date}`}
-            {campaign.end_date && ` · Ends ${campaign.end_date}`}
+            {campaign.start_date && ` · Runs ${campaign.start_date}`}
+            {campaign.end_date && ` to ${campaign.end_date}`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0">
           {campaign.status === "active" && (
-            <>
-              {/* Replaces the old "Generate Content" run trigger. An active
-                  campaign is scheduled by the planner, which draws from it to
-                  fill the weekly quota — there is no per-campaign generate. */}
-              <button
-                onClick={handleComplete}
-                disabled={actionLoading}
-                className={btn.outline}
-              >
-                Mark complete
-              </button>
-              <Link href={`/clients/${clientId}/plan`} className={btn.primarySm}>
-                Plan content
-              </Link>
-            </>
+            <button
+              onClick={() => runCampaignAction(() => completeCampaign(clientId, campaignId))}
+              disabled={actionLoading}
+              className={btn.outline}
+            >
+              Mark complete
+            </button>
           )}
           <button onClick={handleDelete} className={btn.danger}>
             Delete
@@ -211,54 +518,16 @@ export default function CampaignDetailPage() {
         </div>
       </div>
 
-      <Tabs
-        tabs={CAMPAIGN_TABS}
-        value={tab}
-        onChange={setTab}
-        label="Campaign sections"
-        className="mb-4"
-      />
+      <StageRail stages={STAGES} value={stage} onChange={setStage} />
 
-      <TabPanel value="strategy" active={tab === "strategy"}>
-        <div className="grid gap-4">
-          {Object.entries(strategy).map(([key, value]) => (
-            <section key={key} className={`${surface.card} ${surface.pad}`}>
-              <h2 className={`${text.cardTitle} mb-3 capitalize`}>
-                {key.replace(/_/g, " ")}
-              </h2>
-              {Array.isArray(value) ? (
-                <div className="flex flex-wrap gap-2">
-                  {value.map((v, i) => (
-                    <span
-                      key={i}
-                      className={`${PILL} bg-slate-100 text-slate-600`}
-                    >
-                      {String(v)}
-                    </span>
-                  ))}
-                </div>
-              ) : typeof value === "object" ? (
-                <pre className={`${surface.inset} text-xs whitespace-pre-wrap font-mono`}>
-                  {JSON.stringify(value, null, 2)}
-                </pre>
-              ) : (
-                <p className="text-sm text-slate-700">{String(value)}</p>
-              )}
-            </section>
-          ))}
-          {Object.keys(strategy).length === 0 && (
-            <div className={surface.empty}>
-              <p className="text-slate-700 text-lg">No strategy details yet.</p>
-            </div>
-          )}
-        </div>
-      </TabPanel>
+      {error && <p className={`${banner.error} mb-4`}>{error}</p>}
 
-      <TabPanel value="content" active={tab === "content"}>
+      {/* ============================================================ ① -- */}
+      {stage === "brief" && (
         <div className="grid gap-4">
           <section className={`${surface.card} ${surface.pad}`}>
             <div className="flex items-center justify-between gap-3 mb-4">
-              <h2 className={text.cardTitle}>Content plan</h2>
+              <h2 className={text.cardTitle}>What it owes, each week</h2>
               <button
                 onClick={saveContentPlan}
                 disabled={planSaving || planSaved}
@@ -267,97 +536,80 @@ export default function CampaignDetailPage() {
                 {planSaving ? "Saving…" : planSaved ? "Saved" : "Save changes"}
               </button>
             </div>
-            {(() => {
-              const breakdown = (contentPlan.breakdown || []) as Array<
-                Record<string, unknown>
-              >;
-              const usedTypes = breakdown.map((item) => String(item.type));
-              const availableTypes = CONTENT_TYPES.filter(
-                (t) => !usedTypes.includes(t.key)
-              );
 
+            {breakdown.length > 0 ? (
+              <div className={`${surface.table} overflow-x-auto`}>
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-stone-50">
+                      <th className={table.head}>Type</th>
+                      <th className={table.head}>Per week</th>
+                      <th className={table.head}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {breakdown.map((item, i) => (
+                      <tr key={i} className={table.row}>
+                        <td className={`${table.cell} font-medium`}>
+                          {contentTypeLabel(String(item.type))}
+                        </td>
+                        <td className={table.cell}>
+                          <input
+                            type="number"
+                            min={0}
+                            value={Number(item.count) || 0}
+                            onChange={(e) => {
+                              const updated = [...breakdown];
+                              updated[i] = {
+                                ...updated[i],
+                                count: parseInt(e.target.value) || 0,
+                              };
+                              updateBreakdown(updated);
+                            }}
+                            className={`${field.inputSm} w-20`}
+                          />
+                        </td>
+                        <td className={`${table.cell} text-right`}>
+                          <button
+                            className={btn.ghost}
+                            onClick={() =>
+                              updateBreakdown(breakdown.filter((_, j) => j !== i))
+                            }
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className={text.muted}>
+                Nothing yet. Add a content type below and this campaign starts
+                asking for work.
+              </p>
+            )}
+
+            {(() => {
+              const used = breakdown.map((item) => String(item.type));
+              const available = CONTENT_TYPES.filter((t) => !used.includes(t.key));
+              if (available.length === 0) return null;
               return (
-                <div className="space-y-4">
-                  {breakdown.length > 0 && (
-                    <div className={`${surface.table} overflow-x-auto`}>
-                      <table className="w-full">
-                        <thead>
-                          <tr className="bg-stone-50">
-                            <th className={table.head}>Type</th>
-                            <th className={table.head}>Planned per week</th>
-                            <th className={table.head}></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {breakdown.map((item, i) => {
-                            const planned = Number(item.count) || 0;
-                            return (
-                              <tr key={i} className={table.row}>
-                                <td className={`${table.cell} font-medium`}>
-                                  {contentTypeLabel(String(item.type))}
-                                </td>
-                                <td className={table.cell}>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={planned}
-                                    onChange={(e) => {
-                                      const updated = [...breakdown];
-                                      updated[i] = {
-                                        ...updated[i],
-                                        count: parseInt(e.target.value) || 0,
-                                      };
-                                      updateBreakdown(updated);
-                                    }}
-                                    className={`${field.inputSm} w-20`}
-                                  />
-                                </td>
-                                <td className={`${table.cell} text-right`}>
-                                  <button
-                                    className={btn.ghost}
-                                    onClick={() =>
-                                      updateBreakdown(
-                                        breakdown.filter((_, j) => j !== i)
-                                      )
-                                    }
-                                  >
-                                    Remove
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  {breakdown.length === 0 && (
-                    <p className={text.muted}>
-                      No content types selected. Add types below.
-                    </p>
-                  )}
-                  {availableTypes.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      <span className="text-sm text-slate-500 self-center">
-                        Add:
-                      </span>
-                      {availableTypes.map((spec) => (
-                        <button
-                          key={spec.key}
-                          className={btn.outlineSm}
-                          title={spec.description}
-                          onClick={() =>
-                            updateBreakdown([
-                              ...breakdown,
-                              { type: spec.key, count: 1 },
-                            ])
-                          }
-                        >
-                          + {spec.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <span className="text-sm text-slate-500 self-center">Add:</span>
+                  {available.map((spec) => (
+                    <button
+                      key={spec.key}
+                      className={btn.outlineSm}
+                      title={spec.description}
+                      onClick={() =>
+                        updateBreakdown([...breakdown, { type: spec.key, count: 1 }])
+                      }
+                    >
+                      + {spec.label}
+                    </button>
+                  ))}
                 </div>
               );
             })()}
@@ -365,7 +617,13 @@ export default function CampaignDetailPage() {
 
           {Object.keys(accountQuota).length > 0 && (
             <section className={`${surface.card} ${surface.pad}`}>
-              <h2 className={`${text.cardTitle} mb-3`}>Account weekly quota</h2>
+              <h2 className={`${text.cardTitle} mb-1`}>
+                The account&rsquo;s weekly pace
+              </h2>
+              <p className="text-sm text-slate-500 mb-3">
+                Set on the Strategy page. It paces scheduling, not writing — going
+                over warns, it never refuses.
+              </p>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(accountQuota).map(([quotaType, entry]) => (
                   <div
@@ -391,42 +649,62 @@ export default function CampaignDetailPage() {
             </section>
           )}
 
-          {Array.isArray(contentPlan.timeline) &&
-            contentPlan.timeline.length > 0 && (
-              <section className={`${surface.card} ${surface.pad}`}>
-                <h2 className={`${text.cardTitle} mb-3`}>Timeline</h2>
-                <div className="space-y-2">
-                  {(contentPlan.timeline as Array<Record<string, unknown>>).map(
-                    (item, i) => (
-                      <div key={i} className="text-sm text-slate-700">
-                        <span className="font-semibold">
-                          Week {String(item.week)}:
-                        </span>{" "}
-                        {String(item.focus)}
+          {Object.keys(strategy).length > 0 && (
+            <section className={`${surface.card} ${surface.pad}`}>
+              <h2 className={`${text.cardTitle} mb-4`}>What it is for</h2>
+              <div className="grid gap-4">
+                {Object.entries(strategy).map(([key, value]) => (
+                  <div key={key}>
+                    <p className={`${field.micro} capitalize`}>
+                      {key.replace(/_/g, " ")}
+                    </p>
+                    {Array.isArray(value) ? (
+                      <div className="flex flex-wrap gap-2">
+                        {value.map((v, i) => (
+                          <span key={i} className={`${PILL} bg-slate-100 text-slate-600`}>
+                            {String(v)}
+                          </span>
+                        ))}
                       </div>
-                    )
-                  )}
-                </div>
-              </section>
-            )}
-        </div>
-      </TabPanel>
+                    ) : typeof value === "object" ? (
+                      <pre className={`${surface.inset} text-xs whitespace-pre-wrap font-mono`}>
+                        {JSON.stringify(value, null, 2)}
+                      </pre>
+                    ) : (
+                      <p className="text-sm text-slate-700">{String(value)}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
-      <TabPanel value="review" active={tab === "review"}>
-        <div className="grid gap-4">
+          {Array.isArray(contentPlan.timeline) && contentPlan.timeline.length > 0 && (
+            <section className={`${surface.card} ${surface.pad}`}>
+              <h2 className={`${text.cardTitle} mb-3`}>Timeline</h2>
+              <div className="space-y-2">
+                {(contentPlan.timeline as Array<Record<string, unknown>>).map(
+                  (item, i) => (
+                    <div key={i} className="text-sm text-slate-700">
+                      <span className="font-semibold">Week {String(item.week)}:</span>{" "}
+                      {String(item.focus)}
+                    </div>
+                  )
+                )}
+              </div>
+            </section>
+          )}
+
           {campaign.feedback_history.length > 0 && (
             <section className={`${surface.card} ${surface.pad}`}>
               <h2 className={`${text.cardTitle} mb-3`}>Feedback history</h2>
               <div className="space-y-3">
                 {campaign.feedback_history.map((entry, i) => (
-                  <div
-                    key={i}
-                    className="border-l-2 border-slate-200 pl-3 text-sm"
-                  >
+                  <div key={i} className="border-l-2 border-slate-200 pl-3 text-sm">
                     <p className="text-slate-600">{entry.feedback}</p>
                     {entry.changes && (
-                      <p className="text-xs text-green-700 mt-1">
-                        Changes: {entry.changes}
+                      <p className="text-xs text-teal-700 mt-1">
+                        Changed: {entry.changes}
                       </p>
                     )}
                     <p className="text-xs text-slate-400 mt-1">
@@ -445,7 +723,7 @@ export default function CampaignDetailPage() {
           {campaign.status === "rejected" && campaign.rejection_reason && (
             <section className="rounded-xl border border-red-200 bg-red-50 p-5 sm:p-6">
               <h2 className="text-sm font-semibold text-red-700 mb-2">
-                Rejection reason
+                Why it was rejected
               </h2>
               <p className="text-sm text-red-600">{campaign.rejection_reason}</p>
             </section>
@@ -454,28 +732,34 @@ export default function CampaignDetailPage() {
           {isActionable && (
             <>
               <section className={`${surface.card} ${surface.pad}`}>
-                <h2 className={`${text.cardTitle} mb-3`}>Feedback</h2>
+                <h2 className={`${text.cardTitle} mb-3`}>Send it back for changes</h2>
                 <div className="space-y-3">
                   <textarea
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
-                    placeholder="What should be improved? Be specific…"
+                    placeholder="What should be different? Be specific…"
                     className={`${field.textarea} h-24`}
                   />
                   <div className="flex flex-wrap gap-2">
                     <button
-                      onClick={handleReview}
-                      disabled={!feedback.trim()}
+                      onClick={() =>
+                        runCampaignAction(async () => {
+                          const c = await reviewCampaign(clientId, campaignId, feedback);
+                          setFeedback("");
+                          return c;
+                        })
+                      }
+                      disabled={!feedback.trim() || actionLoading}
                       className={btn.outline}
                     >
-                      Submit feedback
+                      Save feedback
                     </button>
                     <button
                       onClick={handleImprove}
                       disabled={!feedback.trim() || improving}
                       className={btn.primarySm}
                     >
-                      {improving ? "Improving with AI…" : "Improve with AI"}
+                      {improving ? "Rewriting…" : "Rewrite with the agent"}
                     </button>
                   </div>
                 </div>
@@ -483,7 +767,9 @@ export default function CampaignDetailPage() {
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
-                  onClick={handleAccept}
+                  onClick={() =>
+                    runCampaignAction(() => acceptCampaign(clientId, campaignId))
+                  }
                   disabled={actionLoading}
                   className={`${btn.primary} flex-1`}
                 >
@@ -493,11 +779,15 @@ export default function CampaignDetailPage() {
                   <textarea
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
-                    placeholder="Reason for rejection…"
+                    placeholder="Why are you rejecting it?"
                     className={`${field.textarea} h-16`}
                   />
                   <button
-                    onClick={handleReject}
+                    onClick={() =>
+                      runCampaignAction(() =>
+                        rejectCampaign(clientId, campaignId, rejectReason)
+                      )
+                    }
                     disabled={!rejectReason.trim() || actionLoading}
                     className={`${btn.danger} w-full`}
                   >
@@ -508,7 +798,503 @@ export default function CampaignDetailPage() {
             </>
           )}
         </div>
-      </TabPanel>
+      )}
+
+      {/* ============================================================ ② -- */}
+      {stage === "content" && (
+        <div className="space-y-6">
+          {campaign.status !== "active" ? (
+            <div className={surface.empty}>
+              <p className="text-slate-700 text-lg">
+                Accept the campaign to write its content.
+              </p>
+              <p className="text-slate-500 text-sm mt-1">
+                The agent only writes what an accepted campaign asks for.
+              </p>
+              <button onClick={() => setStage("brief")} className={`${btn.primary} mt-6`}>
+                Back to the brief
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-slate-500">
+                  {mine.length > 0
+                    ? `${mine.length} piece${mine.length === 1 ? "" : "s"} written for this campaign. Nothing is scheduled — you pick the days afterwards.`
+                    : "Write everything this campaign still owes."}
+                </p>
+                <button
+                  onClick={handlePreview}
+                  disabled={planning}
+                  className={btn.primarySm}
+                >
+                  {planning ? "Writing… (30-90s)" : "Write content"}
+                </button>
+              </div>
+
+              {/* The planner is client-wide for now, so say so rather than
+                  implying this button is scoped to the campaign you are in. */}
+              {otherCampaigns > 0 && (
+                <p className={banner.warn}>
+                  This run also covers {otherCampaigns} other campaign
+                  {otherCampaigns === 1 ? "" : "s"}. Writing or accepting here
+                  affects all of them.{" "}
+                  <Link href={`/clients/${clientId}/plan`} className="underline">
+                    See the whole run
+                  </Link>
+                  .
+                </p>
+              )}
+
+              {run?.status === "degraded" && (
+                <p className={banner.warn}>
+                  The theme model was unavailable. Each piece is still attached to
+                  the campaign that asked for it, but the themes are missing.
+                </p>
+              )}
+
+              {mine.length === 0 && myDropped.length === 0 ? (
+                <div className={surface.empty}>
+                  <p className="text-slate-700 text-lg">Nothing written yet.</p>
+                  <p className="text-slate-500 text-sm mt-1">
+                    {run
+                      ? "The last run wrote nothing for this campaign — everything it asks for may already be delivered."
+                      : "Write the content this campaign owes, then keep what you like."}
+                  </p>
+                  <button
+                    onClick={handlePreview}
+                    disabled={planning}
+                    className={`${btn.primary} mt-6`}
+                  >
+                    {planning ? "Writing…" : "Write content"}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    {mine.map((slot) => (
+                      <PieceCard
+                        key={slot.slotId}
+                        piece={fromProposed(slot)}
+                        action={
+                          <button
+                            onClick={() => handleDrop(slot.slotId)}
+                            disabled={busySlot === slot.slotId || !!run?.committed_at}
+                            className={btn.ghost}
+                          >
+                            {busySlot === slot.slotId ? "…" : "Drop"}
+                          </button>
+                        }
+                      />
+                    ))}
+                  </div>
+
+                  {myDropped.length > 0 && (
+                    <section className={`${surface.card} ${surface.pad}`}>
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+                        <h2 className={text.cardTitle}>
+                          Dropped
+                          <span className={`${PILL} ml-2 bg-slate-100 text-slate-500`}>
+                            {openDropped.length}
+                          </span>
+                        </h2>
+                        {openDropped.length > 0 && !run?.committed_at && (
+                          <button
+                            onClick={handleReplace}
+                            disabled={replacing}
+                            className={btn.primarySm}
+                          >
+                            {replacing
+                              ? "Rethinking… (15-30s)"
+                              : `Rewrite ${openDropped.length} idea${
+                                  openDropped.length === 1 ? "" : "s"
+                                }`}
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-sm text-slate-500 mb-4">
+                        Say what was wrong and rewrite to get a different idea for
+                        the same slot — one model call for all of them. Or leave
+                        them: the campaign still owes the piece, so the next run
+                        writes it again.
+                      </p>
+
+                      <div className="space-y-3">
+                        {myDropped.map((entry) => {
+                          const replaced = entry.replacedAt !== null;
+                          return (
+                            <div
+                              key={`${entry.slotId}-${entry.droppedAt}`}
+                              className={`rounded-lg border p-3 ${
+                                replaced
+                                  ? "border-slate-100 bg-stone-50/60"
+                                  : "border-slate-200"
+                              }`}
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-xs text-slate-400">
+                                    {contentTypeLabel(entry.type)} · {entry.channel}
+                                  </p>
+                                  <p
+                                    className={`font-medium ${
+                                      replaced
+                                        ? "text-slate-400 line-through"
+                                        : "text-slate-700"
+                                    }`}
+                                  >
+                                    {entry.theme || "(no theme)"}
+                                  </p>
+                                </div>
+                                {replaced ? (
+                                  <span className={`${PILL} bg-teal-50 text-teal-700 shrink-0`}>
+                                    rewritten
+                                  </span>
+                                ) : (
+                                  !run?.committed_at && (
+                                    <button
+                                      onClick={() => handleRestore(entry.slotId)}
+                                      disabled={busySlot === entry.slotId}
+                                      className={`${btn.outlineSm} shrink-0`}
+                                    >
+                                      {busySlot === entry.slotId ? "…" : "Put back"}
+                                    </button>
+                                  )
+                                )}
+                              </div>
+
+                              {!replaced && !run?.committed_at && (
+                                <input
+                                  value={reasons[entry.slotId] ?? entry.reason}
+                                  onChange={(e) =>
+                                    setReasons((r) => ({
+                                      ...r,
+                                      [entry.slotId]: e.target.value,
+                                    }))
+                                  }
+                                  onBlur={() => handleReason(entry.slotId, entry.reason)}
+                                  maxLength={300}
+                                  placeholder="What was wrong? — e.g. too salesy, we said this in March"
+                                  className={`${field.inputSm} mt-2`}
+                                />
+                              )}
+                              {replaced && entry.reason && (
+                                <p className="text-xs text-slate-400 mt-1">
+                                  Rejected: {entry.reason}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  )}
+
+                  {run &&
+                    (run.committed_at ? (
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 p-4">
+                        <p className="text-sm text-teal-800">
+                          Accepted {new Date(run.committed_at).toLocaleString()}.
+                          The pieces are waiting for days.
+                        </p>
+                        <button
+                          onClick={() => setStage("schedule")}
+                          className={`${btn.primarySm} shrink-0`}
+                        >
+                          Give them days
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
+                        <p className="text-sm text-slate-500">
+                          Nothing is on the calendar yet.
+                        </p>
+                        <button
+                          onClick={handleCommit}
+                          disabled={committing || run.proposed_slots.length === 0}
+                          className={`${btn.primarySm} shrink-0`}
+                        >
+                          {committing
+                            ? "Accepting…"
+                            : `Accept ${run.proposed_slots.length} piece${
+                                run.proposed_slots.length === 1 ? "" : "s"
+                              }`}
+                        </button>
+                      </div>
+                    ))}
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ============================================================ ③ -- */}
+      {stage === "schedule" && (
+        <div className="space-y-6">
+          {quotaNote && <p className={banner.warn}>{quotaNote}</p>}
+
+          {slots.length === 0 ? (
+            <div className={surface.empty}>
+              <p className="text-slate-700 text-lg">Nothing accepted yet.</p>
+              <p className="text-slate-500 text-sm mt-1">
+                Write this campaign&rsquo;s content and accept it, and the pieces
+                land here waiting for days.
+              </p>
+              <button onClick={() => setStage("content")} className={`${btn.primary} mt-6`}>
+                Go to content
+              </button>
+            </div>
+          ) : undated.length === 0 ? (
+            /* This stage is the dating workbench and nothing else. Once every
+               piece has a day there is no work left in it, and the pieces
+               themselves live one stage on. */
+            <div className={surface.empty}>
+              <p className="text-slate-700 text-lg">
+                Every piece has a day.
+              </p>
+              <p className="text-slate-500 text-sm mt-1">
+                All {dated.length} of them are dated. Push them to Google from
+                the next stage.
+              </p>
+              <button onClick={() => setStage("calendar")} className={`${btn.primary} mt-6`}>
+                On the calendar
+              </button>
+            </div>
+          ) : (
+            <section>
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className={text.cardTitle}>Needs a day</h2>
+                <span className={`${PILL} bg-amber-50 text-amber-700`}>
+                  {undated.length}
+                </span>
+              </div>
+              <p className="text-sm text-slate-500 mb-3">
+                The time comes from the channel&rsquo;s usual posting window.
+                Change it afterwards on the piece.
+              </p>
+              <div className="space-y-3">
+                {undated.map((slot) => (
+                  <PieceCard
+                    key={slot.id}
+                    piece={fromSlot(slot)}
+                    action={
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="date"
+                          value={dates[slot.id] ?? ""}
+                          onChange={(e) =>
+                            setDates((d) => ({ ...d, [slot.id]: e.target.value }))
+                          }
+                          className={field.select}
+                          aria-label={`Date for ${slot.theme || slot.type}`}
+                        />
+                        <button
+                          onClick={() => handleSchedule(slot)}
+                          disabled={!dates[slot.id] || datingId === slot.id}
+                          className={btn.primarySm}
+                        >
+                          {datingId === slot.id ? "Setting…" : "Schedule"}
+                        </button>
+                      </div>
+                    }
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
+      {/* ============================================================ ④ -- */}
+      {stage === "calendar" && (
+        <div className="space-y-6">
+          {dated.length === 0 ? (
+            <div className={surface.empty}>
+              <p className="text-slate-700 text-lg">Nothing has a day yet.</p>
+              <p className="text-slate-500 text-sm mt-1">
+                A piece reaches Google only once it has a date. Give these pieces
+                days and they can be pushed from here.
+              </p>
+              <button
+                onClick={() => setStage("schedule")}
+                className={`${btn.primary} mt-6`}
+              >
+                Give them days
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* The connection, and the one action it allows. Four states,
+                  because "not set up on the server" and "not connected by you"
+                  need different fixes. */}
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                {!google ? (
+                  <span className={text.muted}>Checking Google…</span>
+                ) : !google.configured ? (
+                  <span className="text-sm text-slate-500">
+                    Google Calendar is not set up on this server.{" "}
+                    <span className="font-mono text-xs">
+                      {google.missing.join(", ")}
+                    </span>{" "}
+                    missing from .env.local.
+                  </span>
+                ) : !google.connected ? (
+                  <>
+                    <span className="text-sm text-slate-500">
+                      Connect Google and this campaign&rsquo;s days become events
+                      — one calendar per client.
+                    </span>
+                    <button onClick={handleConnect} className={`${btn.outline} shrink-0`}>
+                      Connect Google
+                    </button>
+                  </>
+                ) : google.needs_reconnect ? (
+                  <>
+                    <span className="text-sm text-amber-700">
+                      Connected as {google.email}, but without calendar access.
+                      Reconnect to grant it.
+                    </span>
+                    <button onClick={handleConnect} className={`${btn.outline} shrink-0`}>
+                      Reconnect
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-sm text-slate-500">
+                      Google Calendar · {google.email}
+                      {syncNote && (
+                        <span className="text-teal-700 font-medium"> — {syncNote}</span>
+                      )}
+                    </span>
+                    <span className="flex gap-2 shrink-0">
+                      {calendarUrl && (
+                        <a
+                          href={calendarUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={btn.outline}
+                        >
+                          Open in Google ↗
+                        </a>
+                      )}
+                      <button
+                        onClick={() => span && handleSync(span.start, span.end)}
+                        disabled={syncing || !span}
+                        className={btn.primarySm}
+                      >
+                        {syncing ? "Pushing…" : "Push to Google"}
+                      </button>
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {/* Sync is addressed by date range, not by campaign. Say so. */}
+              {span && google?.connected && !google.needs_reconnect && (
+                <p className={text.micro}>
+                  Pushes everything scheduled between {span.start} and {span.end},
+                  including other campaigns&rsquo; pieces in that window.
+                </p>
+              )}
+
+              {syncWarnings.length > 0 && (
+                <div className={banner.warn}>
+                  {syncWarnings.map((w) => (
+                    <p key={w}>{w}</p>
+                  ))}
+                </div>
+              )}
+
+              {syncChanges.length > 0 && (
+                <div className="rounded-lg border border-teal-200 bg-teal-50/60 px-4 py-3">
+                  <p className={`${text.cardTitle} text-teal-800 mb-1.5`}>
+                    Changed in Google, adopted here
+                  </p>
+                  <ul className="space-y-1">
+                    {syncChanges.slice(0, 5).map((c) => (
+                      <li key={c} className="text-sm text-teal-900">
+                        {c}
+                      </li>
+                    ))}
+                  </ul>
+                  {syncChanges.length > 5 && (
+                    <p className="mt-1.5 text-xs text-teal-700">
+                      +{syncChanges.length - 5} more
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* A checklist, not cards: at this stage the question is "is it
+                  there", and eight rows of state answer that faster than eight
+                  cards of copy you have already read twice. */}
+              <section>
+                <div className="flex items-center gap-2 mb-3">
+                  <h2 className={text.cardTitle}>This campaign on the calendar</h2>
+                  <span className={`${PILL} bg-slate-100 text-slate-500`}>
+                    {onGoogle.length} of {dated.length}
+                  </span>
+                </div>
+                <div className={surface.list}>
+                  {dated.map((slot) => {
+                    const state = syncState(slot);
+                    return (
+                      <div
+                        key={slot.id}
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3"
+                      >
+                        <span className="text-sm text-slate-700 tabular-nums w-24 shrink-0">
+                          {slot.date}
+                        </span>
+                        <span className="text-sm text-slate-500 w-14 shrink-0 tabular-nums">
+                          {slot.time_local ?? "—"}
+                        </span>
+                        {/* The theme carries the link rather than a separate
+                            Open column: this is the only way into a dated
+                            piece from inside the campaign now that stage ③ is
+                            purely the dating workbench. */}
+                        <Link
+                          href={`/clients/${clientId}/schedule/${slot.id}?from=${campaignId}&stage=calendar`}
+                          className="text-sm text-slate-800 flex-1 min-w-0 truncate hover:text-teal-700 transition-colors"
+                        >
+                          {slot.theme || contentTypeLabel(slot.type)}
+                        </Link>
+                        <span className={`${PILL} ${state.pill} shrink-0`}>
+                          {state.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
+}
+
+/**
+ * Where one piece stands with Google.
+ *
+ * Deliberately not statusPill: this is a different axis from a slot's own
+ * status, and colouring them from the same map would make "planned" and
+ * "not pushed" look like the same kind of fact.
+ */
+function syncState(slot: Slot): { label: string; pill: string } {
+  if (slot.google_sync_error) return { label: "failed", pill: "bg-red-100 text-red-600" };
+  switch (slot.google_sync_status) {
+    case "synced":
+      return { label: "on Google", pill: "bg-teal-100 text-teal-700" };
+    case "locked":
+      return { label: "Google owns the text", pill: "bg-amber-100 text-amber-700" };
+    case "stale":
+      return { label: "changed since push", pill: "bg-amber-100 text-amber-700" };
+    case "removed":
+      return { label: "removed in Google", pill: "bg-slate-100 text-slate-500" };
+    default:
+      return { label: "not pushed yet", pill: "bg-slate-100 text-slate-500" };
+  }
 }
