@@ -100,6 +100,8 @@ export const text = {
   muted: "text-sm text-slate-500",
   micro: "text-xs text-slate-400",
   mono: "font-mono text-xs text-slate-500",
+  /** A count in a summary strip. Tabular so columns of figures line up. */
+  stat: "text-2xl text-slate-900 tabular-nums",
 };
 
 /* ---------------------------------------------------------------- banners -- */
@@ -118,6 +120,74 @@ export const table = {
   row: "border-t border-slate-100 hover:bg-stone-50 transition-colors",
   cell: "px-4 py-3 text-sm text-slate-800",
   cellMuted: "px-4 py-3 text-sm text-slate-500",
+};
+
+/* ------------------------------------------------------------------ pager -- */
+
+/**
+ * Previous / next through a list, as one control.
+ *
+ * This was two separate outline buttons reading "‹ Previous" and "Next ›" with
+ * a loose "3 of 8" floating between them — three elements that belong together
+ * and did not look it. A segmented frame with the position inside reads as the
+ * single control it is, and takes about half the width.
+ */
+/**
+ * Back up one level.
+ *
+ * The chevron is a sibling element rather than a "←" baked into the label, so
+ * the icon matches the pager beside it and the label stays plain text that can
+ * be a campaign's name.
+ */
+export const backLink =
+  "inline-flex items-center gap-1 text-sm text-slate-500 hover:text-teal-700 transition-colors";
+
+export const pager = {
+  frame:
+    "inline-flex items-stretch rounded-lg border border-slate-200 bg-white overflow-hidden divide-x divide-slate-200 shrink-0",
+  step:
+    "px-2.5 flex items-center text-slate-500 transition-colors hover:bg-stone-50 hover:text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-slate-500",
+  count:
+    "px-3 py-1.5 flex items-center text-xs text-slate-500 tabular-nums select-none",
+};
+
+/* -------------------------------------------------------------------- nav -- */
+
+/**
+ * The sidebar. Grouped rather than a flat list of seven siblings: the work you
+ * do daily (campaigns, calendar) and the setup you touch once (research,
+ * strategy, branding) are different kinds of thing, and presenting them as
+ * peers is what made the app feel scattered.
+ */
+export const nav = {
+  group: "px-3 pt-5 pb-1.5 text-[10px] uppercase tracking-widest text-slate-400 font-semibold",
+  item: "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-slate-600 hover:bg-stone-100 hover:text-slate-800",
+  itemActive:
+    "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors bg-teal-50 text-teal-700 font-semibold",
+  icon: "text-base leading-none text-slate-400",
+  iconActive: "text-base leading-none text-teal-600",
+};
+
+/* ------------------------------------------------------------------ piece -- */
+
+/**
+ * A written piece — theme, hook, beats, ask.
+ *
+ * Deliberately not a table row. A piece is five fields of prose of wildly
+ * different lengths; squeezing them into one `<td>` is why the plan was
+ * unreadable. The card gives each field its own line and lets the beats be an
+ * actual list.
+ */
+export const piece = {
+  card: "rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-slate-300",
+  /** Dropped, or otherwise out of the plan. */
+  cardMuted: "rounded-xl border border-slate-200 bg-stone-50/70 p-4",
+  meta: "flex items-center gap-2 mb-2",
+  theme: "font-semibold text-slate-900 leading-snug",
+  hook: "text-sm text-slate-700 mt-1.5",
+  beats: "text-sm text-slate-600 mt-2 space-y-1 list-decimal ml-4 marker:text-slate-300",
+  cta: "text-sm text-teal-700 mt-2 font-medium",
+  rationale: "text-xs text-slate-400 mt-2",
 };
 
 /* ------------------------------------------------------------------ shell -- */

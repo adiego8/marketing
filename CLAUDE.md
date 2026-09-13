@@ -1,91 +1,91 @@
-# Handy Set Go — Autonomous Marketing Agent
+# Marketing Agent
 
-## Project Overview
+## What this is
 
-Build an internal autonomous marketing agent for **Handy Set Go** that acts as a virtual CMO — generating daily content, campaign ideas, and strategic recommendations. This is NOT a product for others; it is an internal execution engine focused on awareness, leads, and positioning.
+A **multi-tenant** marketing agent. An agency (or a solopreneur, who is an agency
+with one client) runs it for **any number of client companies** — each with its
+own strategy, campaigns, calendar and voice. Nothing here is specific to one
+business; a client is data, not code.
+
+> It was first sketched as an internal tool for a single company. It is not that
+> any more, and has not been since the multi-tenant model
+> (`docs/specs/2026-04-14-multi-tenant-design.md`). If a prompt, comment or doc
+> still names one company as *the* company, that is drift — fix it.
+
+**The hierarchy:** `agency → members → clients → (strategy, campaigns, plan runs, slots, research)`
 
 ## Goal
 
-A system that runs daily, makes good marketing decisions autonomously, and delivers actionable outputs — posts, hooks, CTAs, campaign ideas, and recommended actions.
+For each client, write the content its active campaigns still owe — the theme,
+the hook, the beats and the ask — and let a human decide what ships and when.
+The agent decides WHAT gets made; the operator decides when it goes out.
 
 ---
 
 ## Architecture
 
-### Daily Autonomous Loop
+Next.js 16 (App Router, Turbopack) + Firestore Admin SDK. Everything lives in
+`app/`. Read `app/AGENTS.md` before writing code — it is the binding one.
 
-1. Load strategy and past context
-2. Decide daily marketing priorities
-3. Generate content (post, hooks, CTA)
-4. Review quality
-5. Store outputs
-6. Deliver daily brief
-7. Capture feedback
+### The loop
 
-### System Components
+```
+research    scrape and read a client's market            → a proposed strategy
+strategy    ICP, voice, positioning, pillars, quota      ← the source of truth
+campaigns   generated, reviewed, accepted                → what the client owes
+plan        preview what every active campaign still owes (undated)
+            drop what you don't want, regenerate it
+            accept the rest                              → slots, date = null
+schedule    a human gives each slot a day and time       → the quota warns, never refuses
+copy        write / regenerate the copy on a slot
+sync        push dated slots to Google Calendar
+```
 
-| Component | Role |
+Dating is deliberately **not** part of generation. Generating and scheduling in
+one pass is what produced pieces attributed to no campaign; see the planner
+header comments and commit `63039e8`.
+
+### Modules (`app/lib/marketing/`)
+
+| Module | Role |
 |---|---|
-| **Scheduler** | Triggers daily run |
-| **Planning Engine** | Decides what to do today based on strategy + context |
-| **Content Generator** | Creates marketing assets |
-| **Review Engine** | Quality control gate |
-| **Persistence Layer** | Database (strategy, runs, assets, campaigns, feedback) |
-| **Delivery Layer** | Dashboard or daily brief output |
+| `research/` | Market research runs → a proposed strategy |
+| `strategy.ts` | Read/write the client strategy document |
+| `campaigns.ts` | Generate, review, accept, complete campaigns |
+| `planner/` | `observe` (what is owed) → `decide` (the idea) → `commit` (slots) |
+| `planner/drop.ts`, `replace.ts` | Drop ideas from a preview and regenerate them |
+| `planner/schedule.ts` | Weekly load and quota warnings (pure) |
+| `slots.ts` | The scheduled pieces, and the human edits to them |
+| `copy.ts`, `write-copy.ts` | The copy on a slot |
+| `calendar.ts`, `google.ts`, `reconcile.ts` | Google Calendar sync, both directions |
+| `export/` | Plan as Markdown / PDF |
 
-### Daily Outputs
+### Firestore collections (database `marketing`)
 
-- 1 main post
-- 2 hook variations
-- 1 CTA
-- 1 campaign idea
-- 1 recommended action
+`marketing_agencies` · `marketing_members` · `marketing_clients` ·
+`marketing_strategies` · `marketing_campaigns` · `marketing_plan_runs` ·
+`marketing_slots` · `marketing_research_runs` · `marketing_google_credentials`
 
-### Core Modules
+The `(default)` database belongs to numerico-website and is read-only here.
 
-- **Strategy Module** — ICP, messaging, positioning
-- **Memory Module** — History, feedback, past performance
-- **Daily Run Service** — Orchestration of the full loop
-- **Planning Engine** — Priority decisions
-- **Content Generator** — Asset creation
-- **Review Engine** — Quality gates
-- **Feedback Module** — Captures human input to improve over time
+### API
 
-### API Endpoints
+Everything client-scoped lives under `/api/v1/clients/{clientId}/…` —
+`strategy`, `research`, `campaigns`, `plan/preview`, `plan/runs/{runId}/…`
+(`drop`, `restore`, `replace`, `commit`), `slots/{slotId}/…` (`schedule`,
+`copy`, `regenerate`), `calendar/sync`. Auth is `/api/v1/auth/*`, Google OAuth
+is `/api/v1/google/*`.
 
-- `POST /api/v1/runs/daily` — Trigger a daily run
-- `GET /api/v1/runs` — List past runs
-- `GET /api/v1/assets` — List generated assets
-- `PATCH /api/v1/assets/{id}` — Update an asset
-- `POST /api/v1/feedback` — Submit feedback on outputs
-- `GET /api/v1/strategy` — Read current strategy
-- `PUT /api/v1/strategy` — Update strategy
-
-### Database Tables
-
-- `strategy` — ICP, voice, positioning, messaging
-- `daily_runs` — Log of each autonomous run
-- `assets` — Generated content (posts, hooks, CTAs, etc.)
-- `campaigns` — Campaign ideas and status
-- `feedback` — Human feedback on outputs
-
-### Folder Structure
+### Folders
 
 ```
-app/
-  api/          # REST endpoints
-  services/     # Business logic (planning, generation, review)
-  db/           # Database models and migrations
-  prompts/      # Prompt templates and skill files
-  workers/      # Scheduler and background jobs
-tests/          # Test suite
+app/app/api/v1/     REST endpoints
+app/app/clients/    the UI, one page per stage of the loop
+app/lib/marketing/  business logic
+app/lib/            firestore, types, api client, auth
+app/prompts/        prompt templates as JSON
+docs/specs/         design specs, newest wins
 ```
-
-### Build Phases
-
-- **Phase 1:** Core generation + strategy loading
-- **Phase 2:** Review engine + storage + UI/brief delivery
-- **Phase 3:** Feedback loop + full daily automation
 
 ---
 
@@ -204,9 +204,18 @@ When the agent (or operator) must choose between options:
 
 ## Development Guidelines
 
-- Start with Phase 1 (core generation + strategy) before adding complexity
-- Every generated asset must pass through the Review Engine before delivery
-- The Strategy Module is the source of truth — all content generation reads from it
-- Feedback captured today improves tomorrow's output
-- Save all research and context as `.md` files for the agent to reference
-- First drafts are starting points — build in rejection/iteration cycles
+- **`app/AGENTS.md` is binding.** Read it, and the Next.js docs it points at,
+  before writing code.
+- **A client is data.** Never hard-code one company's name, voice or market into
+  a prompt, a default or a test fixture. Everything reads from that client's
+  strategy document.
+- The strategy document is the source of truth — campaigns, plans and copy all
+  read from it.
+- Campaigns are the demand. The planner proposes only what an accepted campaign
+  still owes; with no accepted campaign there is nothing to plan.
+- Generation never dates anything. A human schedules.
+- **Nothing is mocked in the tests.** Only pure functions are tested; anything
+  that calls a model or Firestore takes an injected seam.
+- Degrade, never fail: a bad model response yields a warning and a usable
+  skeleton, not an exception.
+- First drafts are starting points — the drop/regenerate cycle exists for that.

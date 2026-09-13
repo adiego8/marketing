@@ -16,6 +16,7 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer";
 import { contentTypeLabel } from "../content-types";
+import { weekLabel } from "../planner/weeks";
 import { readCopy, isCopyStale, copySections } from "../copy";
 import type { Slot } from "../../types";
 import type { PlanDocMeta } from "./plan-markdown";
@@ -168,7 +169,7 @@ function PlanDoc({ slots, meta }: { slots: Slot[]; meta: PlanDocMeta }) {
             // enough to keep whole, and that is where the flag belongs.
             <View key={weekKey}>
               <View style={s.weekHead} wrap={false} minPresenceAhead={80}>
-                <Text style={s.weekKey}>{weekKey}</Text>
+                <Text style={s.weekKey}>{weekLabel(weekKey, meta.timezone)}</Text>
                 <Text style={s.weekCount}>
                   {weekSlots.length} piece{weekSlots.length === 1 ? "" : "s"}
                 </Text>

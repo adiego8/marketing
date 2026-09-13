@@ -66,6 +66,8 @@ describe("planMarkdown", () => {
     expect(planMarkdown([slot()], META)).toContain("**Tue 8 Sep · 09:00**");
   });
 
+  // Still grouped by ISO week key; only the heading reads as dates now, since
+  // the key is how a slot is filed rather than how a week is read.
   it("groups by ISO week in the order given", () => {
     const md = planMarkdown(
       [
@@ -75,8 +77,12 @@ describe("planMarkdown", () => {
       ],
       META
     );
-    expect(md.indexOf("## 2026-W37")).toBeLessThan(md.indexOf("## 2026-W38"));
-    expect(md.match(/## 2026-W37/g)).toHaveLength(1);
+    expect(md.indexOf("## 7 – 13 September")).toBeLessThan(
+      md.indexOf("## 14 – 20 September")
+    );
+    expect(md.match(/## 7 – 13 September/g)).toHaveLength(1);
+    // The key itself must not survive into a document a client reads.
+    expect(md).not.toContain("2026-W37");
   });
 
   it("says so when a theme is missing rather than leaving a blank", () => {
