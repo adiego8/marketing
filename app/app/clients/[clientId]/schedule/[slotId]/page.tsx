@@ -21,7 +21,9 @@ import {
   regenerateSlot,
   writeSlotCopy,
   getClient,
+  scheduleSlot,
 } from "@/lib/api";
+import { windowFor } from "@/lib/marketing/posting-windows";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
 import { readCopy, isCopyStale, copyWarnings } from "@/lib/marketing/copy";
 import { backLink, btn, field, pager, surface, text, banner } from "@/lib/ui";
@@ -120,6 +122,19 @@ export default function SlotDetailPage() {
     setDraft({ ...next, body: [...next.body] });
     setAll((prev) => prev.map((s) => (s.id === next.id ? next : s)));
   };
+
+  /**
+   * The day and time, edited separately from the brief.
+   *
+   * Not part of `draft`: updateSlot deliberately refuses date, time_local and
+   * week_key (slots.ts), because changing when a piece goes out has to
+   * recompute its week key and its UTC instant and mark the Google event
+   * stale. PATCH .../schedule is the one path that does all three, and it
+   * moves an already-dated piece as readily as it dates a new one.
+   */
+  const [when, setWhen] = useState<{ date: string; time: string } | null>(null);
+  const [moving, setMoving] = useState(false);
+  const [quotaNote, setQuotaNote] = useState<string | null>(null);
 
   const patchDraft = (patch: Partial<Slot>) => {
     setDraft((d) => (d ? { ...d, ...patch } : d));
@@ -241,6 +256,35 @@ export default function SlotDetailPage() {
     }
   };
 
+  // Re-seeded from the slot rather than held independently, so a move made
+  // elsewhere (a Google sync adopting a drag, say) shows up here.
+  useEffect(() => {
+    if (!slot) return;
+    setWhen({
+      date: slot.date ?? "",
+      time: slot.time_local ?? windowFor(slot.channel).times[0] ?? "09:00",
+    });
+  }, [slot]);
+
+  const handleMove = async () => {
+    if (!slot || !when?.date) return;
+    setMoving(true);
+    setError(null);
+    setQuotaNote(null);
+    try {
+      const updated = await scheduleSlot(clientId, slot.id, {
+        date: when.date,
+        timeLocal: when.time || undefined,
+      });
+      setQuotaNote(updated.quota_warning ?? null);
+      replaceSlot(updated);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not move this piece");
+    } finally {
+      setMoving(false);
+    }
+  };
+
   const handleStatus = async (status: SlotStatus) => {
     if (!slot || status === slot.status) return;
     setBusy(true);
@@ -358,7 +402,7 @@ export default function SlotDetailPage() {
         <p className={text.eyebrow}>
           {slot.date
             ? `${dayLabel(slot.date)} · ${slot.time_local} · times in ${timezone}`
-            : "Not scheduled — pick a day on the Schedule page"}
+            : "No day yet"}
         </p>
         <h1 className={`${text.h1} mt-1`}>
           {slot.needs_theme || !slot.theme ? "Theme not set" : slot.theme}
@@ -398,6 +442,54 @@ export default function SlotDetailPage() {
       {note && <p className={`${banner.info} mb-4`}>{note}</p>}
 
       <div className="grid gap-4">
+        {/* ------------------------------------------------------- when -- */}
+        <section className={`${surface.card} ${surface.pad}`}>
+          <h2 className={`${text.cardTitle} mb-1`}>When it goes out</h2>
+          <p className="text-sm text-slate-500 mb-3">
+            {slot.date
+              ? "Moving it re-files the piece in its new week and marks the Google event out of date, so the next push moves it."
+              : "Pick a day and this piece joins the calendar. The time comes from the channel's usual posting window."}
+          </p>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={when?.date ?? ""}
+              onChange={(e) =>
+                setWhen((w) => ({ date: e.target.value, time: w?.time ?? "09:00" }))
+              }
+              className={field.select}
+              aria-label="Date"
+            />
+            <input
+              type="time"
+              value={when?.time ?? ""}
+              onChange={(e) =>
+                setWhen((w) => ({ date: w?.date ?? "", time: e.target.value }))
+              }
+              className={field.select}
+              aria-label="Time"
+            />
+            <span className={text.micro}>{timezone}</span>
+            <button
+              onClick={handleMove}
+              disabled={
+                moving ||
+                !when?.date ||
+                // Nothing to do when neither field moved.
+                (when.date === slot.date && when.time === slot.time_local)
+              }
+              className={`${btn.primarySm} ml-auto`}
+            >
+              {moving ? "Moving…" : slot.date ? "Move" : "Schedule"}
+            </button>
+          </div>
+
+          {/* Advice, not a refusal: going over a weekly cap is the operator's
+              call, and the piece has already moved by the time this shows. */}
+          {quotaNote && <p className={`${banner.warn} mt-3`}>{quotaNote}</p>}
+        </section>
+
         {/* -------------------------------------------------------- brief -- */}
         <section className={`${surface.card} ${surface.pad}`}>
           <h2 className={`${text.cardTitle} mb-3`}>The brief</h2>
