@@ -1,5 +1,5 @@
 {
-  "name": "Strategy intake — Handy Set Go marketing agent",
+  "name": "Strategy intake — marketing agent",
   "version": 1,
   "purpose": "Turn raw facts about a company into the strategy document this app stores for a client. Everything the agent writes — campaigns, the schedule, the copy on each slot — reads from that document, so it is the source of truth and worth getting right.",
 

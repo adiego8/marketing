@@ -15,7 +15,8 @@ import {
 } from "@/lib/api";
 import type { CampaignListItem } from "@/lib/types";
 import { banner, btn, field, surface, table, text } from "@/lib/ui";
-import { channelPill, PILL } from "@/lib/ui-status";
+import { PILL } from "@/lib/ui-status";
+import { PieceCard, fromProposed } from "@/components/shared/piece-card";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
 import type { PlanRun, ProposedSlot } from "@/lib/types";
 
@@ -191,8 +192,7 @@ export default function PlanPage() {
     <div className="max-w-5xl">
       <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
-          <p className={text.eyebrow}>Schedule</p>
-          <h1 className={`${text.h1} mt-1`}>Plan</h1>
+          <h1 className={text.h1}>Every campaign at once</h1>
           <p className="text-sm text-slate-500 mt-1">
             {run
               ? `${run.proposed_slots.length} piece${
@@ -403,82 +403,25 @@ export default function PlanPage() {
                   {slots.length}
                 </span>
               </div>
-              <div className={`${surface.table} overflow-x-auto`}>
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-stone-50">
-                      <th className={`${table.head} w-28`}>Channel</th>
-                      <th className={`${table.head} w-24`}>Type</th>
-                      <th className={table.head}>Theme</th>
-                      <th className={`${table.head} w-20`}>
-                        <span className="sr-only">Actions</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {slots.map((slot) => (
-                      <tr key={slot.slotId} className={table.row}>
-                        <td className={table.cell}>
-                          <span className={channelPill(slot.channel)}>
-                            {slot.channel}
-                          </span>
-                        </td>
-                        <td className={table.cell}>
-                          {contentTypeLabel(slot.type)}
-                        </td>
-                        <td className={table.cell}>
-                          {slot.needsTheme ? (
-                            <span className={`${PILL} bg-red-100 text-red-600`}>
-                              needs theme
-                            </span>
-                          ) : (
-                            <>
-                              <p className="font-medium text-slate-800">
-                                {slot.theme}
-                              </p>
-                              {/* Runs predating the piece structure have none
-                                  of these, so each is guarded. */}
-                              {slot.hook && (
-                                <p className="text-sm text-slate-700 mt-1">
-                                  {slot.hook}
-                                </p>
-                              )}
-                              {slot.body?.length > 0 && (
-                                <ol className="text-xs text-slate-500 mt-1 list-decimal ml-4 space-y-0.5">
-                                  {slot.body.map((beat, i) => (
-                                    <li key={i}>{beat}</li>
-                                  ))}
-                                </ol>
-                              )}
-                              {slot.cta && (
-                                <p className="text-xs text-teal-700 mt-1">
-                                  → {slot.cta}
-                                </p>
-                              )}
-                              {slot.rationale && (
-                                <p className="text-xs text-slate-400 mt-1">
-                                  {slot.rationale}
-                                </p>
-                              )}
-                            </>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {/* Nothing is committed yet, so this is not a
-                              destructive action and asks for no confirmation.
-                              Restore is one click away below. */}
-                          <button
-                            onClick={() => handleDrop(slot.slotId)}
-                            disabled={busySlot === slot.slotId || !!run.committed_at}
-                            className={btn.ghost}
-                          >
-                            {busySlot === slot.slotId ? "…" : "Drop"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-3">
+                {slots.map((slot) => (
+                  <PieceCard
+                    key={slot.slotId}
+                    piece={fromProposed(slot)}
+                    action={
+                      /* Nothing is committed yet, so this is not a destructive
+                         action and asks for no confirmation. Putting it back is
+                         one click away below. */
+                      <button
+                        onClick={() => handleDrop(slot.slotId)}
+                        disabled={busySlot === slot.slotId || !!run.committed_at}
+                        className={btn.ghost}
+                      >
+                        {busySlot === slot.slotId ? "…" : "Drop"}
+                      </button>
+                    }
+                  />
+                ))}
               </div>
             </section>
           ))}

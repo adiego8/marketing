@@ -3,7 +3,12 @@ import { getSlot, listSlots, scheduleSlot } from "@/lib/marketing/slots";
 import { quotaWarning, weekLoad } from "@/lib/marketing/planner/schedule";
 import { getStrategy, type QuotaEntry } from "@/lib/marketing/strategy";
 import { windowFor } from "@/lib/marketing/posting-windows";
-import { toUtcInstant, weekKeyOf, zoneOrUTC } from "@/lib/marketing/planner/weeks";
+import {
+  toUtcInstant,
+  weekKeyOf,
+  weekLabel,
+  zoneOrUTC,
+} from "@/lib/marketing/planner/weeks";
 import {
   requireClient,
   jsonError,
@@ -55,7 +60,9 @@ export async function PATCH(request: Request, { params }: Params) {
 
     const others = await listSlots(clientId, { dated: "scheduled" });
     const warning = quotaWarning(
-      weekKey,
+      // The dates, not the key: this string is read by whoever pressed
+      // Schedule, and "2026-W39" does not tell them which days those are.
+      weekLabel(weekKey, zone),
       slot.type,
       weekLoad(
         others.map((s) => ({

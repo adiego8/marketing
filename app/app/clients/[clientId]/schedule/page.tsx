@@ -13,13 +13,17 @@ import {
   downloadPlanPdf,
   writeSlotCopy,
   scheduleSlot,
+  getStrategy,
 } from "@/lib/api";
-import { banner, btn, field, surface, table, toggle, text } from "@/lib/ui";
-import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
+import { banner, btn, field, surface, toggle, text } from "@/lib/ui";
+import { statusPill, statusLabel, PILL } from "@/lib/ui-status";
+import { PieceCard, fromSlot } from "@/components/shared/piece-card";
 import { readCopy, isCopyStale } from "@/lib/marketing/copy";
 import { calendarOpenUrl } from "@/lib/marketing/calendar-links";
 import { planMarkdown, planFilename } from "@/lib/marketing/export/plan-markdown";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
+import { weekLabel } from "@/lib/marketing/planner/weeks";
+import { overCap, type WeeklyCaps } from "@/lib/marketing/planner/schedule";
 import type { Slot, SlotStatus } from "@/lib/types";
 
 // Committed slots. The plan page shows a proposal; this shows what was accepted
@@ -63,6 +67,35 @@ function isoDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * A read-only state word under a piece: sync health, copy readiness.
+ *
+ * These used to stack inside the Schedule table's Status cell alongside a
+ * pill, a select, a link and a button — nine controls under one column header.
+ * They are the same words; they just have room now.
+ */
+function StateLabel({
+  tone,
+  title,
+  children,
+}: {
+  tone: "good" | "warn" | "bad" | "muted";
+  title?: string;
+  children: React.ReactNode;
+}) {
+  const color = {
+    good: "text-teal-700",
+    warn: "text-amber-700",
+    bad: "text-red-700",
+    muted: "text-slate-400",
+  }[tone];
+  return (
+    <span className={`text-[11px] uppercase tracking-wide ${color}`} title={title}>
+      {children}
+    </span>
+  );
+}
+
 export default function SchedulePage() {
   const { clientId } = useParams() as { clientId: string };
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -92,6 +125,9 @@ export default function SchedulePage() {
   const [syncChanges, setSyncChanges] = useState<string[]>([]);
   const [syncWarnings, setSyncWarnings] = useState<string[]>([]);
   const [calendarUrl, setCalendarUrl] = useState<string | null>(null);
+  // The weekly pace, so a week can say when it is over it. Absent is workable:
+  // no quota means the operator chose not to pace this client.
+  const [quota, setQuota] = useState<WeeklyCaps>({});
 
   // Accepted pieces with no day yet. Loaded separately because they match no
   // date range — the ranged call below cannot see them by construction.
@@ -151,6 +187,12 @@ export default function SchedulePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    getStrategy(clientId)
+      .then((st) => setQuota(st?.content_quota?.weekly ?? {}))
+      .catch(() => {});
+  }, [clientId]);
 
   useEffect(() => {
     getClient(clientId)
@@ -338,8 +380,7 @@ export default function SchedulePage() {
     <div className="max-w-5xl">
       <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
-          <p className={text.eyebrow}>Committed</p>
-          <h1 className={`${text.h1} mt-1`}>Schedule</h1>
+          <h1 className={text.h1}>Calendar</h1>
           <p className="text-sm text-slate-500 mt-1">
             {live.length} piece{live.length === 1 ? "" : "s"} scheduled ·{" "}
             {start} to {end} · times in {timezone}
@@ -547,179 +588,155 @@ export default function SchedulePage() {
           <p className="text-slate-500 text-sm mt-1">
             {unscheduled.length > 0
               ? "Give the pieces above a day and they land here."
-              : "Generate a plan and accept it, and the pieces land here waiting for a day."}
+              : "Write a campaign's content and accept it, and the pieces land here waiting for a day."}
           </p>
-          <Link href={`/clients/${clientId}/plan`} className={`${btn.primary} mt-6`}>
-            Open the planner
+          <Link
+            href={`/clients/${clientId}/campaigns`}
+            className={`${btn.primary} mt-6`}
+          >
+            Open campaigns
           </Link>
         </div>
       ) : (
         <div className="space-y-8">
           {Object.entries(byWeek).map(([weekKey, weekSlots]) => (
             <section key={weekKey}>
-              <div className="flex items-center gap-2 mb-3">
-                <h2 className={text.cardTitle}>{weekKey}</h2>
-                <span className={`${PILL} bg-slate-100 text-slate-500`}>
-                  {weekSlots.length}
-                </span>
+              <div className="mb-3">
+                <div className="flex items-baseline gap-2">
+                  {/* The dates, not "2026-W39". The key is how a slot is
+                      filed; it was never how a week is read. */}
+                  <h2 className={text.cardTitle}>
+                    {weekLabel(weekKey, timezone)}
+                  </h2>
+                  <span className={`${PILL} bg-slate-100 text-slate-500`}>
+                    {weekSlots.length}
+                  </span>
+                </div>
+                {/* A week is a unit here only because the quota is weekly, so
+                    the heading says the one thing that makes it one — and only
+                    when there is something to say. */}
+                {overCap(
+                  slots.map((s) => ({
+                    id: s.id,
+                    date: s.date,
+                    weekKey: s.week_key,
+                    type: s.type,
+                    status: s.status,
+                  })),
+                  weekKey,
+                  quota
+                ).map((row) => (
+                  <p key={row.type} className="text-xs text-amber-700 mt-1">
+                    {row.text}
+                  </p>
+                ))}
               </div>
-              <div className={`${surface.table} overflow-x-auto`}>
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-stone-50">
-                      <th className={`${table.head} w-32`}>Date</th>
-                      <th className={`${table.head} w-20`}>Time</th>
-                      <th className={`${table.head} w-28`}>Channel</th>
-                      <th className={`${table.head} w-24`}>Format</th>
-                      <th className={table.head}>Theme</th>
-                      <th className={`${table.head} w-36`}>Campaign</th>
-                      <th className={`${table.head} w-40`}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {weekSlots.map((slot) => {
-                      const dropped =
-                        slot.status === "cancelled" || slot.status === "skipped";
-                      return (
-                        <tr
-                          key={slot.id}
-                          className={`${table.row} ${dropped ? "opacity-50" : ""}`}
-                        >
-                          <td className={`${table.cell} font-medium whitespace-nowrap`}>
-                            <Link
-                              href={`/clients/${clientId}/schedule/${slot.id}?weeks=${weeks}`}
-                              className="hover:text-teal-700 transition-colors"
-                            >
-                              {slot.date ? dayLabel(slot.date) : "—"}
-                            </Link>
-                          </td>
-                          <td className={table.cell}>{slot.time_local}</td>
-                          <td className={table.cell}>
-                            <span className={channelPill(slot.channel)}>
-                              {slot.channel}
+
+              <div className="space-y-3">
+                {weekSlots.map((slot) => {
+                  const dropped =
+                    slot.status === "cancelled" || slot.status === "skipped";
+                  const copy = readCopy(slot);
+                  return (
+                    <PieceCard
+                      key={slot.id}
+                      piece={fromSlot(slot)}
+                      muted={dropped}
+                      showCampaign
+                      lead={
+                        <>
+                          {slot.date ? dayLabel(slot.date) : "—"}
+                          {slot.time_local && (
+                            <span className="text-slate-400 font-normal">
+                              {" "}
+                              {slot.time_local}
                             </span>
-                          </td>
-                          <td className={table.cell}>
-                            {contentTypeLabel(slot.type)}
-                          </td>
-                          <td className={table.cell}>
-                            {slot.needs_theme || !slot.theme ? (
-                              <span className={`${PILL} bg-red-100 text-red-600`}>
-                                needs theme
-                              </span>
-                            ) : (
-                              <>
-                                <p className="font-medium text-slate-800">
-                                  {slot.theme}
-                                </p>
-                                {slot.hook && (
-                                  <p className="text-sm text-slate-700 mt-1">
-                                    {slot.hook}
-                                  </p>
-                                )}
-                                {slot.body?.length > 0 && (
-                                  <ol className="text-xs text-slate-500 mt-1 list-decimal ml-4 space-y-0.5">
-                                    {slot.body.map((beat, i) => (
-                                      <li key={i}>{beat}</li>
-                                    ))}
-                                  </ol>
-                                )}
-                                {slot.cta && (
-                                  <p className="text-xs text-teal-700 mt-1">
-                                    → {slot.cta}
-                                  </p>
-                                )}
-                                {!slot.hook && slot.brief && (
-                                  <p className="text-xs text-slate-500 mt-0.5">
-                                    {slot.brief}
-                                  </p>
-                                )}
-                              </>
-                            )}
-                          </td>
-                          <td className={table.cellMuted}>
-                            {slot.campaign_title ?? "—"}
-                          </td>
-                          <td className={table.cell}>
-                            <div className="flex items-center gap-2">
-                              <span className={statusPill(slot.status)}>
-                                {statusLabel(slot.status)}
-                              </span>
-                              <select
-                                value={slot.status}
-                                disabled={savingId === slot.id}
-                                onChange={(e) =>
-                                  handleStatus(slot, e.target.value as SlotStatus)
-                                }
-                                aria-label={`Status for ${slot.type} on ${slot.date}`}
-                                className={`${field.select} py-1 text-xs`}
+                          )}
+                        </>
+                      }
+                      action={
+                        <Link
+                          href={`/clients/${clientId}/schedule/${slot.id}?weeks=${weeks}`}
+                          className={btn.ghost}
+                        >
+                          Open
+                        </Link>
+                      }
+                      footer={
+                        <>
+                          {/* The pill scans, the select changes. Both were
+                              here before, crushed against seven other controls
+                              in one table cell; on their own line they read as
+                              the pair they are. */}
+                          <span className={statusPill(slot.status)}>
+                            {statusLabel(slot.status)}
+                          </span>
+                          <select
+                            value={slot.status}
+                            disabled={savingId === slot.id}
+                            onChange={(e) =>
+                              handleStatus(slot, e.target.value as SlotStatus)
+                            }
+                            aria-label={`Status for ${contentTypeLabel(slot.type)}${
+                              slot.date ? ` on ${slot.date}` : ""
+                            }`}
+                            className={`${field.select} py-1 text-xs`}
+                          >
+                            {STATUS_CHOICES.map((s) => (
+                              <option key={s} value={s}>
+                                {statusLabel(s)}
+                              </option>
+                            ))}
+                          </select>
+
+                          {copy ? (
+                            <StateLabel
+                              tone={isCopyStale(slot) ? "warn" : "good"}
+                            >
+                              {isCopyStale(slot)
+                                ? "copy is older than the brief"
+                                : "copy ready"}
+                            </StateLabel>
+                          ) : (
+                            !dropped &&
+                            !slot.needs_theme &&
+                            slot.theme && (
+                              <button
+                                onClick={() => handleWriteCopy(slot)}
+                                disabled={writingId === slot.id}
+                                className={btn.outlineSm}
                               >
-                                {STATUS_CHOICES.map((s) => (
-                                  <option key={s} value={s}>
-                                    {statusLabel(s)}
-                                  </option>
-                                ))}
-                              </select>
-                              <Link
-                                href={`/clients/${clientId}/schedule/${slot.id}?weeks=${weeks}`}
-                                className="text-xs font-semibold text-slate-400 hover:text-teal-700 transition-colors"
-                              >
-                                Open
-                              </Link>
-                            </div>
-                            {/* Only where there is work to do, so the button
-                                disappears as a week fills in. */}
-                            {!dropped &&
-                              !readCopy(slot) &&
-                              !slot.needs_theme &&
-                              slot.theme && (
-                                <button
-                                  onClick={() => handleWriteCopy(slot)}
-                                  disabled={writingId === slot.id}
-                                  className={`${btn.outlineSm} mt-1`}
-                                >
-                                  {writingId === slot.id ? "Writing…" : "Write copy"}
-                                </button>
-                              )}
-                            {slot.google_sync_status === "stale" && (
-                              <span className="text-[10px] uppercase tracking-wide text-amber-700">
-                                changed since sync
-                              </span>
+                                {writingId === slot.id
+                                  ? "Writing…"
+                                  : "Write copy"}
+                              </button>
+                            )
+                          )}
+
+                          {slot.google_sync_status === "stale" && (
+                            <StateLabel tone="warn">
+                              changed since sync
+                            </StateLabel>
+                          )}
+                          {slot.google_event_locked && (
+                            <StateLabel tone="warn">google owns text</StateLabel>
+                          )}
+                          {slot.google_sync_status === "removed" &&
+                            slot.status === "cancelled" && (
+                              <StateLabel tone="muted">
+                                removed in google
+                              </StateLabel>
                             )}
-                            {slot.google_event_locked && (
-                              <span className="text-[10px] uppercase tracking-wide text-amber-700">
-                                google owns text
-                              </span>
-                            )}
-                            {slot.google_sync_status === "removed" &&
-                              slot.status === "cancelled" && (
-                                <span className="text-[10px] uppercase tracking-wide text-slate-400">
-                                  removed in google
-                                </span>
-                              )}
-                            {slot.google_sync_error && (
-                              <span
-                                className="text-[10px] uppercase tracking-wide text-red-700"
-                                title={slot.google_sync_error}
-                              >
-                                sync failed
-                              </span>
-                            )}
-                            {readCopy(slot) && (
-                              <span
-                                className={`text-[10px] uppercase tracking-wide ${
-                                  isCopyStale(slot) ? "text-amber-700" : "text-teal-700"
-                                }`}
-                              >
-                                {isCopyStale(slot) ? "copy is older than the brief" : "copy ready"}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          {slot.google_sync_error && (
+                            <StateLabel tone="bad" title={slot.google_sync_error}>
+                              sync failed
+                            </StateLabel>
+                          )}
+                        </>
+                      }
+                    />
+                  );
+                })}
               </div>
             </section>
           ))}

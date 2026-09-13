@@ -24,7 +24,8 @@ import {
 } from "@/lib/api";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
 import { readCopy, isCopyStale, copyWarnings } from "@/lib/marketing/copy";
-import { btn, field, surface, text, banner } from "@/lib/ui";
+import { backLink, btn, field, pager, surface, text, banner } from "@/lib/ui";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
 import type { Slot, SlotStatus } from "@/lib/types";
 
@@ -165,9 +166,20 @@ export default function SlotDetailPage() {
   // here, and the schedule page's OAuth-callback effect explains why —
   // useSearchParams needs a Suspense boundary to prerender.
   const [weeks, setWeeks] = useState<number | null>(null);
+  // Which campaign sent us here, if any. A piece is reachable from the Calendar
+  // and from its own campaign's Schedule stage; "back" has to mean the one you
+  // actually came from, or the trail dumps you somewhere you have never been.
+  const [from, setFrom] = useState<string | null>(null);
+  // Which stage of that campaign sent us, so "back" lands where you left rather
+  // than on whichever stage happens to be the default.
+  const [backStage, setBackStage] = useState("schedule");
   useEffect(() => {
-    const w = Number(new URLSearchParams(window.location.search).get("weeks"));
+    const params = new URLSearchParams(window.location.search);
+    const w = Number(params.get("weeks"));
     setWeeks(Number.isFinite(w) && w > 0 ? w : null);
+    setFrom(params.get("from"));
+    const stage = params.get("stage");
+    if (stage) setBackStage(stage);
   }, []);
 
   const scope = (() => {
@@ -186,8 +198,22 @@ export default function SlotDetailPage() {
   const index = scope.findIndex((s) => s.id === slotId);
   const prev = index > 0 ? scope[index - 1] : null;
   const next = index >= 0 && index < scope.length - 1 ? scope[index + 1] : null;
-  const suffix = weeks ? `?weeks=${weeks}` : "";
-  const backHref = `/clients/${clientId}/schedule${suffix}`;
+  // Carried on every link out of this page, so walking prev/next never loses
+  // the window you were looking at or the campaign you came from.
+  const suffix = (() => {
+    const p = new URLSearchParams();
+    if (weeks) p.set("weeks", String(weeks));
+    if (from) p.set("from", from);
+    if (from && backStage !== "schedule") p.set("stage", backStage);
+    const q = p.toString();
+    return q ? `?${q}` : "";
+  })();
+  const backHref = from
+    ? `/clients/${clientId}/campaigns/${from}?stage=${backStage}`
+    : `/clients/${clientId}/schedule${suffix}`;
+  const backLabel = from
+    ? slot?.campaign_title || "Back to the campaign"
+    : "Back to the calendar";
   const siblingHref = (id: string) =>
     `/clients/${clientId}/schedule/${id}${suffix}`;
 
@@ -280,13 +306,11 @@ export default function SlotDetailPage() {
   if (!slot || !draft) {
     return (
       <div className="max-w-4xl">
-        <Link
-          href={backHref}
-          className="text-sm text-slate-500 hover:text-teal-700 transition-colors mb-3 inline-block"
-        >
-          ← Back to schedule
+        <Link href={backHref} className={`${backLink} mb-3`}>
+          <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+          {backLabel}
         </Link>
-        <p className={banner.error}>This piece is no longer on the schedule.</p>
+        <p className={banner.error}>This piece is no longer on the calendar.</p>
       </div>
     );
   }
@@ -299,33 +323,35 @@ export default function SlotDetailPage() {
   return (
     <div className="max-w-4xl">
       <div className="flex items-center justify-between gap-4 mb-3">
-        <button
-          onClick={() => leave(backHref)}
-          className="text-sm text-slate-500 hover:text-teal-700 transition-colors"
-        >
-          ← Back to schedule
+        <button onClick={() => leave(backHref)} className={backLink}>
+          <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+          {backLabel}
         </button>
-        <span className="flex items-center gap-2 shrink-0">
+        {/* The theme of the piece you are moving to rides on the tooltip, so
+            stepping through is aimed rather than blind. */}
+        <nav aria-label="Pieces in this view" className={pager.frame}>
           <button
             onClick={() => prev && leave(siblingHref(prev.id))}
             disabled={!prev}
-            className={btn.outlineSm}
-            aria-label="Previous piece"
+            className={pager.step}
+            aria-label={prev ? `Previous piece: ${prev.theme || prev.type}` : "Previous piece"}
+            title={prev?.theme || undefined}
           >
-            ‹ Previous
+            <ChevronLeft className="w-4 h-4" aria-hidden="true" />
           </button>
-          <span className="text-xs text-slate-400 tabular-nums">
-            {index + 1} of {scope.length}
+          <span className={pager.count}>
+            {index + 1} / {scope.length}
           </span>
           <button
             onClick={() => next && leave(siblingHref(next.id))}
             disabled={!next}
-            className={btn.outlineSm}
-            aria-label="Next piece"
+            className={pager.step}
+            aria-label={next ? `Next piece: ${next.theme || next.type}` : "Next piece"}
+            title={next?.theme || undefined}
           >
-            Next ›
+            <ChevronRight className="w-4 h-4" aria-hidden="true" />
           </button>
-        </span>
+        </nav>
       </div>
 
       <div className="mb-8">

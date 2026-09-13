@@ -94,8 +94,7 @@ export default function BrandingPage() {
     <div className="max-w-3xl">
       <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
-          <p className={text.eyebrow}>Client</p>
-          <h1 className={`${text.h1} mt-1`}>Branding</h1>
+          <h1 className={text.h1}>Branding</h1>
           <p className="text-sm text-slate-500 mt-1">
             The brand kit used in Canva prompts and calendar event briefs.
           </p>

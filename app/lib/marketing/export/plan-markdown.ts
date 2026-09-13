@@ -1,4 +1,5 @@
 import type { Slot } from "../../types";
+import { weekLabel } from "../planner/weeks";
 import { contentTypeLabel } from "../content-types";
 import { readCopy, isCopyStale, copySections } from "../copy";
 
@@ -86,7 +87,7 @@ export function planMarkdown(slots: Slot[], meta: PlanDocMeta): string {
     }
 
     for (const [weekKey, weekSlots] of byWeek) {
-      lines.push(`## ${weekKey}`);
+      lines.push(`## ${weekLabel(weekKey, meta.timezone)}`);
       lines.push("");
       for (const slot of weekSlots) {
         const heading =
