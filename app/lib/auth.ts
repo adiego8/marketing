@@ -1,4 +1,4 @@
-import { adminAuth, adminInitError } from "./firebase-admin";
+import { adminAuth, adminInitError, numericoDb } from "./firebase-admin";
 import { db, COLLECTIONS, FieldValue } from "./firestore";
 import type { DecodedIdToken } from "firebase-admin/auth";
 
@@ -17,14 +17,14 @@ import type { DecodedIdToken } from "firebase-admin/auth";
 // numerico-website, so a valid ID token only proves the caller is a numerico
 // user; membership in marketing_members is what grants access here.
 //
-// marketing_members is a RECORD, not a rule. Today the first person to sign in
-// claims the agency and becomes its admin, which is what an MVP needs. When
-// billing goes live, numerico grants a `marketer` entitlement on a
-// customers/{id} document — the same rail already carrying engage, handy and
-// mywelltax — and that grant writes the member document here. Routes keep
-// asking one question and only the source of the answer moves, so none of them
-// change. numericoDb in lib/firebase-admin.ts is the handle for reading those
-// entitlements when that lands.
+// marketing_members is a RECORD, not a rule. numerico grants the `marketing`
+// product on a customers/{id} document — the same entitlement rail that carries
+// engage, handy and mywelltax — and ensureMember materialises that grant into a
+// member record on sign-in, provisioning the customer as admin of their own
+// agency. Routes keep asking one question (getSession -> marketing_members);
+// only the source of the answer is the entitlement. numericoDb in
+// lib/firebase-admin.ts is the read-only handle for those entitlements. A staff
+// allowlist (MARKETING_STAFF_UIDS) covers numerico's own team off the rail.
 
 export interface Session {
   uid: string;
@@ -125,67 +125,118 @@ export async function getClientForSession(
   }
 }
 
-// Called on every token change from the browser. Creates the membership record
-// on first sign-in: the very first user to arrive bootstraps an agency and
-// becomes its admin; anyone after that is refused until an admin invites them,
-// so a numerico-website user cannot self-serve into this app.
+const MARKETING_KEY = "marketing";
+
+// Staff allowlist: uids or emails that get in regardless of the customer
+// entitlement rail, for numerico's own team. Comma-separated in
+// MARKETING_STAFF_UIDS; unset (the default) means the entitlement is the only
+// way in. Compared case-insensitively.
+function isStaff(decoded: DecodedIdToken): boolean {
+  const allow = new Set(
+    (process.env.MARKETING_STAFF_UIDS ?? "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+  );
+  if (allow.size === 0) return false;
+  if (allow.has(decoded.uid.toLowerCase())) return true;
+  const email = decoded.email?.trim().toLowerCase();
+  return Boolean(email && allow.has(email));
+}
+
+// Read-only lookup against numerico-website's Firestore: does this person's
+// customer record carry an ACTIVE `marketing` entitlement? Mirrors numerico's
+// own resolveCustomerForUser order — by ownerUid first, then a lowercased email
+// match so an as-yet-unlinked customer still resolves. Returns the customer id
+// (used as the agency's stable key) or null. Never writes to numericoDb.
+async function findMarketingCustomerId(
+  uid: string,
+  email: string | null
+): Promise<string | null> {
+  if (!numericoDb) return null;
+  const customers = numericoDb.collection("customers");
+
+  let snap = await customers.where("ownerUid", "==", uid).limit(1).get();
+  if (snap.empty && email) {
+    snap = await customers.where("email", "==", email.trim().toLowerCase()).limit(1).get();
+  }
+  if (snap.empty) return null;
+
+  const entitlements = snap.docs[0].data().entitlements;
+  if (!Array.isArray(entitlements)) return null;
+
+  const active = entitlements.some(
+    (e) => e?.key === MARKETING_KEY && e?.status === "active"
+  );
+  return active ? snap.docs[0].id : null;
+}
+
+// Called on every token change from the browser (sign-in and each token
+// refresh). Resolves marketing membership from numerico's entitlement rail:
+// a customer granted the `marketing` product — or a member of the staff
+// allowlist — is admitted and, on first arrival, provisioned as the admin of
+// their OWN agency. Removing the entitlement revokes access on the next
+// sign-in/refresh by deleting the member record (getSession then denies from
+// the following request on). Returns null for anyone without access, so the
+// route answers 403.
 export async function ensureMember(decoded: DecodedIdToken): Promise<Session | null> {
   const memberRef = db().collection(COLLECTIONS.members).doc(decoded.uid);
+  const email = decoded.email ?? null;
+
+  // Grant source: staff allowlist, or an active `marketing` entitlement on the
+  // linked numerico customer. The customer id doubles as the agency's stable key.
+  const staff = isStaff(decoded);
+  const customerId = staff ? null : await findMarketingCustomerId(decoded.uid, email);
+  const entitled = staff || customerId !== null;
+
   const existing = await memberRef.get();
+
+  if (!entitled) {
+    // Revoke: someone who had access but no longer qualifies loses their record.
+    if (existing.exists) await memberRef.delete();
+    return null;
+  }
 
   if (existing.exists) {
     const data = existing.data() ?? {};
     if (!data.agencyId) return null;
     // Keep the denormalised email fresh; it is what the members list displays.
-    if (decoded.email && data.email !== decoded.email) {
-      await memberRef.update({ email: decoded.email });
+    if (email && data.email !== email) {
+      await memberRef.update({ email });
     }
     return {
       uid: decoded.uid,
-      email: decoded.email ?? null,
+      email,
       agencyId: String(data.agencyId),
       role: String(data.role ?? "member"),
     };
   }
 
-  // Bootstrap is gated on there being no MEMBERS, not no agencies.
-  //
-  // Gating on agencies locks everyone out permanently the moment an agency
-  // document exists without a member to go with it — which the seed script
-  // does, and which any half-finished setup would too. Nobody could then sign
-  // in to claim it, and nobody could be invited, because inviting requires an
-  // admin who cannot exist.
-  const members = await db().collection(COLLECTIONS.members).limit(1).get();
-  if (!members.empty) return null; // someone is already here: membership is by invitation
+  // First admit: provision the tenant. The agency doc id is derived from the
+  // grant source (numerico customer id, or the uid for staff) so repeated
+  // sign-ins are idempotent — no duplicate agencies. Agency + member are written
+  // together in a transaction; the agency is created only if absent.
+  const agencyId = customerId ? `cust_${customerId}` : `staff_${decoded.uid}`;
+  const agencyRef = db().collection(COLLECTIONS.agencies).doc(agencyId);
 
-  // Adopt an ownerless agency if one is sitting there, rather than creating a
-  // second one beside it.
-  const agencies = await db().collection(COLLECTIONS.agencies).limit(1).get();
-  let agencyId: string;
-
-  if (!agencies.empty) {
-    agencyId = agencies.docs[0].id;
-  } else {
-    const agencyRef = db().collection(COLLECTIONS.agencies).doc();
-    await agencyRef.set({
-      name: decoded.email ? `${decoded.email.split("@")[0]}'s agency` : "My agency",
+  await db().runTransaction(async (tx) => {
+    const agencySnap = await tx.get(agencyRef);
+    if (!agencySnap.exists) {
+      tx.set(agencyRef, {
+        name: decoded.name ?? (email ? email.split("@")[0] : "My agency"),
+        numericoCustomerId: customerId,
+        ownerUid: decoded.uid,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    tx.set(memberRef, {
+      agencyId,
+      email,
+      name: decoded.name ?? null,
+      role: "admin",
       createdAt: FieldValue.serverTimestamp(),
     });
-    agencyId = agencyRef.id;
-  }
-
-  await memberRef.set({
-    agencyId,
-    email: decoded.email ?? null,
-    name: decoded.name ?? null,
-    role: "admin",
-    createdAt: FieldValue.serverTimestamp(),
   });
 
-  return {
-    uid: decoded.uid,
-    email: decoded.email ?? null,
-    agencyId,
-    role: "admin",
-  };
+  return { uid: decoded.uid, email, agencyId, role: "admin" };
 }
