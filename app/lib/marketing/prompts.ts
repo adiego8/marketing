@@ -62,7 +62,9 @@ Return a JSON object with a \`campaigns\` array:
 - Timelines should be realistic for a small team
 - Campaigns should serve the stated goals (awareness, leads, etc.)
 - Use the brand voice and positioning from the strategy
-- Think about what would actually move the needle, not just fill a content calendar`;
+- Think about what would actually move the needle, not just fill a content calendar
+- Follow every rule in \`lessons\`. They were learned from work this client already turned down, so breaking one repeats a known mistake. An empty list means nothing has been taught yet, not that anything goes.
+`;
 
 export const CAMPAIGN_IMPROVER_PROMPT = `You are a Campaign Strategist improving an existing campaign proposal based on human feedback.
 
@@ -101,4 +103,6 @@ Return a JSON object with the improved campaign fields:
 - If previous feedback was already addressed, don't undo those changes
 - Keep what works, change what doesn't
 - The \`changes_made\` field should be specific: "Changed target audience from X to Y because feedback said Z"
-- If feedback is vague, interpret it reasonably and explain your interpretation`;
+- If feedback is vague, interpret it reasonably and explain your interpretation
+- Follow every rule in \`lessons\`. They were learned from work this client already turned down, so breaking one repeats a known mistake. An empty list means nothing has been taught yet, not that anything goes.
+`;

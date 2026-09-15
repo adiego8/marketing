@@ -22,6 +22,7 @@ import {
   type ReplaceResult,
 } from "./drop";
 import { getPlanRun, loadRecentThemes, updatePlanRunSlots } from "./plan-runs";
+import { lessonsForPrompt } from "../lessons-store";
 import { REPLACE_DROPPED_PROMPT } from "./prompt";
 import type { DroppedSlot } from "../../types";
 
@@ -139,6 +140,7 @@ export async function replaceDropped(
 
   const gaps = buildReplaceGaps(targets);
   const payload = {
+    lessons: await lessonsForPrompt(clientId, "plan_themes"),
     rejected: buildRejectedPayload(targets),
     gaps,
     content_pillars: Array.isArray(contentStrategy.content_pillars)

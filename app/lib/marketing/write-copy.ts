@@ -6,6 +6,9 @@
 // call and the two guards around it.
 
 import { llmJson, DEFAULT_MODEL } from "./llm";
+import { recordSignal } from "./signals";
+import { snapshotOf } from "./lessons";
+import { lessonsForPrompt } from "./lessons-store";
 import { getStrategy } from "./strategy";
 import { getSlot, updateSlot } from "./slots";
 import { SlotNotFoundError } from "./planner/regenerate";
@@ -57,7 +60,9 @@ export interface WriteCopyOptions {
 export function buildCopyPayload(
   slot: Slot,
   strategy: Record<string, unknown> | null,
-  opts: WriteCopyOptions
+  opts: WriteCopyOptions,
+  /** Rules taught for this client. Always passed, often empty. */
+  lessons: string[] = []
 ) {
   const limits = limitsFor(slot.channel);
   return {
@@ -70,6 +75,7 @@ export function buildCopyPayload(
       cta: slot.cta,
     },
     steer: opts.steer?.trim() || "",
+    lessons,
     campaign: slot.campaign_id
       ? { campaign_id: slot.campaign_id, title: slot.campaign_title }
       : null,
@@ -100,7 +106,30 @@ export async function writeCopy(
   }
 
   const strategy = await getStrategy(clientId);
-  const payload = buildCopyPayload(slot, strategy as Record<string, unknown> | null, opts);
+
+  // A steer on a piece that already has copy is a rejection of that copy. On a
+  // first write it is just direction, not feedback, so it teaches nothing.
+  if (opts.steer?.trim() && slot.content) {
+    await recordSignal({
+      clientId,
+      kind: "steered",
+      scope: "copy",
+      type: slot.type,
+      channel: slot.channel,
+      slotId: slot.id,
+      campaignId: slot.campaign_id,
+      planRunId: slot.plan_run_id,
+      reason: opts.steer,
+      before: snapshotOf(slot),
+    });
+  }
+
+  const payload = buildCopyPayload(
+    slot,
+    strategy as Record<string, unknown> | null,
+    opts,
+    await lessonsForPrompt(clientId, "copy")
+  );
 
   let raw: unknown;
   try {

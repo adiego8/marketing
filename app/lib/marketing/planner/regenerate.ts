@@ -12,6 +12,9 @@ import { getSlot, updateSlot } from "../slots";
 import { isChannel, type Channel } from "../posting-windows";
 import { parseFills, type GapRequest } from "./decide";
 import { loadRecentThemes } from "./plan-runs";
+import { recordSignal } from "../signals";
+import { snapshotOf } from "../lessons";
+import { lessonsForPrompt } from "../lessons-store";
 import { REGENERATE_SLOT_PROMPT } from "./prompt";
 import type { Slot } from "../../types";
 
@@ -85,6 +88,7 @@ export async function regenerateSlot(
     gap_id: gap.gap_id,
     mode: opts.mode,
     steer: opts.steer?.trim() || "",
+    lessons: await lessonsForPrompt(clientId, "plan_themes"),
     slot: {
       type: slot.type,
       channel: slot.channel,
@@ -107,6 +111,23 @@ export async function regenerateSlot(
       positioning: strategy?.positioning ?? {},
     },
   };
+
+  // Recorded before the call, not after: asking for a rewrite IS the rejection,
+  // and it happened whether or not the model manages to answer.
+  if (opts.steer?.trim()) {
+    await recordSignal({
+      clientId,
+      kind: "steered",
+      scope: "plan_themes",
+      type: slot.type,
+      channel: slot.channel,
+      slotId,
+      campaignId: slot.campaign_id,
+      planRunId: slot.plan_run_id,
+      reason: opts.steer,
+      before: snapshotOf(slot),
+    });
+  }
 
   let raw: unknown;
   try {

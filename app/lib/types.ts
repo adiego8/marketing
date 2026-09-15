@@ -363,3 +363,83 @@ export interface ResearchRun {
   accepted_at: string | null;
   created_at: string;
 }
+
+/* ----------------------------------------------------- the feedback loop -- */
+//
+// An episode becomes a Signal; several signals justify a Lesson; lessons are
+// what the agent actually writes against. Raw feedback is never fed back into a
+// prompt — it grows without bound, accumulates contradictions and cannot be
+// retired.
+
+/** Which prompt a lesson applies to. */
+export type LessonScope = "campaign_ideas" | "plan_themes" | "copy";
+
+export const LESSON_SCOPES: LessonScope[] = [
+  "campaign_ideas",
+  "plan_themes",
+  "copy",
+];
+
+export type SignalKind =
+  /** A generated piece was rewritten by hand. The strongest signal: it shows
+      the target rather than the miss. */
+  | "edited"
+  /** A proposed piece was dropped before it was ever accepted. */
+  | "dropped"
+  /** A drop was put back — the rejection itself was wrong. */
+  | "restored"
+  /** A rewrite was asked for with a direction. */
+  | "steered"
+  /** A piece was skipped or cancelled after being accepted. */
+  | "retired";
+
+/** The fields of a piece a person can disagree with. */
+export interface BriefSnapshot {
+  theme: string;
+  hook: string;
+  body: string[];
+  cta: string;
+}
+
+export interface Signal {
+  id: string;
+  client_id: string;
+  kind: SignalKind;
+  scope: LessonScope;
+  /** What kind of piece it was, so a rule can be about reels specifically. */
+  type: string;
+  channel: string;
+  slot_id: string | null;
+  campaign_id: string | null;
+  plan_run_id: string | null;
+  /** A drop reason or a steer. Empty when the episode carried no words. */
+  reason: string;
+  /** Edits only: what the agent wrote, and what it became. */
+  before: BriefSnapshot | null;
+  after: BriefSnapshot | null;
+  /** Which fields actually changed. Empty for everything but an edit. */
+  changed: string[];
+  created_at: string;
+}
+
+export interface Lesson {
+  id: string;
+  client_id: string;
+  /** One short imperative rule. A model obeys a rule; it ignores a paragraph. */
+  text: string;
+  scope: LessonScope;
+  status: "active" | "retired";
+  /** "distilled" is Phase 3 — an LLM proposing lessons from signals. */
+  source: "written" | "distilled";
+  /**
+   * Written from the first day and never read.
+   *
+   * Agency-wide house rules ("we never write 'leverage'") become a filter
+   * change rather than a migration, which is the only reason this exists now.
+   */
+  owner: "client" | "agency";
+  evidence: string[];
+  evidence_count: number;
+  created_at: string;
+  retired_at: string | null;
+}

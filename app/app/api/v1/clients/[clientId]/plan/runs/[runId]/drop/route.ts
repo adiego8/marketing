@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPlanRun, updatePlanRunSlots } from "@/lib/marketing/planner/plan-runs";
 import { applyDrops, parseDrops } from "@/lib/marketing/planner/drop";
+import { recordSignal } from "@/lib/marketing/signals";
 import {
   requireClient,
   jsonError,
@@ -48,6 +49,31 @@ export async function POST(request: Request, { params }: Params) {
       droppedSlots: result.dropped,
     });
     if (!updated) return jsonError("Plan run not found", 404);
+
+    // One signal per dropped piece, keyed on (run, slot) so the reason typed
+    // after the drop merges into the same episode rather than reading back as
+    // a second rejection of the same idea.
+    for (const drop of drops) {
+      const entry = result.dropped.find((d) => d.slotId === drop.slotId);
+      if (!entry) continue;
+      await recordSignal({
+        clientId,
+        kind: "dropped",
+        scope: "plan_themes",
+        type: entry.type,
+        channel: entry.channel,
+        slotId: entry.slotId,
+        campaignId: entry.campaignId,
+        planRunId: runId,
+        reason: entry.reason,
+        before: {
+          theme: entry.theme,
+          hook: entry.hook ?? "",
+          body: entry.body ?? [],
+          cta: entry.cta ?? "",
+        },
+      });
+    }
 
     return NextResponse.json({ ...updated, drop_warnings: result.warnings });
   } catch (error) {

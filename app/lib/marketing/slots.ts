@@ -5,6 +5,8 @@
 // applies the small set of edits a human is allowed to make.
 
 import { db, COLLECTIONS, FieldValue, serializeSlot } from "../firestore";
+import { recordSignal } from "./signals";
+import { diffBrief, snapshotOf } from "./lessons";
 import { SLOT_STATUSES, type SlotStatus } from "./planner/types";
 import type { Slot } from "../types";
 
@@ -185,7 +187,63 @@ export async function updateSlot(
   }
 
   await db().collection(COLLECTIONS.slots).doc(slotId).update(update);
-  return getSlot(clientId, slotId);
+  const saved = await getSlot(clientId, slotId);
+
+  // The feedback loop's richest input, and it costs one comparison. A drop says
+  // "not this"; an edit says "this instead", which is the only signal that
+  // shows the target rather than the miss.
+  //
+  // `existing` is the agent's output on the FIRST save and the person's own
+  // previous draft on every save after. recordSignal is what makes that safe:
+  // edit signals collapse onto one document per slot and keep the first
+  // `before`, so a piece worked over five times stays one episode measured
+  // from what the agent actually wrote.
+  //
+  // byHuman is what separates the two — a regenerate goes through here too, and
+  // the model disagreeing with itself is not feedback.
+  if (byHuman && saved) {
+    const before = snapshotOf(existing);
+    const after = snapshotOf(saved);
+    const changed = diffBrief(before, after);
+    if (changed.length > 0) {
+      await recordSignal({
+        clientId,
+        kind: "edited",
+        // A hand-edited brief is a judgement about how pieces should read, so
+        // it teaches theme-writing rather than campaign strategy.
+        scope: "plan_themes",
+        type: saved.type,
+        channel: saved.channel,
+        slotId,
+        campaignId: saved.campaign_id,
+        planRunId: saved.plan_run_id,
+        before,
+        after,
+        changed,
+      });
+    }
+
+    // Skipping or cancelling after acceptance is a late rejection: the piece
+    // survived the preview and still did not run.
+    if (patch.status === "skipped" || patch.status === "cancelled") {
+      if (existing.status !== patch.status) {
+        await recordSignal({
+          clientId,
+          kind: "retired",
+          scope: "plan_themes",
+          type: saved.type,
+          channel: saved.channel,
+          slotId,
+          campaignId: saved.campaign_id,
+          planRunId: saved.plan_run_id,
+          reason: patch.status,
+          before: snapshotOf(saved),
+        });
+      }
+    }
+  }
+
+  return saved;
 }
 
 /* ----------------------------------------------------- reconciliation --- */

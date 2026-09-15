@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { expandGapIds, parseFills, skeletonFills, chunkRequest, type GapRequest } from "./decide";
+import {
+  expandGapIds,
+  parseFills,
+  skeletonFills,
+  chunkRequest,
+  buildDecideRequest,
+  type GapRequest,
+} from "./decide";
 import {
   MAX_BODY_ITEMS,
   MAX_BODY_ITEM_CHARS,
@@ -64,6 +71,7 @@ describe("chunkRequest", () => {
     content_pillars: [],
     campaigns: [],
     recent_themes: [],
+    lessons: [],
   };
 
   it("leaves a small request in one call", () => {
@@ -257,5 +265,35 @@ describe("parseFills — the piece structure", () => {
     expect(skeleton.hook).toBe("");
     expect(skeleton.body).toEqual([]);
     expect(skeleton.cta).toBe("");
+  });
+});
+
+describe("buildDecideRequest — lessons", () => {
+  const observation = {
+    demand: [],
+    campaigns: [],
+    totalOutstanding: 0,
+    warnings: [],
+  } as unknown as Parameters<typeof buildDecideRequest>[0];
+
+  const context = {
+    business: {},
+    pillars: [],
+    recentThemes: [],
+    lessons: ["Never open with the product name."],
+  };
+
+  it("carries what the client has taught into the payload", () => {
+    const request = buildDecideRequest(observation, [], context);
+    expect(request.lessons).toEqual(["Never open with the product name."]);
+  });
+
+  // The steer convention in this codebase: the key is always present, so the
+  // prompt never has to reason about a missing one. A silently dropped key is
+  // exactly the failure this whole feature would die of.
+  it("sends an empty array rather than omitting the key", () => {
+    const request = buildDecideRequest(observation, [], { ...context, lessons: [] });
+    expect(request).toHaveProperty("lessons");
+    expect(request.lessons).toEqual([]);
   });
 });

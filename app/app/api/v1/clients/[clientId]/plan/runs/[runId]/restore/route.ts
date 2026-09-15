@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPlanRun, updatePlanRunSlots } from "@/lib/marketing/planner/plan-runs";
 import { applyRestores, parseSlotIds } from "@/lib/marketing/planner/drop";
+import { recordSignal } from "@/lib/marketing/signals";
 import {
   requireClient,
   jsonError,
@@ -38,6 +39,22 @@ export async function POST(request: Request, { params }: Params) {
       droppedSlots: result.dropped,
     });
     if (!updated) return jsonError("Plan run not found", 404);
+
+    // A reversal. Recorded because it is evidence AGAINST whatever the drop
+    // seemed to teach — without it, a rejection you took back still counts
+    // towards a rule.
+    for (const slot of result.proposed.filter((p) => slotIds.includes(p.slotId))) {
+      await recordSignal({
+        clientId,
+        kind: "restored",
+        scope: "plan_themes",
+        type: slot.type,
+        channel: slot.channel,
+        slotId: slot.slotId,
+        campaignId: slot.campaignId,
+        planRunId: runId,
+      });
+    }
 
     return NextResponse.json({ ...updated, drop_warnings: result.warnings });
   } catch (error) {
