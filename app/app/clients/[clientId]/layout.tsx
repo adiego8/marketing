@@ -96,6 +96,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         { href: `${prefix}/research`, label: "Research", icon: "◍" },
         { href: `${prefix}/strategy`, label: "Strategy", icon: "◎" },
         { href: `${prefix}/branding`, label: "Branding", icon: "◐" },
+        { href: `${prefix}/learned`, label: "Learned", icon: "◑" },
       ],
     },
   ];

@@ -8,6 +8,9 @@ import type {
   SlotStatus,
   PlanRun,
   ResearchRun,
+  Lesson,
+  LessonScope,
+  Signal,
 } from "./types";
 
 import { auth } from "./firebase";
@@ -146,6 +149,39 @@ export const previewPlan = (clientId: string) =>
 
 export const listPlanRuns = (clientId: string, limit = 20) =>
   request<PlanRun[]>(`${c(clientId)}/plan/runs?limit=${limit}`);
+
+/* ------------------------------------------------------ the feedback loop -- */
+
+export const listLessons = (clientId: string) =>
+  request<Lesson[]>(`${c(clientId)}/lessons`);
+
+export const createLesson = (
+  clientId: string,
+  lesson: { text: string; scope: LessonScope }
+) =>
+  request<Lesson>(`${c(clientId)}/lessons`, {
+    method: "POST",
+    body: JSON.stringify(lesson),
+  });
+
+export const updateLesson = (
+  clientId: string,
+  lessonId: string,
+  patch: { text?: string; scope?: LessonScope; status?: "active" | "retired" }
+) =>
+  request<Lesson>(`${c(clientId)}/lessons/${lessonId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+
+export const deleteLesson = (clientId: string, lessonId: string) =>
+  request<{ deleted: boolean }>(`${c(clientId)}/lessons/${lessonId}`, {
+    method: "DELETE",
+  });
+
+/** The evidence behind the lessons. Read-only: signals are written by actions. */
+export const listSignals = (clientId: string, limit = 200) =>
+  request<Signal[]>(`${c(clientId)}/signals?limit=${limit}`);
 
 export const getPlanRun = (clientId: string, runId: string) =>
   request<PlanRun>(`${c(clientId)}/plan/runs/${runId}`);

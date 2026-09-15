@@ -1,6 +1,7 @@
 import { isChannel, type Channel } from "../posting-windows";
 import { listCampaigns } from "../campaigns";
 import { getStrategy } from "../strategy";
+import { lessonsForPrompt } from "../lessons-store";
 import type { QuotaEntry } from "../strategy";
 import { buildDecideRequest, decide, type DecideFn } from "./decide";
 import { observe } from "./observe";
@@ -57,6 +58,8 @@ export interface PlannerInputs {
   business: Record<string, unknown>;
   strategyChannels: Channel[];
   recentThemes: { date: string | null; type: string; theme: string }[];
+  /** What the Learned page has taught for this client. */
+  lessons: string[];
   /** Only for stamping proposed slots; nothing here computes a date. */
   timezone: string;
 }
@@ -111,6 +114,7 @@ export async function planFromInputs(
     recentThemes: inputs.recentThemes
       .filter((t): t is { date: string; type: string; theme: string } => t.date !== null)
       .map((t) => ({ date: t.date, type: t.type, theme: t.theme })),
+    lessons: inputs.lessons,
   });
 
   const started = Date.now();
@@ -195,10 +199,11 @@ export async function previewPlan(clientId: string, opts: { timezone: string }) 
   // happens later and by hand. An empty one is entirely workable.
   const quota = (strategy.content_quota?.weekly ?? {}) as Record<string, QuotaEntry>;
 
-  const [allCampaigns, slots, recentThemes] = await Promise.all([
+  const [allCampaigns, slots, recentThemes, lessons] = await Promise.all([
     listCampaigns(clientId, "active"),
     loadPlannerSlots(clientId),
     loadRecentThemes(clientId),
+    lessonsForPrompt(clientId, "plan_themes"),
   ]);
 
   if (allCampaigns.length === 0) throw new NoActiveCampaignsError();
@@ -228,6 +233,7 @@ export async function previewPlan(clientId: string, opts: { timezone: string }) 
       ? (contentStrategy.platforms.filter(isChannel) as Channel[])
       : [],
     recentThemes,
+    lessons,
   });
 
   return createPlanRun(clientId, {

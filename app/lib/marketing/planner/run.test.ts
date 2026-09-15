@@ -69,6 +69,7 @@ function inputs(over: Partial<PlannerInputs> = {}): PlannerInputs {
     timezone: NY,
     quota: { post: { count: 3, channels: ["linkedin"] } },
     slots: [],
+    lessons: [],
     campaigns: [CAMPAIGN],
     pillars: ["operator playbooks"],
     business: { name: "Test Co" },

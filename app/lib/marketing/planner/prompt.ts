@@ -20,6 +20,7 @@ Nothing here is scheduled. You are writing the content a campaign asked for; a p
 - \`content_pillars\`: recurring themes for this brand.
 - \`recent_themes\`: what has already been written, so you do not repeat it.
 - The brand's ICP, voice and positioning.
+- \`lessons\`: rules this client has taught, from past pieces they rejected or rewrote. Binding: they override your general instinct, and they beat the examples above wherever the two disagree.
 
 ## What you return
 
@@ -65,6 +66,7 @@ A JSON object with a \`fills\` array containing **exactly one entry per gap_id**
 - Do not repeat anything in \`recent_themes\`.
 - The whole set is read together before any of it is scheduled, so it should read as a body of work for that campaign, not N variations on its key message.
 - Use the brand's voice. Avoid the words listed in \`voice.words_to_avoid\`.
+- Follow every rule in \`lessons\`. They were learned from work this client already turned down, so breaking one repeats a known mistake. An empty list means nothing has been taught yet, not that anything goes.
 
 ## What each part means, per format
 
@@ -103,6 +105,7 @@ The date, the time, the channel and the format are already decided. They are giv
 - \`steer\`: what the operator wants different, in their words. May be empty.
 - \`campaign\`: the campaign this piece serves, or null.
 - \`content_pillars\`, \`recent_themes\`, and the brand's ICP, voice and positioning.
+- \`lessons\`: rules this client has taught, from past pieces they rejected or rewrote. Binding: they override your general instinct, and they beat the examples above wherever the two disagree.
 
 ## Mode
 
@@ -142,6 +145,7 @@ A JSON object with a \`fills\` array containing exactly one entry, using the \`g
 - Never return a date, a time, or a day of the week.
 - Do not repeat anything in \`recent_themes\`.
 - Use the brand's voice. Avoid the words listed in \`voice.words_to_avoid\`.
+- Follow every rule in \`lessons\`. They were learned from work this client already turned down, so breaking one repeats a known mistake. An empty list means nothing has been taught yet, not that anything goes.
 
 ## What each part means, for this format
 
@@ -183,6 +187,7 @@ The date, the time, the channel and the format of each slot are already decided.
 - \`rejected\`: one entry per slot, each with its \`gap_id\`, its \`type\` and \`channel\`, the \`theme\`, \`hook\`, \`body\` and \`cta\` that were turned down, and \`reason\` — why, in the operator's words. \`reason\` may be empty.
 - \`gaps\`: the slots to fill, matching \`rejected\` by \`gap_id\`.
 - \`content_pillars\`, \`recent_themes\`, and the brand's ICP, voice and positioning.
+- \`lessons\`: rules this client has taught, from past pieces they rejected or rewrote. Binding: they override your general instinct, and they beat the examples above wherever the two disagree.
 
 ## What you return
 
@@ -218,6 +223,7 @@ A JSON object with a \`fills\` array containing **exactly one entry per gap_id**
 - \`theme\` at most 120 characters, \`brief\` at most 500, \`rationale\` at most 240.
 - Never return a date, a time, or a day of the week.
 - Use the brand's voice. Avoid the words listed in \`voice.words_to_avoid\`.
+- Follow every rule in \`lessons\`. They were learned from work this client already turned down, so breaking one repeats a known mistake. An empty list means nothing has been taught yet, not that anything goes.
 
 ## What each part means, per format
 
@@ -261,6 +267,7 @@ The date, the time, the channel and the format are also fixed. They are given so
 - \`campaign\`: the campaign this piece serves, or null.
 - \`limits\`: what this platform accepts. Stay inside them.
 - The brand's ICP, voice and positioning.
+- \`lessons\`: rules this client has taught, from past pieces they rejected or rewrote. Binding: they override your general instinct, and they beat the examples above wherever the two disagree.
 
 ## What you return
 
@@ -307,6 +314,7 @@ A JSON object. Every field is the finished text, exactly as it would be publishe
 - If \`steer\` is non-empty, it is the most important instruction here. Do what it says.
 - Use the brand's voice. Avoid the words listed in \`voice.words_to_avoid\`, and avoid "delve", "landscape", "paradigm", "tapestry", "unlock", "leverage" and "game-changing" whether or not they are listed.
 - Never return a date, a time, or a day of the week.
+- Follow every rule in \`lessons\`. They were learned from work this client already turned down, so breaking one repeats a known mistake. An empty list means nothing has been taught yet, not that anything goes.
 
 ## What each part means, per format
 

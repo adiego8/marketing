@@ -46,6 +46,13 @@ export interface GapRequest {
 export interface DecideRequest {
   business: Record<string, unknown>;
   content_pillars: string[];
+  /**
+   * Rules this client has taught the agent, from the Learned page.
+   *
+   * Always present, empty when nothing has been taught — the same convention
+   * as `steer`, so the prompt never has to reason about a missing key.
+   */
+  lessons: string[];
   campaigns: Record<string, unknown>[];
   recent_themes: { date: string; type: string; theme: string }[];
   gaps: GapRequest[];
@@ -91,6 +98,8 @@ export function buildDecideRequest(
     business: Record<string, unknown>;
     pillars: string[];
     recentThemes: { date: string; type: string; theme: string }[];
+    /** Rules this client has taught the agent. Always present, often empty. */
+    lessons: string[];
   }
 ): DecideRequest {
   const byId = new Map(campaigns.map((c) => [c.id, c]));
@@ -98,6 +107,7 @@ export function buildDecideRequest(
   return {
     business: context.business,
     content_pillars: context.pillars,
+    lessons: context.lessons,
     // Only campaigns that still owe something. A fully delivered campaign in
     // this list is context the model cannot act on, and a piece it might
     // wrongly reach for.

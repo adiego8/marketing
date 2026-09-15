@@ -34,6 +34,8 @@ export const COLLECTIONS = {
   planRuns: "marketing_plan_runs",
   researchRuns: "marketing_research_runs",
   googleCredentials: "marketing_google_credentials",
+  signals: "marketing_signals",
+  lessons: "marketing_lessons",
 } as const;
 
 // Convert Firestore Timestamps to ISO strings for JSON responses.
@@ -257,3 +259,55 @@ export function serializePlanRun(id: string, d: FirebaseFirestore.DocumentData) 
 }
 
 export { num };
+
+/* ----------------------------------------------------- the feedback loop -- */
+
+function brief(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const d = value as Record<string, unknown>;
+  return {
+    theme: str(d.theme, ""),
+    hook: str(d.hook, ""),
+    body: Array.isArray(d.body) ? d.body.map((b) => String(b)) : [],
+    cta: str(d.cta, ""),
+  };
+}
+
+export function serializeSignal(id: string, d: FirebaseFirestore.DocumentData) {
+  return {
+    id,
+    client_id: d.clientId ?? null,
+    kind: str(d.kind, "edited"),
+    scope: str(d.scope, "plan_themes"),
+    type: str(d.type, ""),
+    channel: str(d.channel, ""),
+    slot_id: d.slotId ?? null,
+    campaign_id: d.campaignId ?? null,
+    plan_run_id: d.planRunId ?? null,
+    reason: str(d.reason, ""),
+    before: brief(d.before),
+    after: brief(d.after),
+    changed: Array.isArray(d.changed) ? d.changed.map((c) => String(c)) : [],
+    created_at: toISO(d.createdAt) ?? "",
+  };
+}
+
+export function serializeLesson(id: string, d: FirebaseFirestore.DocumentData) {
+  const evidence = Array.isArray(d.evidence) ? d.evidence.map((e) => String(e)) : [];
+  return {
+    id,
+    client_id: d.clientId ?? null,
+    text: str(d.text, ""),
+    scope: str(d.scope, "plan_themes"),
+    status: d.retiredAt ? "retired" : "active",
+    source: str(d.source, "written"),
+    // Never read yet. See the note on Lesson.owner in lib/types.ts.
+    owner: str(d.owner, "client"),
+    evidence,
+    // Stored rather than derived from evidence.length: a distilled lesson can
+    // cite more episodes than it keeps ids for.
+    evidence_count: typeof d.evidenceCount === "number" ? d.evidenceCount : evidence.length,
+    created_at: toISO(d.createdAt) ?? "",
+    retired_at: toISO(d.retiredAt),
+  };
+}
