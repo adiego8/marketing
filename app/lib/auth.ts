@@ -127,6 +127,15 @@ export async function getClientForSession(
 
 const MARKETING_KEY = "marketing";
 
+// Whether a numerico customer's entitlements carry an ACTIVE `marketing` product
+// — the paid grant that lets someone own a marketing agency and seat teammates.
+function hasActiveMarketing(entitlements: unknown): boolean {
+  return (
+    Array.isArray(entitlements) &&
+    entitlements.some((e) => e?.key === MARKETING_KEY && e?.status === "active")
+  );
+}
+
 // Staff allowlist: uids or emails that get in regardless of the customer
 // entitlement rail, for numerico's own team. Comma-separated in
 // MARKETING_STAFF_UIDS; unset (the default) means the entitlement is the only
@@ -144,11 +153,10 @@ function isStaff(decoded: DecodedIdToken): boolean {
   return Boolean(email && allow.has(email));
 }
 
-// Read-only lookup against numerico-website's Firestore: does this person's
-// customer record carry an ACTIVE `marketing` entitlement? Mirrors numerico's
+// Read-only lookup against numerico-website's Firestore: the id of the customer
+// who OWNS the marketing subscription for this person, or null. Mirrors numerico's
 // own resolveCustomerForUser order — by ownerUid first, then a lowercased email
-// match so an as-yet-unlinked customer still resolves. Returns the customer id
-// (used as the agency's stable key) or null. Never writes to numericoDb.
+// match so an as-yet-unlinked customer still resolves. Never writes to numericoDb.
 async function findMarketingCustomerId(
   uid: string,
   email: string | null
@@ -162,81 +170,149 @@ async function findMarketingCustomerId(
   }
   if (snap.empty) return null;
 
-  const entitlements = snap.docs[0].data().entitlements;
-  if (!Array.isArray(entitlements)) return null;
+  return hasActiveMarketing(snap.docs[0].data().entitlements) ? snap.docs[0].id : null;
+}
 
-  const active = entitlements.some(
-    (e) => e?.key === MARKETING_KEY && e?.status === "active"
-  );
-  return active ? snap.docs[0].id : null;
+// Read-only lookup: is this email seated on a paying customer's Marketing team?
+// Finds a numerico customer whose `marketingSeats` contains the email AND who
+// still holds an active `marketing` entitlement (a lapsed owner can't keep
+// teammates in). Returns that OWNER's customer id + display name — the teammate
+// joins the owner's agency. One agency per person for now: if seated on several,
+// take the first and warn.
+async function findSeatOwner(
+  email: string | null
+): Promise<{ customerId: string; name: string } | null> {
+  if (!numericoDb || !email) return null;
+
+  const snap = await numericoDb
+    .collection("customers")
+    .where("marketingSeats", "array-contains", email.trim().toLowerCase())
+    .limit(5)
+    .get();
+
+  const active = snap.docs.filter((d) => hasActiveMarketing(d.data().entitlements));
+  if (active.length === 0) return null;
+  if (active.length > 1) {
+    console.warn(`marketing: ${email} is seated on ${active.length} agencies; using the first.`);
+  }
+
+  const data = active[0].data();
+  const name =
+    (typeof data.company === "string" && data.company) ||
+    (typeof data.name === "string" && data.name) ||
+    (typeof data.email === "string" ? data.email.split("@")[0] : "") ||
+    "Agency";
+  return { customerId: active[0].id, name };
+}
+
+interface Grant {
+  agencyId: string;
+  role: "admin" | "member";
+  numericoCustomerId: string | null;
+  /** The agency owner's uid, when the person signing in IS the owner; else null. */
+  agencyOwnerUid: string | null;
+  agencyName: string;
+}
+
+// The single source of truth for who gets into which agency, and as what. Order
+// matters: a paying owner always lands in their OWN agency as admin; otherwise a
+// seated teammate joins the owner's agency as a member; otherwise numerico staff
+// get an internal agency. Everyone else is refused (null).
+async function resolveGrant(decoded: DecodedIdToken): Promise<Grant | null> {
+  const email = decoded.email ?? null;
+  const selfName = decoded.name ?? (email ? email.split("@")[0] : "Agency");
+
+  const ownCustomerId = await findMarketingCustomerId(decoded.uid, email);
+  if (ownCustomerId) {
+    return {
+      agencyId: `cust_${ownCustomerId}`,
+      role: "admin",
+      numericoCustomerId: ownCustomerId,
+      agencyOwnerUid: decoded.uid,
+      agencyName: selfName,
+    };
+  }
+
+  const seat = await findSeatOwner(email);
+  if (seat) {
+    return {
+      agencyId: `cust_${seat.customerId}`,
+      role: "member",
+      numericoCustomerId: seat.customerId,
+      agencyOwnerUid: null, // the owner may not have signed in yet; backfilled later
+      agencyName: seat.name,
+    };
+  }
+
+  if (isStaff(decoded)) {
+    return {
+      agencyId: `staff_${decoded.uid}`,
+      role: "admin",
+      numericoCustomerId: null,
+      agencyOwnerUid: decoded.uid,
+      agencyName: selfName,
+    };
+  }
+
+  return null;
 }
 
 // Called on every token change from the browser (sign-in and each token
-// refresh). Resolves marketing membership from numerico's entitlement rail:
-// a customer granted the `marketing` product — or a member of the staff
-// allowlist — is admitted and, on first arrival, provisioned as the admin of
-// their OWN agency. Removing the entitlement revokes access on the next
-// sign-in/refresh by deleting the member record (getSession then denies from
-// the following request on). Returns null for anyone without access, so the
-// route answers 403.
+// refresh). Resolves the grant from numerico's entitlement/seat rail and
+// materialises it into a member record: owners and staff are admins of their own
+// agency; seated teammates are members of the OWNER's agency. Losing the grant
+// (entitlement lapsed, seat removed, or owner cascade) deletes the member record,
+// so getSession denies from the next request on. Returns null → the route 403s.
 export async function ensureMember(decoded: DecodedIdToken): Promise<Session | null> {
   const memberRef = db().collection(COLLECTIONS.members).doc(decoded.uid);
   const email = decoded.email ?? null;
 
-  // Grant source: staff allowlist, or an active `marketing` entitlement on the
-  // linked numerico customer. The customer id doubles as the agency's stable key.
-  const staff = isStaff(decoded);
-  const customerId = staff ? null : await findMarketingCustomerId(decoded.uid, email);
-  const entitled = staff || customerId !== null;
+  const grant = await resolveGrant(decoded);
 
-  const existing = await memberRef.get();
-
-  if (!entitled) {
-    // Revoke: someone who had access but no longer qualifies loses their record.
-    if (existing.exists) await memberRef.delete();
+  if (!grant) {
+    // Revoke — delete() is a no-op when the doc doesn't already exist.
+    await memberRef.delete();
     return null;
   }
 
-  if (existing.exists) {
-    const data = existing.data() ?? {};
-    if (!data.agencyId) return null;
-    // Keep the denormalised email fresh; it is what the members list displays.
-    if (email && data.email !== email) {
-      await memberRef.update({ email });
-    }
-    return {
-      uid: decoded.uid,
-      email,
-      agencyId: String(data.agencyId),
-      role: String(data.role ?? "member"),
-    };
-  }
-
-  // First admit: provision the tenant. The agency doc id is derived from the
-  // grant source (numerico customer id, or the uid for staff) so repeated
-  // sign-ins are idempotent — no duplicate agencies. Agency + member are written
-  // together in a transaction; the agency is created only if absent.
-  const agencyId = customerId ? `cust_${customerId}` : `staff_${decoded.uid}`;
-  const agencyRef = db().collection(COLLECTIONS.agencies).doc(agencyId);
+  // Provision (or refresh) the tenant. Deterministic agency ids keep repeated
+  // sign-ins idempotent; a teammate always lands in the OWNER's agency, never a
+  // new one. Agency (created only if absent) and member are written together.
+  const agencyRef = db().collection(COLLECTIONS.agencies).doc(grant.agencyId);
 
   await db().runTransaction(async (tx) => {
-    const agencySnap = await tx.get(agencyRef);
+    const [agencySnap, memberSnap] = await tx.getAll(agencyRef, memberRef);
+
     if (!agencySnap.exists) {
       tx.set(agencyRef, {
-        name: decoded.name ?? (email ? email.split("@")[0] : "My agency"),
-        numericoCustomerId: customerId,
-        ownerUid: decoded.uid,
+        name: grant.agencyName,
+        numericoCustomerId: grant.numericoCustomerId,
+        ownerUid: grant.agencyOwnerUid,
         createdAt: FieldValue.serverTimestamp(),
       });
+    } else if (grant.agencyOwnerUid && !agencySnap.data()?.ownerUid) {
+      // Backfill the owner's uid if a teammate created the agency first.
+      tx.update(agencyRef, { ownerUid: grant.agencyOwnerUid });
     }
-    tx.set(memberRef, {
-      agencyId,
-      email,
-      name: decoded.name ?? null,
-      role: "admin",
-      createdAt: FieldValue.serverTimestamp(),
-    });
+
+    if (!memberSnap.exists) {
+      tx.set(memberRef, {
+        agencyId: grant.agencyId,
+        email,
+        name: decoded.name ?? null,
+        role: grant.role,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    } else {
+      // Keep denormalised fields fresh (email display, role/agency changes).
+      const data = memberSnap.data() ?? {};
+      const patch: Record<string, unknown> = {};
+      if (email && data.email !== email) patch.email = email;
+      if (data.role !== grant.role) patch.role = grant.role;
+      if (data.agencyId !== grant.agencyId) patch.agencyId = grant.agencyId;
+      if (Object.keys(patch).length > 0) tx.update(memberRef, patch);
+    }
   });
 
-  return { uid: decoded.uid, email, agencyId, role: "admin" };
+  return { uid: decoded.uid, email, agencyId: grant.agencyId, role: grant.role };
 }
