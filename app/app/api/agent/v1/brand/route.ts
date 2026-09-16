@@ -14,13 +14,14 @@ import {
 // Everything an agent needs to sound and look like this client. Assembled from
 // the strategy document, the branding record and the lessons — all of which
 // already exist; none of this is a new store.
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const ctx = await requireApiKey("brand:read");
+    const clientId = new URL(request.url).searchParams.get("client_id");
+    const ctx = await requireApiKey("brand:read", clientId);
     if ("response" in ctx) return ctx.response;
 
     const client = serializeClient(ctx.client.id, ctx.client.data);
-    const strategy = await getStrategy(ctx.key.clientId);
+    const strategy = await getStrategy(ctx.client.id);
 
     /**
      * listLessons, NOT lessonsForPrompt.
@@ -31,7 +32,7 @@ export async function GET() {
      * rules" the same response, and an agent would write against neither.
      * Letting it throw gets a 500, which is the truth.
      */
-    const lessons = await listLessons(ctx.key.clientId);
+    const lessons = await listLessons(ctx.client.id);
 
     return NextResponse.json({
       client: {

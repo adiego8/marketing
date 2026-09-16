@@ -17,15 +17,16 @@ type Params = { params: Promise<{ slotId: string }> };
 // Unlike the list, this serves a piece whatever its state: the caller already
 // has the id, and `publishable` plus `copy.state` say whether to act on it.
 // Hiding it would leave an agent unable to find out why its piece vanished.
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   try {
-    const ctx = await requireApiKey("schedule:read");
+    const clientId = new URL(request.url).searchParams.get("client_id");
+    const ctx = await requireApiKey("schedule:read", clientId);
     if ("response" in ctx) return ctx.response;
 
     const { slotId } = await params;
     // getSlot checks the slot belongs to this client, so a key for one client
     // cannot read another's piece by guessing an id — it reads as missing.
-    const slot = await getSlot(ctx.key.clientId, slotId);
+    const slot = await getSlot(ctx.client.id, slotId);
     if (!slot) {
       return keyError("not_found", "No such piece.", 404);
     }

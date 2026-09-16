@@ -23,17 +23,21 @@ type Params = { params: Promise<{ slotId: string }> };
 // Body: { reason }
 export async function POST(request: Request, { params }: Params) {
   try {
-    const ctx = await requireApiKey("schedule:publish");
+    const body = await readAgentBody(request);
+    const ctx = await requireApiKey(
+      "schedule:publish",
+      typeof body.client_id === "string" ? body.client_id : null
+    );
     if ("response" in ctx) return ctx.response;
 
     const { slotId } = await params;
-    const parsed = parseFailedBody(await readAgentBody(request));
+    const parsed = parseFailedBody(body);
     if ("error" in parsed) {
       return keyError("invalid_body", parsed.error, 400);
     }
 
     const slot = await markSlotFailed(
-      ctx.key.clientId,
+      ctx.client.id,
       slotId,
       parsed.value,
       ctx.key.prefix

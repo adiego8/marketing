@@ -20,17 +20,21 @@ type Params = { params: Promise<{ slotId: string }> };
 // Body: { external_id, external_url?, published_at?, idempotency_key }
 export async function POST(request: Request, { params }: Params) {
   try {
-    const ctx = await requireApiKey("schedule:publish");
+    const body = await readAgentBody(request);
+    const ctx = await requireApiKey(
+      "schedule:publish",
+      typeof body.client_id === "string" ? body.client_id : null
+    );
     if ("response" in ctx) return ctx.response;
 
     const { slotId } = await params;
-    const parsed = parsePublishBody(await readAgentBody(request));
+    const parsed = parsePublishBody(body);
     if ("error" in parsed) {
       return keyError("invalid_body", parsed.error, 400);
     }
 
     const outcome = await markSlotPublished(
-      ctx.key.clientId,
+      ctx.client.id,
       slotId,
       parsed.value,
       // The prefix, never the key. A verifier does not belong in a data

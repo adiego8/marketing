@@ -50,7 +50,7 @@ export async function GET(request: Request) {
 
     // listSlots filters on clientId and narrows the range in memory — the
     // house pattern, and the reason this needs no composite index.
-    const all = await listSlots(ctx.key.clientId, { start: from, end: to });
+    const all = await listSlots(ctx.client.id, { start: from, end: to });
 
     const channels = searchParams
       .getAll("channel")

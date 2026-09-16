@@ -14,9 +14,10 @@ import {
 // There is no file storage in this app yet — logo_url is a URL somebody typed
 // on the Branding page. When storage lands, this endpoint does not change;
 // only what the URL points at does.
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const ctx = await requireApiKey("brand:read");
+    const clientId = new URL(request.url).searchParams.get("client_id");
+    const ctx = await requireApiKey("brand:read", clientId);
     if ("response" in ctx) return ctx.response;
 
     /**

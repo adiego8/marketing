@@ -262,6 +262,23 @@ export const createApiKey = (
 export const revokeApiKey = (clientId: string, keyId: string) =>
   request<ApiKey>(`${c(clientId)}/api-keys/${keyId}`, { method: "DELETE" });
 
+// Agency-wide keys reach every client, so they live outside /clients/[id].
+
+export const listAgencyKeys = () => request<ApiKey[]>("/agency/api-keys");
+
+export const createAgencyKey = (data: {
+  name: string;
+  scopes: ApiKeyScope[];
+  expires_at?: string | null;
+}) =>
+  request<ApiKey & { secret: string }>("/agency/api-keys", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const revokeAgencyKey = (keyId: string) =>
+  request<ApiKey>(`/agency/api-keys/${keyId}`, { method: "DELETE" });
+
 export const syncCalendar = (
   clientId: string,
   params?: { start?: string; end?: string }

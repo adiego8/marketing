@@ -115,9 +115,11 @@ export default function ApiAccessPage() {
       <header className="mb-6">
         <h1 className={text.h1}>API access</h1>
         <p className={`${text.muted} mt-1 max-w-2xl`}>
-          Keys let something else — a publishing agent, a script — read what this
-          client has scheduled and report back what it posted. Each key is scoped
-          to this client alone.
+          Keys let something else — a publishing agent, an assistant — read what
+          this client has scheduled and report back what it posted. Each key here
+          is scoped to this client alone. For one key that covers every client,
+          use <a href="/settings" className="text-teal-700 hover:underline">agency
+          settings</a>.
         </p>
       </header>
 

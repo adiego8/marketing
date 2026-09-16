@@ -22,7 +22,10 @@ export async function DELETE(_request: Request, { params }: Params) {
     const ctx = await requireClient(clientId);
     if ("response" in ctx) return ctx.response;
 
-    const revoked = await revokeApiKey(clientId, keyId);
+    // Both the agency AND the client are checked. Passing the client is what
+    // stops this client-scoped screen revoking an agency-wide key, which would
+    // cut off every other client at once.
+    const revoked = await revokeApiKey(ctx.session.agencyId, keyId, clientId);
     if (!revoked) return jsonError("Key not found", 404);
 
     return NextResponse.json(revoked);
