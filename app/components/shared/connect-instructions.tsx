@@ -71,23 +71,23 @@ Steps:
 
    Run a short script rather than writing the key by hand, so it is read from
    the file and never printed. This MERGES into whatever is already there —
-   do not replace the file:
+   do not replace the file. Run it exactly as written, starting at column one:
 
-   python3 - <<'PY'
-   import json, os, pathlib
-   key = pathlib.Path(os.path.expanduser("${keyPath}")).read_text().strip()
-   cfg = pathlib.Path(os.path.expanduser(
-       "~/Library/Application Support/Claude/claude_desktop_config.json"))
-   data = json.loads(cfg.read_text()) if cfg.exists() else {}
-   data.setdefault("mcpServers", {})["numerico-marketing"] = {
-       "command": "npx",
-       "args": ["-y", "mcp-remote", "${url}",
-                "--header", f"Authorization: Bearer {key}"],
-   }
-   cfg.parent.mkdir(parents=True, exist_ok=True)
-   cfg.write_text(json.dumps(data, indent=2))
-   print("Claude Desktop configured.")
-   PY
+python3 - <<'PY'
+import json, os, pathlib
+key = pathlib.Path(os.path.expanduser("${keyPath}")).read_text().strip()
+cfg = pathlib.Path(os.path.expanduser(
+    "~/Library/Application Support/Claude/claude_desktop_config.json"))
+data = json.loads(cfg.read_text()) if cfg.exists() else {}
+data.setdefault("mcpServers", {})["numerico-marketing"] = {
+    "command": "npx",
+    "args": ["-y", "mcp-remote", "${url}",
+             "--header", f"Authorization: Bearer {key}"],
+}
+cfg.parent.mkdir(parents=True, exist_ok=True)
+cfg.write_text(json.dumps(data, indent=2))
+print("Claude Desktop configured.")
+PY
 
    Then tell me to quit and reopen Claude Desktop — it only reads that file at
    startup.
