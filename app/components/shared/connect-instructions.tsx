@@ -39,19 +39,14 @@ const readNothing = () => "";
 
 export function connectionInstructions(
   url: string,
-  scope: "client" | "agency",
   keyPath: string = DEFAULT_KEY_PATH
 ): string {
-  const reach =
-    scope === "agency"
-      ? "It covers every client in my agency."
-      : "It covers a single client.";
-
   return `Please connect me to my Numerico Marketing workspace.
 
 It is an MCP server that knows what my marketing clients are scheduled to
 publish, the finished copy for each piece, and how each client's brand sounds.
-${reach}
+Which clients the key reaches is a property of the key, so ask the server —
+do not assume.
 
   Server URL:  ${url}
   API key:     in a file on my machine, at ${keyPath}
@@ -76,23 +71,23 @@ Steps:
 
    Run a short script rather than writing the key by hand, so it is read from
    the file and never printed. This MERGES into whatever is already there —
-   do not replace the file:
+   do not replace the file. Run it exactly as written, starting at column one:
 
-   python3 - <<'PY'
-   import json, os, pathlib
-   key = pathlib.Path(os.path.expanduser("${keyPath}")).read_text().strip()
-   cfg = pathlib.Path(os.path.expanduser(
-       "~/Library/Application Support/Claude/claude_desktop_config.json"))
-   data = json.loads(cfg.read_text()) if cfg.exists() else {}
-   data.setdefault("mcpServers", {})["numerico-marketing"] = {
-       "command": "npx",
-       "args": ["-y", "mcp-remote", "${url}",
-                "--header", f"Authorization: Bearer {key}"],
-   }
-   cfg.parent.mkdir(parents=True, exist_ok=True)
-   cfg.write_text(json.dumps(data, indent=2))
-   print("Claude Desktop configured.")
-   PY
+python3 - <<'PY'
+import json, os, pathlib
+key = pathlib.Path(os.path.expanduser("${keyPath}")).read_text().strip()
+cfg = pathlib.Path(os.path.expanduser(
+    "~/Library/Application Support/Claude/claude_desktop_config.json"))
+data = json.loads(cfg.read_text()) if cfg.exists() else {}
+data.setdefault("mcpServers", {})["numerico-marketing"] = {
+    "command": "npx",
+    "args": ["-y", "mcp-remote", "${url}",
+             "--header", f"Authorization: Bearer {key}"],
+}
+cfg.parent.mkdir(parents=True, exist_ok=True)
+cfg.write_text(json.dumps(data, indent=2))
+print("Claude Desktop configured.")
+PY
 
    Then tell me to quit and reopen Claude Desktop — it only reads that file at
    startup.
@@ -105,12 +100,10 @@ you can see and what each is scheduled to publish this week.`;
 }
 
 export function ConnectInstructions({
-  scope,
   keyPath,
   title = "Connect an assistant",
   hint,
 }: {
-  scope: "client" | "agency";
   keyPath?: string;
   title?: string;
   hint?: string;
@@ -122,7 +115,7 @@ export function ConnectInstructions({
   const origin = useSyncExternalStore(subscribeNever, readOrigin, readNothing);
 
   const url = `${origin || "https://your-marketing-domain"}/api/mcp`;
-  const instructions = connectionInstructions(url, scope, keyPath);
+  const instructions = connectionInstructions(url, keyPath);
 
   return (
     <div className={`${surface.inset} mt-4`}>

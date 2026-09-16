@@ -1,68 +1,119 @@
 import { describe, it, expect } from "vitest";
-import { targetClientId } from "./tenancy";
+import { clientScopeOf, scopeAllows, targetClientId } from "./tenancy";
 
 /**
- * The whole multi-tenant story for the agent rail is this function plus the
- * agency check that follows it. Both failure directions are silent: too strict
- * and an agency key cannot reach its own clients, too loose and one agency's
- * key reads another's content with no error anywhere.
+ * The whole multi-tenant story for the agent rail is these three functions plus
+ * the agency check that follows them. Both failure directions are silent: too
+ * strict and a key cannot reach its own clients, too loose and one key reads
+ * content it was never granted, with no error anywhere.
  */
 
-const CLIENT_KEY = { clientId: "c1" };
-const AGENCY_KEY = { clientId: null };
-
-describe("targetClientId — a client-scoped key", () => {
-  it("defaults to the client it was minted for", () => {
-    expect(targetClientId(CLIENT_KEY, null)).toEqual({ id: "c1" });
-    expect(targetClientId(CLIENT_KEY, undefined)).toEqual({ id: "c1" });
-    expect(targetClientId(CLIENT_KEY, "")).toEqual({ id: "c1" });
-    expect(targetClientId(CLIENT_KEY, "   ")).toEqual({ id: "c1" });
+describe("clientScopeOf", () => {
+  it("reads an explicit allowlist", () => {
+    expect(clientScopeOf({ clientIds: ["c1", "c2"] })).toEqual(["c1", "c2"]);
   });
 
-  it("accepts its own client stated explicitly", () => {
-    expect(targetClientId(CLIENT_KEY, "c1")).toEqual({ id: "c1" });
-    expect(targetClientId(CLIENT_KEY, "  c1  ")).toEqual({ id: "c1" });
+  it("reads an empty allowlist as reaching nothing, not everything", () => {
+    // The dangerous confusion: [] must not collapse to null.
+    expect(clientScopeOf({ clientIds: [] })).toEqual([]);
+    expect(scopeAllows(clientScopeOf({ clientIds: [] }), "c1")).toBe(false);
   });
 
   /**
-   * The attack this exists to stop: a key for one client passing somebody
-   * else's id and being served their plan.
+   * Keys minted before the allowlist carry a single clientId. Both of its
+   * shapes map exactly, so nothing needs migrating — and a key someone is
+   * using today must not stop working on deploy.
    */
-  it("refuses another client", () => {
-    expect(targetClientId(CLIENT_KEY, "c2")).toEqual({ error: "not_found" });
+  it("maps a legacy single-client key onto a one-entry list", () => {
+    expect(clientScopeOf({ clientId: "c1" })).toEqual(["c1"]);
   });
 
-  // not_found, never a 403 — a 403 would confirm the id exists and turn this
-  // parameter into an oracle for enumerating other agencies' clients.
-  it("reads a refusal as missing rather than forbidden", () => {
-    const result = targetClientId(CLIENT_KEY, "c2");
-    expect(result).not.toHaveProperty("error", "needs_client");
-    expect(result).toHaveProperty("error", "not_found");
+  it("maps a legacy agency-wide key onto all clients", () => {
+    expect(clientScopeOf({ clientId: null })).toBeNull();
+    expect(clientScopeOf({})).toBeNull();
+  });
+
+  it("prefers the allowlist when a document carries both", () => {
+    expect(clientScopeOf({ clientIds: ["c9"], clientId: "c1" })).toEqual(["c9"]);
+  });
+
+  it("drops junk entries rather than trusting them", () => {
+    expect(clientScopeOf({ clientIds: ["c1", 42, null, ""] })).toEqual(["c1"]);
   });
 });
 
-describe("targetClientId — an agency-wide key", () => {
-  it("resolves whatever client it names", () => {
-    expect(targetClientId(AGENCY_KEY, "c9")).toEqual({ id: "c9" });
-    expect(targetClientId(AGENCY_KEY, " c9 ")).toEqual({ id: "c9" });
+describe("scopeAllows", () => {
+  it("lets an all-clients key reach anything", () => {
+    expect(scopeAllows(null, "anything")).toBe(true);
+  });
+
+  it("honours an allowlist exactly", () => {
+    expect(scopeAllows(["c1", "c2"], "c2")).toBe(true);
+    expect(scopeAllows(["c1", "c2"], "c3")).toBe(false);
+  });
+});
+
+describe("targetClientId — naming a client", () => {
+  it("accepts one inside the allowlist", () => {
+    expect(targetClientId(["c1", "c2"], "c2")).toEqual({ id: "c2" });
+    expect(targetClientId(["c1"], "  c1  ")).toEqual({ id: "c1" });
+  });
+
+  it("accepts anything when the key reaches all clients", () => {
+    expect(targetClientId(null, "c9")).toEqual({ id: "c9" });
+  });
+
+  /** The attack: a key for two clients reaching for a third. */
+  it("refuses one outside the allowlist", () => {
+    expect(targetClientId(["c1", "c2"], "c3")).toEqual({ error: "not_found" });
+  });
+
+  // not_found, never "forbidden" — a 403 confirms the id exists and turns this
+  // parameter into an oracle for enumerating clients.
+  it("reads a refusal as missing rather than forbidden", () => {
+    expect(targetClientId(["c1"], "c2")).toHaveProperty("error", "not_found");
+  });
+
+  it("refuses everything when the allowlist is empty", () => {
+    expect(targetClientId([], "c1")).toEqual({ error: "not_found" });
+  });
+});
+
+describe("targetClientId — naming nothing", () => {
+  it("defaults to the only client a key reaches", () => {
+    expect(targetClientId(["c1"], null)).toEqual({ id: "c1" });
+    expect(targetClientId(["c1"], undefined)).toEqual({ id: "c1" });
+    expect(targetClientId(["c1"], "   ")).toEqual({ id: "c1" });
   });
 
   /**
-   * It must ASK rather than pick. Defaulting to "the agency's first client"
-   * would act on the wrong one and report success — the worst possible shape
-   * for a bug in a tool an LLM calls.
+   * It must ASK rather than pick. Defaulting to "the first client" would act on
+   * the wrong one and report success — the worst shape a bug can take in a tool
+   * a model calls without a human watching each call.
    */
-  it("refuses to guess when no client is named", () => {
-    expect(targetClientId(AGENCY_KEY, null)).toEqual({ error: "needs_client" });
-    expect(targetClientId(AGENCY_KEY, "")).toEqual({ error: "needs_client" });
-    expect(targetClientId(AGENCY_KEY, "  ")).toEqual({ error: "needs_client" });
+  it("refuses to guess between several", () => {
+    expect(targetClientId(["c1", "c2"], null)).toEqual({ error: "needs_client" });
   });
 
-  // Resolving an id here is not authorisation. The agency comparison against
-  // the loaded client document is what actually decides, and it runs after.
-  it("does not itself authorise the client it resolves", () => {
-    expect(targetClientId(AGENCY_KEY, "belongs-to-someone-else")).toEqual({
-      id: "belongs-to-someone-else",
+  it("refuses to guess for an all-clients key", () => {
+    expect(targetClientId(null, null)).toEqual({ error: "needs_client" });
+  });
+
+  it("refuses when the key reaches nothing at all", () => {
+    expect(targetClientId([], null)).toEqual({ error: "needs_client" });
+  });
+});
+
+describe("resolving an id is not authorisation", () => {
+  /**
+   * An all-clients key resolves any id at all — including one from another
+   * agency. What stops it is the agencyId comparison on the loaded client
+   * document, which runs after. This test exists so nobody reads a bare
+   * `{ id }` here as permission granted.
+   */
+  it("still resolves a client belonging to someone else", () => {
+    expect(targetClientId(null, "another-agencys-client")).toEqual({
+      id: "another-agencys-client",
     });
   });
 });

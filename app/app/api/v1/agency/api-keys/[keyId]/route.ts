@@ -10,11 +10,12 @@ type Params = { params: Promise<{ keyId: string }> };
 
 // DELETE /api/v1/agency/api-keys/[keyId]
 //
-// Revokes rather than deletes, for the same reason as the per-client route: a
-// deleted key makes a leaked one indistinguishable from one that never existed.
+// Revokes rather than deletes: a deleted key makes a leaked one
+// indistinguishable from one that never existed, and every publication it
+// reported carries its prefix — that trail should not dangle.
 //
-// No client is passed, so this can revoke any key in the agency — which is the
-// point of an agency-level screen, and why the client-scoped route passes one.
+// Ownership is the agency. A key belongs to the agency that minted it, whatever
+// subset of clients its allowlist names.
 export async function DELETE(_request: Request, { params }: Params) {
   try {
     const { keyId } = await params;

@@ -359,7 +359,14 @@ export function serializeApiKey(id: string, d: FirebaseFirestore.DocumentData) {
   const expired = !!expiresAt && Date.parse(expiresAt) <= Date.now();
   return {
     id,
-    client_id: d.clientId ?? null,
+    // Null means every client in the agency, present and future. A key minted
+    // before the allowlist stored a single clientId; both shapes are read here
+    // so nothing needs migrating.
+    client_ids: Array.isArray(d.clientIds)
+      ? strArray(d.clientIds)
+      : d.clientId
+        ? [String(d.clientId)]
+        : null,
     agency_id: d.agencyId ?? null,
     name: str(d.name, ""),
     prefix: str(d.prefix, ""),

@@ -15,7 +15,7 @@ import { headers } from "next/headers";
 import { db, COLLECTIONS } from "../../firestore";
 import { keyFromHeader, hasScope } from "../api-keys";
 import { findApiKey, touchApiKey, type StoredKey } from "../api-keys-store";
-import { targetClientId } from "./tenancy";
+import { scopeAllows, targetClientId } from "./tenancy";
 import type { ApiKeyScope } from "../../types";
 
 export type ErrorCode =
@@ -145,7 +145,7 @@ export async function resolveClient(
   | { client: { id: string; data: FirebaseFirestore.DocumentData } }
   | { error: "needs_client" | "not_found" }
 > {
-  const target = targetClientId(key, requestedClientId);
+  const target = targetClientId(key.clientIds, requestedClientId);
   if ("error" in target) return { error: target.error };
 
   const client = await loadClient(key, target.id);
@@ -189,19 +189,17 @@ async function loadClient(
 export async function clientsForKey(
   key: StoredKey
 ): Promise<{ id: string; data: FirebaseFirestore.DocumentData }[]> {
-  if (key.clientId) {
-    const one = await loadClient(key, key.clientId);
-    return one ? [one] : [];
-  }
-
   const snap = await db()
     .collection(COLLECTIONS.clients)
     .where("agencyId", "==", key.agencyId)
     .get();
 
+  // The agency query is the authorisation; the allowlist narrows within it. A
+  // key can therefore never reach past its own agency however its list reads.
   // Sorted in memory, like every other list here: no composite index to deploy.
   return snap.docs
     .filter((doc) => doc.data()?.status !== "archived")
+    .filter((doc) => scopeAllows(key.clientIds, doc.id))
     .map((doc) => ({ id: doc.id, data: doc.data() ?? {} }))
     .sort((a, b) =>
       String(a.data.name ?? "").localeCompare(String(b.data.name ?? ""))

@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { listAgencyKeys, createAgencyKey, revokeAgencyKey } from "@/lib/api";
+import {
+  listAgencyKeys,
+  createAgencyKey,
+  revokeAgencyKey,
+  listClients,
+} from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { NumericoLockup } from "@/components/brand/numerico-mark";
 import { CopyButton } from "@/components/shared/copy-button";
@@ -12,17 +17,17 @@ import {
 } from "@/components/shared/connect-instructions";
 import { banner, btn, field, surface, text } from "@/lib/ui";
 import { statusPill } from "@/lib/ui-status";
-import type { ApiKey, ApiKeyScope } from "@/lib/types";
+import type { ApiKey, ApiKeyScope, ClientListItem } from "@/lib/types";
 
 /**
  * The agency's own settings — the first screen in this app that is not about
  * one client, and the thing the login page has been promising all along
  * ("Google Calendar can be connected later, from Settings").
  *
- * It holds agency-wide API keys: one credential that reaches every client. Per
- * client keys stay on the client's own API access page, because the two have
- * very different blast radius and the place you find a key should tell you
- * which kind you are holding.
+ * It holds every API key the agency has. There used to be two kinds in two
+ * places — an agency key here and a per-client key on each client's own page —
+ * which meant the one almost everyone wants was the harder one to find. Now a
+ * key carries an allowlist, and "a key for one client" is a one-entry list.
  */
 
 const SCOPE_LABELS: Record<ApiKeyScope, string> = {
@@ -54,14 +59,20 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  const [clients, setClients] = useState<ClientListItem[]>([]);
   const [name, setName] = useState("");
   const [preset, setPreset] = useState(PRESETS[0].id);
+  /** Empty means every client, present and future. */
+  const [picked, setPicked] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [minted, setMinted] = useState<(ApiKey & { secret: string }) | null>(null);
 
   const load = useCallback(() => {
-    listAgencyKeys()
-      .then(setKeys)
+    Promise.all([listAgencyKeys(), listClients({ status: "active" })])
+      .then(([k, c]) => {
+        setKeys(k);
+        setClients(c);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load the keys"))
       .finally(() => setLoading(false));
   }, []);
@@ -74,9 +85,16 @@ export default function SettingsPage() {
     setError(null);
     try {
       const scopes = PRESETS.find((p) => p.id === preset)?.scopes ?? [];
-      const created = await createAgencyKey({ name: name.trim(), scopes });
+      const created = await createAgencyKey({
+        name: name.trim(),
+        scopes,
+        // Omitted entirely when nothing is picked, which the route reads as
+        // every client, present and future.
+        ...(picked.length > 0 ? { client_ids: picked } : {}),
+      });
       setMinted(created);
       setName("");
+      setPicked([]);
       setKeys((prev) => [created, ...prev]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create the key");
@@ -88,7 +106,7 @@ export default function SettingsPage() {
   const handleRevoke = async (key: ApiKey) => {
     if (
       !confirm(
-        `Revoke "${key.name}"? It reaches every client, so anything using it stops working everywhere on its next request.`
+        `Revoke "${key.name}"? Anything using it stops working on its very next request.`
       )
     ) {
       return;
@@ -171,7 +189,7 @@ export default function SettingsPage() {
             {/* The key is shown once, so this is where it has to be saved.
                 The instructions carry only the path — never the secret. */}
             <SaveKeyFirst />
-            <ConnectInstructions scope="agency" />
+            <ConnectInstructions />
           </div>
         )}
 
@@ -230,16 +248,61 @@ export default function SettingsPage() {
             </div>
           </fieldset>
 
-          <p className={`${text.micro} mt-4`}>
-            Want a key limited to one client instead? Open that client and use its
-            API access page.
-          </p>
+          <fieldset className="mt-4">
+            <legend className={field.micro}>Which clients it reaches</legend>
+            {/*
+              Nothing picked means every client, present and future — the right
+              default for your own assistant, which should see a new client the
+              moment you create one. Picking a subset freezes it, which is what
+              makes a key safe to hand to somebody working on two of five.
+            */}
+            <label className="flex gap-3 rounded-lg border border-slate-200 p-3 cursor-pointer hover:border-slate-300 transition-colors">
+              <input
+                type="checkbox"
+                checked={picked.length === 0}
+                onChange={() => setPicked([])}
+                className="mt-1 accent-teal-600"
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-slate-800">
+                  All clients
+                </span>
+                <span className={`${text.micro} block mt-0.5`}>
+                  Including any you add later. Nothing to reconfigure.
+                </span>
+              </span>
+            </label>
+
+            {clients.length > 0 && (
+              <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                {clients.map((client) => (
+                  <label
+                    key={client.id}
+                    className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 cursor-pointer hover:border-slate-300 transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={picked.includes(client.id)}
+                      onChange={(e) =>
+                        setPicked((prev) =>
+                          e.target.checked
+                            ? [...prev, client.id]
+                            : prev.filter((id) => id !== client.id)
+                        )
+                      }
+                      className="accent-teal-600"
+                    />
+                    <span className="text-sm text-slate-800 truncate">{client.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </fieldset>
 
           {/* Deliberately without a key. A file or page carrying a live secret
               would outlive the moment it was needed; this is the shape, and the
               reader pastes their own key into it. */}
           <ConnectInstructions
-            scope="agency"
             title="How anyone connects"
             hint="The same instructions without a key — paste your own in where it says so, then paste the whole thing into Claude."
           />
@@ -270,6 +333,22 @@ export default function SettingsPage() {
                       )}
                     </p>
                     <p className={`${text.mono} mt-1`}>{key.prefix}…</p>
+                    <p className={`${text.micro} mt-1`}>
+                      {key.client_ids === null
+                        ? "All clients, including any added later"
+                        : key.client_ids.length === 0
+                          ? "No clients — this key can reach nothing"
+                          : key.client_ids
+                              .map(
+                                (id) =>
+                                  clients.find((c) => c.id === id)?.name ??
+                                  // A client archived or deleted since. Shown as
+                                  // the id rather than hidden, so the row still
+                                  // accounts for everything the key covers.
+                                  `${id.slice(0, 8)}…`
+                              )
+                              .join(" · ")}
+                    </p>
                     <p className={`${text.micro} mt-1`}>
                       {key.scopes.map((s) => SCOPE_LABELS[s as ApiKeyScope] ?? s).join(" · ")}
                     </p>

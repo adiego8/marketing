@@ -512,7 +512,12 @@ export const API_KEY_SCOPES: ApiKeyScope[] = [
  */
 export interface ApiKey {
   id: string;
-  client_id: string;
+  /**
+   * The clients this key reaches. Null means all of them, including any added
+   * later — the right default for the agency's own assistant. An explicit list
+   * never widens on its own, so it is what you hand to a contractor.
+   */
+  client_ids: string[] | null;
   agency_id: string;
   name: string;
   /** The leading fragment, the only displayable part: "mk_live_7fQ2xR9v". */

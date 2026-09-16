@@ -8,20 +8,19 @@ import {
   shouldStampLastUsed,
   type KeyRecord,
 } from "./api-keys";
+import { clientScopeOf } from "./agent/tenancy";
 import type { ApiKey, ApiKeyScope } from "../types";
 
 /** The stored document, plus the id it lives under (which is the key's hash). */
 export interface StoredKey extends KeyRecord {
   id: string;
   /**
-   * The one client this key may reach, or null for an agency-wide key.
+   * The clients this key may reach. Null means all of them, present and future.
    *
-   * Null is not "unset": it is the whole difference between a key an operator
-   * pastes into one connector and twenty keys they paste into twenty. Every
-   * read of this field has to decide which it is holding, which is why
-   * clientForKey exists rather than each route branching for itself.
+   * Normalised by clientScopeOf, so a key minted before the allowlist — which
+   * stored a single `clientId` — reads correctly with nothing migrated.
    */
-  clientId: string | null;
+  clientIds: string[] | null;
   agencyId: string;
   name: string;
   prefix: string;
@@ -44,14 +43,15 @@ export interface CreateKeyInput {
  * revoking and minting another, which is the intended cost.
  */
 export async function createApiKey(
-  clientId: string | null,
+  /** Null for every client in the agency, present and future. */
+  clientIds: string[] | null,
   agencyId: string,
   input: CreateKeyInput
 ): Promise<{ key: ApiKey; secret: string }> {
   const { secret, hash, prefix } = generateKey();
 
   const doc = {
-    clientId,
+    clientIds,
     agencyId,
     name: input.name,
     prefix,
@@ -88,7 +88,7 @@ export async function findApiKey(secret: string): Promise<StoredKey | null> {
   const d = snap.data() ?? {};
   const record: StoredKey = {
     id: hash,
-    clientId: typeof d.clientId === "string" && d.clientId ? d.clientId : null,
+    clientIds: clientScopeOf(d),
     agencyId: String(d.agencyId ?? ""),
     name: String(d.name ?? ""),
     prefix: String(d.prefix ?? ""),
@@ -123,24 +123,11 @@ export async function touchApiKey(record: StoredKey): Promise<void> {
   }
 }
 
-/** Every key ever minted for a client, revoked ones included. */
-export async function listApiKeys(clientId: string): Promise<ApiKey[]> {
-  const snap = await db()
-    .collection(COLLECTIONS.apiKeys)
-    .where("clientId", "==", clientId)
-    .get();
-
-  // Sorted in memory, like every other list here: no composite index to deploy.
-  return snap.docs
-    .map((doc) => serializeApiKey(doc.id, doc.data()))
-    .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? "")) as ApiKey[];
-}
-
 /**
- * The agency-wide keys — the ones with no client of their own.
+ * Every key the agency has ever minted, revoked ones included.
  *
- * Queried on agencyId and narrowed in memory rather than on both fields, which
- * would need a composite index. An agency has a handful of keys, not thousands.
+ * One list, because there is one kind of key now: a key carries an allowlist,
+ * and "for this client" is a filter over that rather than a separate species.
  */
 export async function listAgencyKeys(agencyId: string): Promise<ApiKey[]> {
   const snap = await db()
@@ -148,9 +135,9 @@ export async function listAgencyKeys(agencyId: string): Promise<ApiKey[]> {
     .where("agencyId", "==", agencyId)
     .get();
 
+  // Sorted in memory, like every other list here: no composite index to deploy.
   return snap.docs
     .map((doc) => serializeApiKey(doc.id, doc.data()))
-    .filter((k) => !k.client_id)
     .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? "")) as ApiKey[];
 }
 
@@ -167,8 +154,7 @@ export async function listAgencyKeys(agencyId: string): Promise<ApiKey[]> {
  */
 export async function revokeApiKey(
   agencyId: string,
-  keyId: string,
-  clientId?: string
+  keyId: string
 ): Promise<ApiKey | null> {
   const ref = db().collection(COLLECTIONS.apiKeys).doc(keyId);
   const snap = await ref.get();
@@ -176,7 +162,6 @@ export async function revokeApiKey(
 
   const data = snap.data() ?? {};
   if (data.agencyId !== agencyId) return null;
-  if (clientId !== undefined && data.clientId !== clientId) return null;
 
   // Already revoked: leave the original timestamp alone rather than moving it.
   if (!data.revokedAt) {

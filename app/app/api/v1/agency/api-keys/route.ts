@@ -12,8 +12,9 @@ const MAX_NAME_CHARS = 80;
 
 // GET /api/v1/agency/api-keys
 //
-// Agency-wide keys — the ones that reach every client rather than one. Agency
-// scoped rather than client scoped, so this sits outside /clients/[clientId].
+// Every key the agency has. There is one kind now: a key carries an allowlist
+// of clients, and "a key for this client" is a one-entry list rather than a
+// separate species living on a different page.
 export async function GET() {
   try {
     const ctx = await requireSession();
@@ -27,9 +28,11 @@ export async function GET() {
 
 // POST /api/v1/agency/api-keys
 //
-// One key that covers every client in the agency. The reason it exists: over
-// MCP a person adds a connector by hand, and one per client does not scale past
-// about three.
+// Body: { name, scopes, client_ids?, expires_at? }
+//
+// client_ids absent or empty means every client, present and future. That is
+// the default because over MCP a person adds a connector by hand, and one per
+// client does not scale past about three.
 //
 // Returns the key itself, exactly once — only its sha256 is stored.
 export async function POST(request: Request) {
@@ -60,9 +63,22 @@ export async function POST(request: Request) {
       expiresAt = new Date(parsed).toISOString();
     }
 
-    // null clientId is what makes it agency-wide. Everything else is identical
-    // to a per-client key, including how it is stored and verified.
-    const { key, secret } = await createApiKey(null, ctx.session.agencyId, {
+    /**
+     * The allowlist. Absent or empty means every client in the agency,
+     * including ones created later — the right default for the agency's own
+     * assistant. An explicit list never widens on its own, which is what makes
+     * it safe to hand to somebody working on a subset.
+     *
+     * Ids are NOT checked against the agency here: they do not need to be.
+     * clientsForKey queries by agencyId and narrows within it, so an id from
+     * another agency on the list simply never matches anything.
+     */
+    const ids = Array.isArray(body.client_ids)
+      ? body.client_ids.filter((id): id is string => typeof id === "string" && !!id)
+      : null;
+    const clientIds = ids && ids.length > 0 ? ids : null;
+
+    const { key, secret } = await createApiKey(clientIds, ctx.session.agencyId, {
       name,
       scopes,
       createdBy: ctx.session.email ?? ctx.session.uid,
