@@ -11,6 +11,8 @@ import type {
   Lesson,
   LessonScope,
   Signal,
+  ApiKey,
+  ApiKeyScope,
 } from "./types";
 
 import { auth } from "./firebase";
@@ -241,6 +243,24 @@ export const startGoogleConnect = (returnTo?: string) =>
 
 export const disconnectGoogle = () =>
   request<{ connected: boolean }>("/google/disconnect", { method: "POST" });
+
+// --- API keys (the agent rail's credentials, managed from a human session) ---
+
+export const listApiKeys = (clientId: string) =>
+  request<ApiKey[]>(`${c(clientId)}/api-keys`);
+
+/** The only response that ever carries `secret`. Show it once, then forget it. */
+export const createApiKey = (
+  clientId: string,
+  data: { name: string; scopes: ApiKeyScope[]; expires_at?: string | null }
+) =>
+  request<ApiKey & { secret: string }>(`${c(clientId)}/api-keys`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const revokeApiKey = (clientId: string, keyId: string) =>
+  request<ApiKey>(`${c(clientId)}/api-keys/${keyId}`, { method: "DELETE" });
 
 export const syncCalendar = (
   clientId: string,

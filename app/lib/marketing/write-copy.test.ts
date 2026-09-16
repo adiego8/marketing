@@ -41,6 +41,8 @@ function slot(over: Partial<Slot> = {}): Slot {
     google_event_locked: false,
     google_adopted_at: null,
     last_human_edit_at: null,
+    publication: null,
+    last_publish_error: null,
     created_at: null,
     updated_at: null,
     ...over,

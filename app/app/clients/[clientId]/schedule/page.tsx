@@ -689,6 +689,23 @@ export default function SchedulePage() {
                             ))}
                           </select>
 
+                          {/* Released and ready is the state a publisher acts
+                              on, so it is the one worth naming outright —
+                              "copy ready" alone does not say it can leave. */}
+                          {slot.status === "confirmed" &&
+                            copy &&
+                            !isCopyStale(slot) && (
+                              <StateLabel tone="good">
+                                released to publisher
+                              </StateLabel>
+                            )}
+                          {slot.status === "confirmed" &&
+                            (!copy || isCopyStale(slot)) && (
+                              <StateLabel tone="warn">
+                                released but not publishable
+                              </StateLabel>
+                            )}
+
                           {copy ? (
                             <StateLabel
                               tone={isCopyStale(slot) ? "warn" : "good"}

@@ -36,6 +36,7 @@ export const COLLECTIONS = {
   googleCredentials: "marketing_google_credentials",
   signals: "marketing_signals",
   lessons: "marketing_lessons",
+  apiKeys: "marketing_api_keys",
 } as const;
 
 // Convert Firestore Timestamps to ISO strings for JSON responses.
@@ -194,8 +195,34 @@ export function serializeSlot(id: string, d: FirebaseFirestore.DocumentData) {
     google_event_locked: d.googleEventLocked === true,
     google_adopted_at: toISO(d.googleAdoptedAt),
     last_human_edit_at: toISO(d.lastHumanEditAt),
+    // Written only by the agent API. `reported_at` is ours and arrives as a
+    // Timestamp; `published_at` is the platform's own and arrives as a string.
+    // toISO handles both, which is what it is for.
+    publication: publication(d.publication),
+    last_publish_error: d.lastPublishError
+      ? {
+          reason: str((d.lastPublishError as Record<string, unknown>).reason),
+          reported_at: toISO((d.lastPublishError as Record<string, unknown>).reportedAt),
+        }
+      : null,
     created_at: toISO(d.createdAt),
     updated_at: toISO(d.updatedAt),
+  };
+}
+
+/** Null unless there is an external id — a publication without one is debris. */
+function publication(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const p = value as Record<string, unknown>;
+  const externalId = str(p.externalId);
+  if (!externalId) return null;
+  return {
+    external_id: externalId,
+    external_url: typeof p.externalUrl === "string" ? p.externalUrl : null,
+    published_at: toISO(p.publishedAt) ?? "",
+    reported_at: toISO(p.reportedAt),
+    idempotency_key: str(p.idempotencyKey),
+    key_prefix: typeof p.keyPrefix === "string" ? p.keyPrefix : null,
   };
 }
 
@@ -309,5 +336,36 @@ export function serializeLesson(id: string, d: FirebaseFirestore.DocumentData) {
     evidence_count: typeof d.evidenceCount === "number" ? d.evidenceCount : evidence.length,
     created_at: toISO(d.createdAt) ?? "",
     retired_at: toISO(d.retiredAt),
+  };
+}
+
+/**
+ * A key, as the app shows it back. The secret is never in the document, so
+ * there is nothing to withhold here — `id` is the sha256, which identifies the
+ * key for revocation without being able to authenticate as it.
+ *
+ * Status is derived rather than stored, like serializeLesson's: storing it
+ * would let it disagree with the timestamps, and expiry passes on its own
+ * without anyone writing anything.
+ */
+export function serializeApiKey(id: string, d: FirebaseFirestore.DocumentData) {
+  const expiresAt = toISO(d.expiresAt);
+  const revokedAt = toISO(d.revokedAt);
+  const expired = !!expiresAt && Date.parse(expiresAt) <= Date.now();
+  return {
+    id,
+    client_id: d.clientId ?? null,
+    agency_id: d.agencyId ?? null,
+    name: str(d.name, ""),
+    prefix: str(d.prefix, ""),
+    // Whatever is on the document, not what this version knows about: a scope
+    // dropped from the union must still be visible so it can be revoked.
+    scopes: strArray(d.scopes),
+    status: revokedAt ? "revoked" : expired ? "expired" : "active",
+    created_by: d.createdBy ?? null,
+    created_at: toISO(d.createdAt),
+    last_used_at: toISO(d.lastUsedAt),
+    expires_at: expiresAt,
+    revoked_at: revokedAt,
   };
 }

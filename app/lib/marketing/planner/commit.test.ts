@@ -78,6 +78,8 @@ const READ_BY_SERIALIZER = [
   "googleEventLocked",
   "googleAdoptedAt",
   "lastHumanEditAt",
+  "publication",
+  "lastPublishError",
   "createdAt",
   "updatedAt",
 ] as const;

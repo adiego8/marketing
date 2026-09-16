@@ -78,8 +78,39 @@ export interface Slot {
   /** When a move made in Google was last adopted. */
   google_adopted_at: string | null;
   last_human_edit_at: string | null;
+  /**
+   * What an external agent reported publishing, and where.
+   *
+   * One map rather than four fields: it is a single unit, so "has this gone
+   * out" is one null check rather than four that could disagree. Null until an
+   * agent reports, and never written by this app's own UI.
+   */
+  publication: Publication | null;
+  /**
+   * The last failed publish attempt. Deliberately does NOT move the status:
+   * cancelled and skipped free the slot's quota, so demoting a failed publish
+   * would have the next plan run propose a replacement for a piece that is
+   * still sitting there waiting to be retried.
+   */
+  last_publish_error: { reason: string; reported_at: string | null } | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+export interface Publication {
+  external_id: string;
+  external_url: string | null;
+  /** The platform's own timestamp, as reported. */
+  published_at: string;
+  /** When we recorded it. Ours, not theirs. */
+  reported_at: string | null;
+  /**
+   * The caller's assertion that a repeat is the same request. Stored so a
+   * retried queue message replays instead of posting twice.
+   */
+  idempotency_key: string;
+  /** Which key claimed this, for the audit trail. Never the key itself. */
+  key_prefix: string | null;
 }
 
 /**
@@ -442,4 +473,85 @@ export interface Lesson {
   evidence_count: number;
   created_at: string;
   retired_at: string | null;
+}
+
+// --- Agent API (Phase 8) ---
+//
+// A second auth rail: an external agent holds a key, reads what a client owes
+// and reports what it published. Deliberately separate from Session — nothing
+// on this rail can reach a human's privileges.
+
+/** What a key is allowed to do. A key carries an explicit list; never "all". */
+export type ApiKeyScope = "schedule:read" | "brand:read" | "schedule:publish";
+
+export const API_KEY_SCOPES: ApiKeyScope[] = [
+  "schedule:read",
+  "brand:read",
+  "schedule:publish",
+];
+
+/**
+ * A key as the app shows it back. Never carries the secret.
+ *
+ * `id` is the sha256 of the key, which is also the document id — it identifies
+ * a key for revocation without being usable to authenticate, since it is the
+ * hash rather than the input.
+ */
+export interface ApiKey {
+  id: string;
+  client_id: string;
+  agency_id: string;
+  name: string;
+  /** The leading fragment, the only displayable part: "mk_live_7fQ2xR9v". */
+  prefix: string;
+  scopes: ApiKeyScope[];
+  status: "active" | "revoked" | "expired";
+  created_by: string | null;
+  created_at: string | null;
+  /** Throttled to once an hour — a read endpoint must not cost a write. */
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+}
+
+/** Whether a piece's finished copy is usable right now. */
+export type CopyState = "ready" | "stale" | "missing";
+
+/** One piece, as an external agent sees it. A projection, not the document. */
+export interface AgentSlot {
+  id: string;
+  date: string | null;
+  time_local: string | null;
+  timezone: string;
+  scheduled_at: string | null;
+  channel: string;
+  format: string;
+  format_label: string;
+  status: string;
+  publishable: boolean;
+  campaign: { id: string; title: string | null } | null;
+  theme: string;
+  brief: {
+    one_line: string;
+    hook: string;
+    body: string[];
+    cta: string;
+    rationale: string;
+  };
+  copy: {
+    state: CopyState;
+    headline: string | null;
+    blocks: { label: string; text: string; on_screen: string | null }[];
+    caption: string | null;
+    hashtags: string[];
+    authored_by: "agent" | "human" | null;
+    generated_at: string | null;
+    edited_at: string | null;
+  };
+  published: {
+    external_id: string | null;
+    external_url: string | null;
+    published_at: string;
+  } | null;
+  updated_at: string | null;
 }

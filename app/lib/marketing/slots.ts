@@ -8,6 +8,7 @@ import { db, COLLECTIONS, FieldValue, serializeSlot } from "../firestore";
 import { recordSignal } from "./signals";
 import { diffBrief, snapshotOf } from "./lessons";
 import { SLOT_STATUSES, type SlotStatus } from "./planner/types";
+import { publishDecision, type PublishReport } from "./agent/publish";
 import type { Slot } from "../types";
 
 export interface ListSlotsOptions {
@@ -404,6 +405,121 @@ export async function setEventLock(
             googleEventBodyHash: fingerprint.bodyHash,
           }
         : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  return getSlot(clientId, slotId);
+}
+
+/* ------------------------------------------------------- the agent API --- */
+//
+// Two writes that only the agent API makes, when an external publisher reports
+// what it did. Here rather than in the route for the reason above: every write
+// to a slot document goes through this module.
+//
+// Neither goes through updateSlot, and that is deliberate on three counts:
+//
+//  - updateSlot records a signal on a human edit. A robot reporting a publish
+//    is not feedback about the brief, and feeding it to the learning loop
+//    would teach the planner from its own output.
+//  - updateSlot stamps lastHumanEditAt, which is exactly how reconciliation
+//    tells a hand edit from agent output. A publish must not look like one.
+//  - SlotPatch would have to grow a `publication` field, and SlotPatch is what
+//    the browser's PATCH route accepts. Widening it would let anyone with a
+//    session forge a publication.
+
+export type PublishOutcome =
+  | { ok: true; slot: Slot; replayed: boolean }
+  | { conflict: true; slot: Slot }
+  | { rejected: string }
+  | null;
+
+/**
+ * Record that an agent published a piece.
+ *
+ * In a transaction, because the read-decide-write in publishDecision is
+ * otherwise a check-then-act race: two reports arriving together would both
+ * see no publication, both write, and the conflict that should have protected
+ * the client would never fire. runTransaction is the house precedent from
+ * ensureMember in lib/auth.ts.
+ *
+ * @returns null when the slot does not exist or belongs to another client.
+ */
+export async function markSlotPublished(
+  clientId: string,
+  slotId: string,
+  report: PublishReport,
+  keyPrefix: string
+): Promise<PublishOutcome> {
+  const ref = db().collection(COLLECTIONS.slots).doc(slotId);
+
+  const outcome = await db().runTransaction(async (tx): Promise<PublishOutcome> => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return null;
+
+    const slot = serializeSlot(snap.id, snap.data() ?? {}) as Slot;
+    if (slot.client_id !== clientId) return null;
+
+    const decision = publishDecision(slot, report);
+
+    if (decision.action === "reject") return { rejected: decision.reason };
+    if (decision.action === "conflict") return { conflict: true, slot };
+    if (decision.action === "replay") return { ok: true, slot, replayed: true };
+
+    tx.update(ref, {
+      status: "posted",
+      publication: {
+        externalId: report.externalId,
+        externalUrl: report.externalUrl,
+        publishedAt: report.publishedAt,
+        reportedAt: FieldValue.serverTimestamp(),
+        idempotencyKey: report.idempotencyKey,
+        keyPrefix,
+      },
+      // A successful publish clears the last failure: leaving it would show a
+      // red piece that has, in fact, gone out.
+      lastPublishError: null,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { ok: true, slot, replayed: false };
+  });
+
+  // Re-read outside the transaction so the caller gets the stamped timestamps
+  // rather than the sentinels, which do not resolve inside the transaction.
+  if (outcome && "ok" in outcome && !outcome.replayed) {
+    const saved = await getSlot(clientId, slotId);
+    if (saved) return { ok: true, slot: saved, replayed: false };
+  }
+  return outcome;
+}
+
+/**
+ * Record that a publish attempt failed.
+ *
+ * The status deliberately does not move. cancelled and skipped free the slot's
+ * quota, so demoting a failed publish would have the next plan run propose a
+ * replacement for a piece that is still sitting there, confirmed, waiting to
+ * be retried. A failure means "look at this", not "this is retired".
+ *
+ * No transaction: last-write-wins on an error field is honest.
+ */
+export async function markSlotFailed(
+  clientId: string,
+  slotId: string,
+  reason: string,
+  keyPrefix: string
+): Promise<Slot | null> {
+  const existing = await getSlot(clientId, slotId);
+  if (!existing) return null;
+
+  await db()
+    .collection(COLLECTIONS.slots)
+    .doc(slotId)
+    .update({
+      lastPublishError: {
+        reason,
+        reportedAt: FieldValue.serverTimestamp(),
+        keyPrefix,
+      },
       updatedAt: FieldValue.serverTimestamp(),
     });
   return getSlot(clientId, slotId);

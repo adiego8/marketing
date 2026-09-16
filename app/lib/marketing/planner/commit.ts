@@ -131,6 +131,10 @@ export function slotDoc(clientId: string, runId: string, slot: ProposedSlot) {
     googleEventLocked: false,
     googleAdoptedAt: null,
     lastHumanEditAt: null,
+    // Only the agent API ever writes these. Seeded so serializeSlot reads a
+    // real null rather than a missing key, same as every other nullable here.
+    publication: null,
+    lastPublishError: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };

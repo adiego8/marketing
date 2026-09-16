@@ -38,11 +38,25 @@ const STATUS_COLORS: Record<string, string> = {
   // state rather than a generic one.
   committed: "bg-teal-100 text-teal-700",
 
+  // A piece's life, and the only place a slot status has ever had a colour.
+  //
+  // Until the agent API there was no reason to tell them apart: every one of
+  // the six fell through to NEUTRAL and rendered as the same grey pill. That
+  // stopped being harmless the moment `confirmed` became the line between a
+  // draft and something an external publisher will put on a client's feed —
+  // a gate nobody can see is a gate people walk through by accident.
+  planned: "bg-slate-100 text-slate-600",
+  drafted: "bg-blue-100 text-blue-700",
+  confirmed: "bg-teal-100 text-teal-700",
+  posted: "bg-green-100 text-green-700",
+
   // Inert.
   idea: NEUTRAL,
   draft: NEUTRAL,
   noop: NEUTRAL,
   archived: NEUTRAL,
+  skipped: NEUTRAL,
+  cancelled: NEUTRAL,
 };
 
 /** Distinct hues per channel, restated in the same 100/700 idiom. */
