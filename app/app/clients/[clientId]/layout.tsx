@@ -97,6 +97,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         { href: `${prefix}/strategy`, label: "Strategy", icon: "◎" },
         { href: `${prefix}/branding`, label: "Branding", icon: "◐" },
         { href: `${prefix}/learned`, label: "Learned", icon: "◑" },
+        { href: `${prefix}/api-access`, label: "API access", icon: "◒" },
       ],
     },
   ];

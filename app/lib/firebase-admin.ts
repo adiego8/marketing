@@ -1,6 +1,7 @@
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 // Never throws at import time — if the env vars are absent OR invalid,
 // adminAuth/adminDb stay undefined so the app still builds and renders. The
@@ -30,6 +31,7 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 // collection prefixes keep it distinct either way, so a first run is not
 // blocked on that database existing.
 
+let adminApp: ReturnType<typeof initializeApp> | undefined;
 let adminAuth: Auth | undefined;
 let adminDb: Firestore | undefined;
 /** Always (default): where numerico-website keeps customers and entitlements. */
@@ -54,9 +56,14 @@ if (
                 "\n",
               ),
             }),
+            // Named here so getAdminBucket() can take the no-argument path.
+            // Empty is legal: the app still runs, and only logo upload fails,
+            // with a message that names the variable.
+            storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
           })
         : getApps()[0];
 
+    adminApp = app;
     adminAuth = getAuth(app);
 
     const databaseId = process.env.FIREBASE_DATABASE_ID;
@@ -78,12 +85,46 @@ if (
       }
     }
   } catch (error) {
+    adminApp = undefined;
     adminAuth = undefined;
     adminDb = undefined;
     numericoDb = undefined;
     adminInitError = error instanceof Error ? error.message : String(error);
     console.error("Firebase Admin failed to initialise:", error);
   }
+}
+
+/**
+ * The Cloud Storage bucket behind Firebase Storage, for logo uploads.
+ *
+ * Uploads go through the ADMIN SDK rather than the browser's Storage SDK
+ * because the bytes have to be sniffed server-side before they are stored — a
+ * browser-declared content-type is not evidence of anything, and the object
+ * ends up fetchable on a googleapis.com URL. See lib/marketing/logo.ts.
+ *
+ * Throws rather than returning undefined: unlike Firestore, nothing here has a
+ * sensible degraded mode, and the message names the variable to set.
+ */
+export function storageBucketName(): string {
+  const name = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  if (!name) {
+    throw new Error(
+      "Firebase Storage is not configured: set NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET " +
+        "in .env.local (see .env.example), and enable Storage for the project."
+    );
+  }
+  return name;
+}
+
+export function getAdminBucket() {
+  if (!adminApp) {
+    throw new Error(
+      adminInitError
+        ? `Firebase Storage is not configured: Firebase Admin credentials were rejected (${adminInitError}).`
+        : "Firebase Storage is not configured (missing Firebase Admin env vars)."
+    );
+  }
+  return getStorage(adminApp).bucket(storageBucketName());
 }
 
 export { adminAuth, adminDb, numericoDb, adminInitError };

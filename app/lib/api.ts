@@ -11,6 +11,8 @@ import type {
   Lesson,
   LessonScope,
   Signal,
+  ApiKey,
+  ApiKeyScope,
 } from "./types";
 
 import { auth } from "./firebase";
@@ -62,7 +64,7 @@ export const listClients = (params?: { status?: string; search?: string }) => {
 
 export const getClient = (id: string) => request<Client>(`/clients/${id}`);
 
-export const createClient = (data: { name: string; website_url?: string; logo_url?: string; description?: string; contact_email?: string; contact_phone?: string; timezone?: string }) =>
+export const createClient = (data: { name: string; website_url?: string; description?: string; contact_email?: string; contact_phone?: string; timezone?: string }) =>
   request<Client>("/clients", { method: "POST", body: JSON.stringify(data) });
 
 export const updateClient = (id: string, data: Record<string, unknown>) =>
@@ -241,6 +243,76 @@ export const startGoogleConnect = (returnTo?: string) =>
 
 export const disconnectGoogle = () =>
   request<{ connected: boolean }>("/google/disconnect", { method: "POST" });
+
+// --- API keys (the agent rail's credentials, managed from a human session) ---
+
+export const listApiKeys = (clientId: string) =>
+  request<ApiKey[]>(`${c(clientId)}/api-keys`);
+
+/** The only response that ever carries `secret`. Show it once, then forget it. */
+export const createApiKey = (
+  clientId: string,
+  data: { name: string; scopes: ApiKeyScope[]; expires_at?: string | null }
+) =>
+  request<ApiKey & { secret: string }>(`${c(clientId)}/api-keys`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const revokeApiKey = (clientId: string, keyId: string) =>
+  request<ApiKey>(`${c(clientId)}/api-keys/${keyId}`, { method: "DELETE" });
+
+// Agency-wide keys reach every client, so they live outside /clients/[id].
+
+export const listAgencyKeys = () => request<ApiKey[]>("/agency/api-keys");
+
+export const createAgencyKey = (data: {
+  name: string;
+  scopes: ApiKeyScope[];
+  expires_at?: string | null;
+}) =>
+  request<ApiKey & { secret: string }>("/agency/api-keys", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const revokeAgencyKey = (keyId: string) =>
+  request<ApiKey>(`/agency/api-keys/${keyId}`, { method: "DELETE" });
+
+/**
+ * Upload a client's logo.
+ *
+ * Bypasses request(), which forces a JSON content-type — the browser has to set
+ * the multipart boundary itself, so Content-Type must be left alone entirely.
+ * Same reason downloadPlanPdf goes around it.
+ */
+export async function uploadClientLogo(clientId: string, file: File): Promise<Client> {
+  const body = new FormData();
+  body.append("file", file);
+
+  const res = await fetch(`${API}${c(clientId)}/logo`, {
+    method: "POST",
+    headers: await authHeader(),
+    body,
+  });
+  if (!res.ok) {
+    // Unwrapped, unlike request(): these messages name the actual problem
+    // ("that file is not a PNG, JPEG, GIF or WebP image") and are worth showing
+    // as-is rather than inside an "API error 415: {...}" wrapper.
+    const text = await res.text();
+    let message = text;
+    try {
+      message = JSON.parse(text).error ?? text;
+    } catch {
+      // Not JSON — keep the raw body.
+    }
+    throw new Error(message);
+  }
+  return res.json();
+}
+
+export const removeClientLogo = (clientId: string) =>
+  request<Client>(`${c(clientId)}/logo`, { method: "DELETE" });
 
 export const syncCalendar = (
   clientId: string,

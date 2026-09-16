@@ -11,3 +11,7 @@ client_secret_*.json
 
 # Local Claude Code settings
 .claude/settings.local.json
+
+# A stray vitest/tsx run from the repo root (rather than app/) creates one
+# here. The real one lives in app/, which has its own ignore file.
+node_modules/

@@ -436,6 +436,68 @@ export default function SlotDetailPage() {
             plan you generate may propose something to replace it.
           </p>
         )}
+
+        {/*
+          The publisher gate.
+
+          "confirmed" used to be one of six values in a dropdown with no stated
+          consequence. Now it is the line an external agent reads: a released
+          piece can leave this app and land on the client's feed. That deserves
+          a button that says so, and a disabled state that explains why not.
+        */}
+        {!dropped && slot.status !== "posted" && (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {slot.status === "confirmed" ? (
+              <>
+                <button
+                  onClick={() => {
+                    if (confirm("Hold this back? A publisher will stop picking it up.")) {
+                      handleStatus("planned");
+                    }
+                  }}
+                  disabled={busy}
+                  className={btn.outline}
+                >
+                  Hold back
+                </button>
+                <span className={text.muted}>
+                  Released — any API key with publish access can post this.
+                </span>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleStatus("confirmed")}
+                  disabled={busy || !copy || stale}
+                  className={btn.primary}
+                >
+                  Release to publisher
+                </button>
+                <span className={text.muted}>
+                  {!copy
+                    ? "Write the copy first — a brief is not publishable prose."
+                    : stale
+                      ? "The copy is older than the brief. Regenerate it before releasing."
+                      : "Lets an external publisher pick this up."}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
+        {/*
+          Released but no longer ready. Nothing demotes a confirmed piece when
+          its brief is edited, so without this the operator has no idea the
+          release is now pointing at copy nobody wrote for it. The API refuses
+          to serve it, but the API is not who needs telling.
+        */}
+        {slot.status === "confirmed" && (!copy || stale) && (
+          <p className={`${banner.warn} mt-3`}>
+            This piece is released, but {!copy ? "has no copy" : "its copy is older than the brief"} —
+            so a publisher will skip it. {!copy ? "Write the copy" : "Regenerate the copy"} to make it
+            publishable again.
+          </p>
+        )}
       </div>
 
       {error && <p className={`${banner.error} mb-4`}>{error}</p>}

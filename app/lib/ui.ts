@@ -60,6 +60,15 @@ export const field = {
     "w-full bg-white border border-slate-200 rounded-lg px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-600 transition-colors text-sm resize-y",
   select:
     "bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-teal-600 transition-colors",
+  /**
+   * A file input. The native button cannot be styled, so ::file-selector-button
+   * is restyled to match btn.outlineSm rather than left looking like 1998.
+   */
+  file:
+    "block w-full text-sm text-slate-600 file:mr-3 file:inline-flex file:items-center " +
+    "file:px-3 file:py-1.5 file:border file:border-slate-300 file:rounded-lg " +
+    "file:text-xs file:font-semibold file:text-slate-700 file:bg-white " +
+    "file:hover:border-slate-400 file:cursor-pointer file:transition-colors",
 };
 
 /* --------------------------------------------------------------- surfaces -- */

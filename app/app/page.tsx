@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { listClients, createClient, deleteClient } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -97,6 +98,12 @@ export default function ClientListPage() {
               <span className="text-xs text-slate-500 truncate max-w-[16rem]">
                 {user.email}
               </span>
+              <Link
+                href="/settings"
+                className="text-xs text-slate-400 hover:text-teal-700 transition-colors"
+              >
+                Settings
+              </Link>
               <button
                 onClick={signOut}
                 className="text-xs text-slate-400 hover:text-teal-700 transition-colors"

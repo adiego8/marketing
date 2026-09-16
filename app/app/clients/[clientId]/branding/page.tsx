@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { getClient, updateClient } from "@/lib/api";
+import {
+  getClient,
+  updateClient,
+  uploadClientLogo,
+  removeClientLogo,
+} from "@/lib/api";
+import { ALLOWED_LOGO_LABEL } from "@/lib/marketing/logo";
 import { banner, btn, field, surface, text } from "@/lib/ui";
 import type { Branding } from "@/lib/types";
 
@@ -43,6 +49,7 @@ export default function BrandingPage() {
   const { clientId } = useParams() as { clientId: string };
   const [branding, setBranding] = useState<Branding>(DEFAULT_BRANDING);
   const [logoUrl, setLogoUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,13 +79,50 @@ export default function BrandingPage() {
     setSaved(false);
     setError(null);
     try {
-      await updateClient(clientId, { branding, logo_url: logoUrl || null });
+      await updateClient(clientId, { branding });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save");
     } finally {
       setSaving(false);
+    }
+  };
+
+  /**
+   * Uploads on selection rather than waiting for Save.
+   *
+   * By the time the response lands the bytes are already in storage and the
+   * client document already points at them, so holding the new URL in local
+   * state until somebody presses Save would just let the page disagree with
+   * what is stored.
+   */
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Clear the input so re-picking the same file fires onChange again.
+    e.target.value = "";
+    if (!file) return;
+
+    setUploading(true);
+    setError(null);
+    try {
+      const client = await uploadClientLogo(clientId, file);
+      setLogoUrl(client.logo_url || "");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not upload that logo");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleLogoRemove = async () => {
+    if (!confirm("Remove this logo? The stored image is deleted.")) return;
+    setError(null);
+    try {
+      await removeClientLogo(clientId);
+      setLogoUrl("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove that logo");
     }
   };
 
@@ -112,16 +156,35 @@ export default function BrandingPage() {
       {error && <p className={`${banner.error} mb-4`}>{error}</p>}
 
       <div className="space-y-4">
+        {/*
+          Upload only — there is deliberately no URL field.
+
+          logo_url is what GET /api/agent/v1/logo redirects an external agent
+          to, so a value an operator could type was a redirect to any host at
+          all. Now the only writer is the upload route, and the field can only
+          ever hold a URL we wrote.
+
+          The logo also saves immediately rather than waiting for the Save
+          button: the bytes are already stored by the time the response lands,
+          so leaving the field dirty would let the page disagree with storage.
+        */}
         <section className={`${surface.card} ${surface.pad}`}>
           <h2 className={`${text.cardTitle} mb-4`}>Logo</h2>
-          <label className={field.micro}>Logo URL</label>
+
           <input
-            value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
-            placeholder="https://example.com/logo.png"
-            className={field.inputSm}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            disabled={uploading}
+            onChange={handleLogoChange}
+            className={field.file}
           />
-          {logoUrl && (
+          <p className={`${text.micro} mt-2`}>
+            {ALLOWED_LOGO_LABEL}, up to 1 MB. Replaces whatever is there now.
+          </p>
+
+          {uploading && <p className={`${text.muted} mt-3`}>Uploading…</p>}
+
+          {logoUrl && !uploading && (
             <div className={`${surface.inset} mt-3 flex items-center gap-3`}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -129,7 +192,10 @@ export default function BrandingPage() {
                 alt="Logo preview"
                 className="w-16 h-16 object-contain"
               />
-              <span className="text-xs text-slate-500">Preview</span>
+              <span className="text-xs text-slate-500 flex-1">Current logo</span>
+              <button onClick={handleLogoRemove} className={btn.outlineSm}>
+                Remove
+              </button>
             </div>
           )}
         </section>
