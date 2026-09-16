@@ -1,5 +1,5 @@
 import { isChannel, type Channel } from "../posting-windows";
-import { listCampaigns } from "../campaigns";
+import { getCampaign } from "../campaigns";
 import { getStrategy } from "../strategy";
 import { lessonsForPrompt } from "../lessons-store";
 import type { QuotaEntry } from "../strategy";
@@ -10,6 +10,8 @@ import {
   fingerprintInputs,
   loadPlannerSlots,
   loadRecentThemes,
+  scopeToCampaign,
+  themesFromOpenRuns,
   toCampaignWindow,
 } from "./plan-runs";
 import { mintSlotId } from "./slot-id";
@@ -33,12 +35,24 @@ import {
 // class of bug where a piece was generated in a week its campaign was not
 // running in, and so arrived attributed to nothing.
 
-export class NoActiveCampaignsError extends Error {
+/**
+ * Both messages keep the word "campaign": the campaign page and the error
+ * banners pattern-match on /campaign/i to decide which guidance to render.
+ */
+export class CampaignNotFoundError extends Error {
   constructor() {
+    super("That campaign does not exist for this client.");
+    this.name = "CampaignNotFoundError";
+  }
+}
+
+export class CampaignNotActiveError extends Error {
+  constructor(title?: string) {
     super(
-      "No active campaigns. The planner writes what a campaign's content plan asks for, so accept a campaign before planning."
+      `${title ? `The campaign "${title}"` : "That campaign"} is not active. ` +
+        "The planner writes what a campaign's content plan asks for, so accept it before planning."
     );
-    this.name = "NoActiveCampaignsError";
+    this.name = "CampaignNotActiveError";
   }
 }
 
@@ -190,8 +204,19 @@ export async function planFromInputs(
   };
 }
 
-/** Load everything, plan, and persist the run. Writes NO slots — that is commit. */
-export async function previewPlan(clientId: string, opts: { timezone: string }) {
+/**
+ * Load everything, plan ONE campaign, and persist the run. Writes NO slots —
+ * that is commit.
+ *
+ * Scoped to a single campaign, and that is the point. A run used to cover every
+ * active campaign while the campaign workspace showed you only your own slice
+ * of it — so accepting from inside one campaign committed content for the
+ * others, which you never saw. The filter was on the display; it belongs here.
+ */
+export async function previewPlan(
+  clientId: string,
+  opts: { timezone: string; campaignId: string }
+) {
   const strategy = await getStrategy(clientId);
   if (!strategy) throw new NoStrategyError();
 
@@ -199,14 +224,38 @@ export async function previewPlan(clientId: string, opts: { timezone: string }) 
   // happens later and by hand. An empty one is entirely workable.
   const quota = (strategy.content_quota?.weekly ?? {}) as Record<string, QuotaEntry>;
 
-  const [allCampaigns, slots, recentThemes, lessons] = await Promise.all([
-    listCampaigns(clientId, "active"),
+  const [campaign, allSlots, committedThemes, openThemes, lessons] = await Promise.all([
+    getCampaign(clientId, opts.campaignId),
     loadPlannerSlots(clientId),
     loadRecentThemes(clientId),
+    themesFromOpenRuns(clientId, opts.campaignId),
     lessonsForPrompt(clientId, "plan_themes"),
   ]);
 
-  if (allCampaigns.length === 0) throw new NoActiveCampaignsError();
+  // Everything already scheduled, PLUS what other campaigns have open but not
+  // committed. The second half exists because scoping split what used to be
+  // one model call per client into one per campaign — see themesFromOpenRuns.
+  const recentThemes = [...committedThemes, ...openThemes];
+
+  // getCampaign returns null for another client's campaign too, so this is the
+  // tenancy check as well as the existence one.
+  if (!campaign) throw new CampaignNotFoundError();
+  // Checked here rather than by listing active campaigns: getCampaign does not
+  // filter on status, so without this a proposal would be plannable.
+  if (campaign.status !== "active") throw new CampaignNotActiveError(campaign.title);
+
+  /**
+   * Narrowed to this campaign, which is what scopes the fingerprint.
+   *
+   * planFromInputs hashes inputs.slots, so passing the client's whole slot set
+   * would make committing campaign A invalidate campaign B's open preview —
+   * and two open previews are now the normal case. Narrowing is otherwise a
+   * no-op: deliveredByType already ignores other campaigns' slots, and slot ids
+   * are namespaced by campaign, so the id set this seeds cannot collide.
+   *
+   * Through the shared helper, so commit narrows identically.
+   */
+  const scoped = scopeToCampaign(opts.campaignId, [toCampaignWindow(campaign)], allSlots);
 
   const contentStrategy = (strategy.content_strategy ?? {}) as {
     platforms?: unknown;
@@ -217,8 +266,8 @@ export async function previewPlan(clientId: string, opts: { timezone: string }) 
     clientId,
     timezone: opts.timezone,
     quota,
-    slots,
-    campaigns: allCampaigns.map(toCampaignWindow),
+    slots: scoped.slots,
+    campaigns: scoped.campaigns,
     pillars: Array.isArray(contentStrategy.content_pillars)
       ? contentStrategy.content_pillars.filter((p): p is string => typeof p === "string")
       : [],
@@ -237,8 +286,11 @@ export async function previewPlan(clientId: string, opts: { timezone: string }) 
   });
 
   return createPlanRun(clientId, {
+    // What this run is for. Runs predating scoping have none, which is how the
+    // campaign page tells "no run for me yet" from "a run that is not mine".
+    campaignId: opts.campaignId,
     status: result.status,
-    // What each campaign owed when this ran. Replaces the horizon, which meant
+    // What the campaign owed when this ran. Replaces the horizon, which meant
     // nothing once planning stopped placing dates.
     demand: result.observation.campaigns,
     observation: result.observation,

@@ -169,7 +169,7 @@ describe("planFromInputs", () => {
     const result = await planFromInputs(inputs({ campaigns: [] }), stubDecide);
     expect(result.proposedSlots).toHaveLength(0);
     expect(result.status).toBe("noop");
-    expect(result.warnings.join(" ")).toContain("No active campaigns");
+    expect(result.warnings.join(" ")).toContain("No campaign to plan for");
   });
 
   it("plans only what the campaign's content plan asks for", async () => {
@@ -195,6 +195,36 @@ describe("planFromInputs", () => {
     expect(result.proposedSlots.every((s) => s.needsTheme)).toBe(true);
     expect(result.proposedSlots.every((s) => s.campaignId === "c1")).toBe(true);
     expect(result.warnings.join(" ")).toContain("connection refused");
+  });
+
+  /**
+   * A run is generated for ONE campaign now. This pins the consequence at the
+   * planner's own level: given one campaign, nothing the other one owes can
+   * appear — not hidden from the output, absent from it.
+   *
+   * The old shape filtered on the page instead, so a second campaign's pieces
+   * were generated, not shown, and committed anyway.
+   */
+  it("writes nothing for a campaign it was not given", async () => {
+    const other: CampaignWindow = {
+      ...CAMPAIGN,
+      id: "c2",
+      title: "Other",
+      plannedByType: { post: 5 },
+      plannedTotal: 5,
+    };
+
+    const both = await planFromInputs(inputs({ campaigns: [CAMPAIGN, other] }), stubDecide);
+    expect(new Set(both.proposedSlots.map((s) => s.campaignId))).toEqual(
+      new Set(["c1", "c2"])
+    );
+
+    const scoped = await planFromInputs(inputs({ campaigns: [CAMPAIGN] }), stubDecide);
+    expect(scoped.proposedSlots.every((s) => s.campaignId === "c1")).toBe(true);
+    // The other campaign is not in the observation either — it was never asked
+    // about, rather than asked about and dropped.
+    expect(scoped.observation.campaigns.map((c) => c.campaignId)).toEqual(["c1"]);
+    expect(scoped.proposedSlots).toHaveLength(6);
   });
 
   it("produces a fingerprint that changes when the inputs change", async () => {

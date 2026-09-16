@@ -165,10 +165,12 @@ export function observe(input: ObserveInput): Observation {
 
   if (input.campaigns.length === 0) {
     warnings.push(
-      "No active campaigns, so there is nothing to plan. Accept a campaign to give the planner a content plan to work from."
+      "No campaign to plan for. The planner writes what a campaign's content plan asks for."
     );
   } else if (demand.length === 0) {
-    warnings.push("Every active campaign's content plan is already fully delivered.");
+    // Singular: a run covers one campaign now, so this is a verdict on that
+    // campaign rather than on the client.
+    warnings.push("This campaign's content plan is already fully delivered.");
   }
 
   // A campaign whose breakdown is empty asks for nothing, and would otherwise

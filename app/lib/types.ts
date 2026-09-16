@@ -329,10 +329,23 @@ export interface PlanObservation {
 export interface PlanRun {
   id: string;
   client_id: string;
-  /** proposed = ready to commit · noop = every campaign plan already scheduled · degraded = themes missing */
+  /**
+   * The campaign this run belongs to.
+   *
+   * Null only on runs made before planning was scoped, when one run covered
+   * every active campaign — and committing from inside one campaign therefore
+   * wrote slots for all of them. Those runs are kept readable rather than
+   * migrated; nothing produces a null one any more.
+   */
+  campaign_id: string | null;
+  /** proposed = ready to commit · noop = the campaign's plan is already delivered · degraded = themes missing */
   status: "proposed" | "noop" | "degraded" | "committed";
   /**
-   * What each campaign owed when this ran.
+   * What the campaign owed when this ran.
+   *
+   * Still an array, holding one entry: it predates scoping, when it held one
+   * row per active campaign, and the shape is what `serializePlanRun` and the
+   * overview page already read.
    *
    * Replaces `horizon`, which stopped meaning anything once planning no longer
    * placed dates. Runs made before that still carry `horizon`, so it is kept

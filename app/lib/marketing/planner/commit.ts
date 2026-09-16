@@ -6,6 +6,7 @@ import {
   fingerprintInputs,
   getPlanRun,
   loadPlannerSlots,
+  scopeToCampaign,
   toCampaignWindow,
 } from "./plan-runs";
 import type { ProposedSlot } from "./types";
@@ -59,20 +60,42 @@ export class StalePlanError extends Error {
  * and commit someone can change the weekly quota, retire a campaign, or add a
  * slot by hand — and committing a stale plan would silently schedule content
  * against a strategy that no longer exists.
+ *
+ * Scoped to the run's own campaign, and it has to be, on BOTH counts:
+ *
+ *  - previewPlan hashes one campaign and that campaign's slots. Hashing the
+ *    client's whole set here would never match, so every commit would throw
+ *    StalePlanError.
+ *  - two open previews for two campaigns is now the normal case. If the hash
+ *    covered every slot, committing one campaign would change the other's
+ *    input set and make a perfectly good preview un-committable.
+ *
+ * A run predating scoping has no campaignId. Those were computed client-wide,
+ * so they are checked client-wide — the old behaviour, for the old documents.
  */
-async function currentFingerprint(clientId: string): Promise<string | null> {
+async function currentFingerprint(
+  clientId: string,
+  campaignId: string | null
+): Promise<string | null> {
   const strategy = await getStrategy(clientId);
   if (!strategy) return null;
 
-  const [campaigns, slots] = await Promise.all([
+  const [campaigns, allSlots] = await Promise.all([
     listCampaigns(clientId, "active"),
     loadPlannerSlots(clientId),
   ]);
 
+  // The same helper previewPlan uses, so the two cannot drift.
+  const scoped = scopeToCampaign(
+    campaignId,
+    campaigns.map(toCampaignWindow),
+    allSlots
+  );
+
   return fingerprintInputs({
     quota: (strategy.content_quota?.weekly ?? {}) as Record<string, QuotaEntry>,
-    campaigns: campaigns.map(toCampaignWindow),
-    slots,
+    campaigns: scoped.campaigns,
+    slots: scoped.slots,
   });
 }
 
@@ -154,7 +177,7 @@ export async function commitPlan(clientId: string, runId: string) {
   // Only meaningful if the run recorded one. Runs predating the fingerprint
   // are committed without the check rather than being made uncommittable.
   if (run.inputs_fingerprint) {
-    const now = await currentFingerprint(clientId);
+    const now = await currentFingerprint(clientId, run.campaign_id);
     if (now !== run.inputs_fingerprint) throw new StalePlanError();
   }
 

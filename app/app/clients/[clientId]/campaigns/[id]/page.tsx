@@ -37,7 +37,6 @@ import type {
   QuotaEntry,
   PlanRun,
   Slot,
-  ProposedSlot,
   DroppedSlot,
 } from "@/lib/types";
 import { CONTENT_TYPES, contentTypeLabel } from "@/lib/marketing/content-types";
@@ -57,9 +56,11 @@ import { CONTENT_TYPES, contentTypeLabel } from "@/lib/marketing/content-types";
  *   ③ Schedule  its accepted pieces, and giving them days
  *   ④ Calendar  pushing those days to Google, and what came back
  *
- * One caveat is live while the planner is still client-wide: generating and
- * accepting act on every active campaign at once. Stage ② says so in as many
- * words rather than pretending to be scoped.
+ * Everything here is scoped to this campaign, including generation: a plan run
+ * belongs to one campaign, so what stage ② shows is exactly what accepting it
+ * will write. It was not always so — the planner used to run client-wide while
+ * this page filtered the display, which meant accepting here committed content
+ * for campaigns you never saw.
  */
 
 export default function CampaignWorkspace() {
@@ -149,10 +150,13 @@ export default function CampaignWorkspace() {
   }, [clientId, campaignId]);
 
   const loadRun = useCallback(() => {
-    listPlanRuns(clientId, 1)
+    // Scoped, or "the latest run" would be the latest run for the CLIENT — and
+    // this page would show another campaign's work, filter it to nothing, and
+    // report that nothing was written for this one.
+    listPlanRuns(clientId, 1, campaignId)
       .then((runs) => setRun(runs[0] ?? null))
       .catch(() => {});
-  }, [clientId]);
+  }, [clientId, campaignId]);
 
   const loadSlots = useCallback(() => {
     listSlots(clientId)
@@ -244,7 +248,7 @@ export default function CampaignWorkspace() {
     setPlanning(true);
     setError(null);
     try {
-      setRun(await previewPlan(clientId));
+      setRun(await previewPlan(clientId, campaignId));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Writing failed");
     } finally {
@@ -403,20 +407,18 @@ export default function CampaignWorkspace() {
 
   const owed = breakdown.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
 
-  // This campaign's slice of the latest run. The planner is still client-wide,
-  // so a run can hold pieces for campaigns this page knows nothing about.
-  const mine = (run?.proposed_slots ?? []).filter(
-    (s: ProposedSlot) => s.campaignId === campaignId
-  );
-  const myDropped = (run?.dropped_slots ?? []).filter(
-    (d: DroppedSlot) => d.campaignId === campaignId
-  );
-  const openDropped = myDropped.filter((d) => d.replacedAt === null);
-  const otherCampaigns = new Set(
-    (run?.proposed_slots ?? [])
-      .map((s: ProposedSlot) => s.campaignId)
-      .filter((id) => id && id !== campaignId)
-  ).size;
+  /**
+   * The run as it stands — NOT filtered.
+   *
+   * A run is fetched by campaign and generated for one, so there is nothing to
+   * filter out. Deliberately left unfiltered rather than kept "for safety":
+   * hiding part of a run while the accept button commits all of it is the
+   * exact defect this replaced. If a run ever holds something unexpected, it
+   * should be visible before you accept it.
+   */
+  const mine = run?.proposed_slots ?? [];
+  const myDropped = run?.dropped_slots ?? [];
+  const openDropped = myDropped.filter((d: DroppedSlot) => d.replacedAt === null);
 
   const dated = slots
     .filter((s) => s.date)
@@ -832,19 +834,6 @@ export default function CampaignWorkspace() {
                 </button>
               </div>
 
-              {/* The planner is client-wide for now, so say so rather than
-                  implying this button is scoped to the campaign you are in. */}
-              {otherCampaigns > 0 && (
-                <p className={banner.warn}>
-                  This run also covers {otherCampaigns} other campaign
-                  {otherCampaigns === 1 ? "" : "s"}. Writing or accepting here
-                  affects all of them.{" "}
-                  <Link href={`/clients/${clientId}/plan`} className="underline">
-                    See the whole run
-                  </Link>
-                  .
-                </p>
-              )}
 
               {run?.status === "degraded" && (
                 <p className={banner.warn}>

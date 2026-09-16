@@ -136,9 +136,10 @@ export function buildDecideRequest(
  * Split a large request by campaign so one failed chunk degrades only its own
  * gaps.
  *
- * Splitting matters more than it used to: a preview now generates everything
- * every active campaign owes, so two campaigns of twenty pieces is exactly the
- * per-call ceiling.
+ * Rarely fires now that a run covers one campaign: a single campaign owing more
+ * than the per-call ceiling is unusual, where two campaigns of twenty pieces
+ * used to hit it exactly. It stays as the failure-isolation mechanism it always
+ * was, not as a per-campaign fan-out.
  */
 export function chunkRequest(request: DecideRequest, maxGaps = MAX_GAPS_PER_CALL): DecideRequest[] {
   if (request.gaps.length <= maxGaps) return [request];
