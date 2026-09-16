@@ -164,6 +164,17 @@ describe("renderSlotList", () => {
     expect(renderSlotList(range, [slot()])).toContain("1 piece ");
     expect(renderSlotList(range, [slot(), slot({ id: "s2" })])).toContain("2 pieces");
   });
+
+  /**
+   * Found against real data: a blank element added to the array for spacing
+   * gets the separator applied to it like any other, so the list opened with
+   * an empty divided block that read as a piece which had failed to load.
+   */
+  it("opens with a piece, not an empty block", () => {
+    const blocks = renderSlotList(range, [slot(), slot({ id: "s2" })]).split("\n\n---\n\n");
+    expect(blocks).toHaveLength(3); // header + two pieces, nothing between
+    expect(blocks.every((b) => b.trim().length > 0)).toBe(true);
+  });
 });
 
 describe("renderBrand", () => {

@@ -94,7 +94,11 @@ export function renderSlotList(range: RenderedRange, slots: AgentSlot[]): string
     `${slots.length} piece${slots.length === 1 ? "" : "s"} between ${range.from} and ` +
     `${range.to}, in ${range.timezone}. Dates are the client's local calendar.`;
 
-  return [header, "", ...slots.map((s) => renderSlot(s))].join("\n\n---\n\n");
+  // No blank element in this array. The separator applies between every pair,
+  // so an empty string added for spacing renders as its own divided block —
+  // the list then opens with an empty piece, which reads as a piece that
+  // failed to load.
+  return [header, ...slots.map((s) => renderSlot(s))].join("\n\n---\n\n");
 }
 
 export function renderClients(
