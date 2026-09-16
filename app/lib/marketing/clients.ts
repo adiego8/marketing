@@ -5,7 +5,6 @@ import type { Session } from "../auth";
 export interface ClientWrite {
   name: string;
   website_url: string | null;
-  logo_url: string | null;
   description: string | null;
   contact_email: string | null;
   contact_phone: string | null;
@@ -16,7 +15,10 @@ export interface ClientWrite {
 const FIELD_MAP: Record<string, string> = {
   name: "name",
   website_url: "websiteUrl",
-  logo_url: "logoUrl",
+  // logo_url is deliberately absent. It is written ONLY by the upload route
+  // (app/api/v1/clients/[clientId]/logo), so the field can never hold a string
+  // an operator typed. GET /api/agent/v1/logo answers a bare 302 with this
+  // value, which made an arbitrary string a redirect to any host at all.
   description: "description",
   contact_email: "contactEmail",
   contact_phone: "contactPhone",
@@ -62,7 +64,6 @@ export function parseClientCreate(
     data: {
       name,
       website_url: optionalString(b.website_url),
-      logo_url: optionalString(b.logo_url),
       description: optionalString(b.description),
       contact_email: optionalString(b.contact_email),
       contact_phone: optionalString(b.contact_phone),
@@ -147,7 +148,9 @@ export async function createClient(session: Session, data: ClientWrite) {
     agencyId: session.agencyId,
     name: data.name,
     websiteUrl: data.website_url,
-    logoUrl: data.logo_url,
+    // Always null at creation. A logo arrives by upload, which needs a client
+    // id to file the object under — so it cannot happen until this row exists.
+    logoUrl: null,
     description: data.description,
     contactEmail: data.contact_email,
     contactPhone: data.contact_phone,
