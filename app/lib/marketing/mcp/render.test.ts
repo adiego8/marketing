@@ -235,33 +235,57 @@ describe("renderClients", () => {
     { id: "c2", name: "Globex", timezone: "UTC", status: "active" },
   ];
 
-  // The model must learn from the first call whether client_id is required,
-  // rather than by getting a 400 on the second.
-  it("tells an agency key that client_id is required", () => {
+  // The model must learn whether client_id is required from its FIRST call,
+  // rather than by getting a 400 on its second.
+  it("tells an all-clients key that client_id is required", () => {
     const out = renderClients(clients, {
       name: "Desktop",
       scopes: ["schedule:read"],
-      scopeKind: "agency",
+      reachesAll: true,
     });
-    expect(out).toContain("whole agency");
+    expect(out).toContain("every client in the agency");
     expect(out).toContain("needs a client_id");
     expect(out).toContain("id: c1");
   });
 
-  it("tells a client key that it can be omitted", () => {
+  it("says how many a narrowed key reaches", () => {
+    const out = renderClients(clients, {
+      name: "Contractor",
+      scopes: ["schedule:read"],
+      reachesAll: false,
+    });
+    expect(out).toContain("2 clients");
+    expect(out).toContain("needs a client_id");
+  });
+
+  it("lets a key with exactly one client omit the id", () => {
     const out = renderClients([clients[0]], {
       name: "Publisher",
       scopes: ["schedule:read"],
-      scopeKind: "client",
+      reachesAll: false,
     });
-    expect(out).toContain("can be omitted");
+    expect(out).toContain("1 client");
+    expect(out).toContain("can omit client_id");
+  });
+
+  /**
+   * An all-clients key that happens to reach one client today still needs the
+   * id, because it will reach two tomorrow without being reconfigured.
+   */
+  it("still requires the id for an all-clients key with one client", () => {
+    const out = renderClients([clients[0]], {
+      name: "Desktop",
+      scopes: ["schedule:read"],
+      reachesAll: true,
+    });
+    expect(out).toContain("needs a client_id");
   });
 
   it("says plainly when a key reaches nothing", () => {
     const out = renderClients([], {
       name: "Stale",
       scopes: [],
-      scopeKind: "agency",
+      reachesAll: false,
     });
     expect(out).toContain("No clients are reachable");
   });

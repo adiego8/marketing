@@ -134,7 +134,7 @@ async function handle(
         {
           name: key.name,
           scopes: key.scopes,
-          scopeKind: key.clientId ? "client" : "agency",
+          reachesAll: key.clientIds === null,
         }
       )
     );

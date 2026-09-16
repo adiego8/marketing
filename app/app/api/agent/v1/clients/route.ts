@@ -43,8 +43,10 @@ export async function GET() {
         prefix: auth.key.prefix,
         scopes: auth.key.scopes,
         // So a caller knows whether client_id is required on everything else,
-        // and an operator debugging a 400 can see which kind they pasted.
-        scope_kind: auth.key.clientId ? "client" : "agency",
+        // and an operator debugging a 400 can see what they pasted. "all" also
+        // covers clients added after the key was minted.
+        reaches: auth.key.clientIds === null ? "all" : "selected",
+        client_count: clients.length,
       },
     });
   } catch (error) {

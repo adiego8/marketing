@@ -103,12 +103,20 @@ export function renderSlotList(range: RenderedRange, slots: AgentSlot[]): string
 
 export function renderClients(
   clients: { id: string; name: string; timezone: string; status: string }[],
-  key: { name: string; scopes: readonly string[]; scopeKind: "client" | "agency" }
+  key: { name: string; scopes: readonly string[]; reachesAll: boolean }
 ): string {
+  // Says whether client_id is required, so the model learns it from its first
+  // call rather than from a 400 on its second. One reachable client needs no
+  // id; anything else does, including an all-clients key that happens to have
+  // one client today but will not tomorrow.
+  const needsId = key.reachesAll || clients.length !== 1;
+  const reach = key.reachesAll
+    ? "every client in the agency"
+    : `${clients.length} client${clients.length === 1 ? "" : "s"}`;
+
   const lines = [
-    key.scopeKind === "agency"
-      ? `This key ("${key.name}") covers the whole agency, so every other tool needs a client_id.`
-      : `This key ("${key.name}") covers one client, so client_id can be omitted.`,
+    `This key ("${key.name}") reaches ${reach}, so every other tool ` +
+      (needsId ? "needs a client_id from the list below." : "can omit client_id."),
     `It may: ${key.scopes.join(", ")}`,
     "",
   ];

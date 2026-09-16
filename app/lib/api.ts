@@ -258,29 +258,17 @@ export const disconnectGoogle = () =>
 
 // --- API keys (the agent rail's credentials, managed from a human session) ---
 
-export const listApiKeys = (clientId: string) =>
-  request<ApiKey[]>(`${c(clientId)}/api-keys`);
-
-/** The only response that ever carries `secret`. Show it once, then forget it. */
-export const createApiKey = (
-  clientId: string,
-  data: { name: string; scopes: ApiKeyScope[]; expires_at?: string | null }
-) =>
-  request<ApiKey & { secret: string }>(`${c(clientId)}/api-keys`, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-
-export const revokeApiKey = (clientId: string, keyId: string) =>
-  request<ApiKey>(`${c(clientId)}/api-keys/${keyId}`, { method: "DELETE" });
-
-// Agency-wide keys reach every client, so they live outside /clients/[id].
-
 export const listAgencyKeys = () => request<ApiKey[]>("/agency/api-keys");
 
+/**
+ * The only response that ever carries `secret`. Show it once, then forget it.
+ *
+ * Omit client_ids for every client in the agency, present and future.
+ */
 export const createAgencyKey = (data: {
   name: string;
   scopes: ApiKeyScope[];
+  client_ids?: string[];
   expires_at?: string | null;
 }) =>
   request<ApiKey & { secret: string }>("/agency/api-keys", {

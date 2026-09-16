@@ -39,19 +39,14 @@ const readNothing = () => "";
 
 export function connectionInstructions(
   url: string,
-  scope: "client" | "agency",
   keyPath: string = DEFAULT_KEY_PATH
 ): string {
-  const reach =
-    scope === "agency"
-      ? "It covers every client in my agency."
-      : "It covers a single client.";
-
   return `Please connect me to my Numerico Marketing workspace.
 
 It is an MCP server that knows what my marketing clients are scheduled to
 publish, the finished copy for each piece, and how each client's brand sounds.
-${reach}
+Which clients the key reaches is a property of the key, so ask the server —
+do not assume.
 
   Server URL:  ${url}
   API key:     in a file on my machine, at ${keyPath}
@@ -105,12 +100,10 @@ you can see and what each is scheduled to publish this week.`;
 }
 
 export function ConnectInstructions({
-  scope,
   keyPath,
   title = "Connect an assistant",
   hint,
 }: {
-  scope: "client" | "agency";
   keyPath?: string;
   title?: string;
   hint?: string;
@@ -122,7 +115,7 @@ export function ConnectInstructions({
   const origin = useSyncExternalStore(subscribeNever, readOrigin, readNothing);
 
   const url = `${origin || "https://your-marketing-domain"}/api/mcp`;
-  const instructions = connectionInstructions(url, scope, keyPath);
+  const instructions = connectionInstructions(url, keyPath);
 
   return (
     <div className={`${surface.inset} mt-4`}>
