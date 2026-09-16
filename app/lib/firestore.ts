@@ -258,6 +258,11 @@ export function serializePlanRun(id: string, d: FirebaseFirestore.DocumentData) 
   return {
     id,
     client_id: d.clientId ?? null,
+    // The campaign this run was generated for. Null on every run made before
+    // planning was scoped, which is why the campaign page filters by it rather
+    // than assuming it: an old client-wide run must not be mistaken for one
+    // belonging to whichever campaign happens to be open.
+    campaign_id: d.campaignId ?? null,
     status: str(d.status, "proposed"),
     // What each campaign owed when the run was made. `horizon` is only present
     // on runs from before planning stopped placing dates; it is passed through

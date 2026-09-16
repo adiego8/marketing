@@ -145,12 +145,24 @@ export const getAuthMe = () =>
   request<{ user_email: string; agency_id: string; google_connected: boolean }>("/auth/me");
 
 // Planner
-/** Writes everything the active campaigns still owe. Undated; no horizon. */
-export const previewPlan = (clientId: string) =>
-  request<PlanRun>(`${c(clientId)}/plan/preview`, { method: "POST" });
+/**
+ * Writes everything ONE campaign still owes. Undated; no horizon.
+ *
+ * campaignId is required. A run belongs to a campaign, so what the campaign
+ * page shows is exactly what accepting it will commit.
+ */
+export const previewPlan = (clientId: string, campaignId: string) =>
+  request<PlanRun>(`${c(clientId)}/plan/preview`, {
+    method: "POST",
+    body: JSON.stringify({ campaign_id: campaignId }),
+  });
 
-export const listPlanRuns = (clientId: string, limit = 20) =>
-  request<PlanRun[]>(`${c(clientId)}/plan/runs?limit=${limit}`);
+/** Omit campaignId only where every campaign's runs are wanted. */
+export const listPlanRuns = (clientId: string, limit = 20, campaignId?: string) =>
+  request<PlanRun[]>(
+    `${c(clientId)}/plan/runs?limit=${limit}` +
+      (campaignId ? `&campaign_id=${encodeURIComponent(campaignId)}` : "")
+  );
 
 /* ------------------------------------------------------ the feedback loop -- */
 

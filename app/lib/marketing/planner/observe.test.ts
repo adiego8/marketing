@@ -161,7 +161,7 @@ describe("observe", () => {
   it("says so when there is no campaign at all", () => {
     const o = run({ campaigns: [] });
     expect(o.totalOutstanding).toBe(0);
-    expect(o.warnings.join(" ")).toContain("No active campaigns");
+    expect(o.warnings.join(" ")).toContain("No campaign to plan for");
   });
 
   it("says so when every plan is delivered", () => {

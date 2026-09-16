@@ -54,6 +54,46 @@ export async function loadRecentThemes(clientId: string, limit = 20) {
     }));
 }
 
+/**
+ * Themes sitting in other campaigns' OPEN, uncommitted runs.
+ *
+ * loadRecentThemes reads committed slots, which was enough while one run
+ * covered every campaign: all their gaps went into a single model call that
+ * saw them together. Scoped runs decide each campaign separately, so without
+ * this, previewing campaign A and then campaign B in the same session can hand
+ * both the same angle — A's ten themes are invisible to B because none of them
+ * are slots yet.
+ *
+ * Same blind spot, and same remedy, as rejectedThemes in replace.ts: an idea
+ * that exists but is not yet a slot still has to count as taken.
+ *
+ * Committed runs are skipped because their themes ARE slots by then, and
+ * loadRecentThemes already has them.
+ */
+export async function themesFromOpenRuns(
+  clientId: string,
+  excludeCampaignId: string
+): Promise<{ date: string | null; type: string; theme: string }[]> {
+  const snap = await db()
+    .collection(COLLECTIONS.planRuns)
+    .where("clientId", "==", clientId)
+    .get();
+
+  const out: { date: string | null; type: string; theme: string }[] = [];
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    if (d.committedAt) continue;
+    if (d.campaignId === excludeCampaignId) continue;
+    if (!Array.isArray(d.proposedSlots)) continue;
+
+    for (const slot of d.proposedSlots) {
+      const theme = typeof slot?.theme === "string" ? slot.theme : "";
+      if (theme) out.push({ date: null, type: String(slot?.type ?? ""), theme });
+    }
+  }
+  return out;
+}
+
 /** Map a serialized campaign into the shape the planner reasons about. */
 export function toCampaignWindow(campaign: {
   id: string;
@@ -103,6 +143,32 @@ export function toCampaignWindow(campaign: {
           .filter((t) => typeof t?.week === "number" && typeof t?.focus === "string")
           .map((t) => ({ week: t.week as number, focus: t.focus as string }))
       : [],
+  };
+}
+
+/**
+ * Narrow campaigns and slots to one campaign.
+ *
+ * Exists so previewPlan and commit's currentFingerprint cannot disagree about
+ * what "scoped" means. They hash the same inputs, and if one narrowed slots
+ * while the other did not, every commit would throw StalePlanError — a failure
+ * that looks like data corruption and is really a one-line divergence.
+ *
+ * A null campaignId means a run from before planning was scoped: those were
+ * computed client-wide, so they are left client-wide.
+ */
+export function scopeToCampaign<
+  C extends { id: string },
+  S extends { campaignId: string | null },
+>(
+  campaignId: string | null,
+  campaigns: C[],
+  slots: S[]
+): { campaigns: C[]; slots: S[] } {
+  if (!campaignId) return { campaigns, slots };
+  return {
+    campaigns: campaigns.filter((c) => c.id === campaignId),
+    slots: slots.filter((s) => s.campaignId === campaignId),
   };
 }
 
@@ -161,7 +227,23 @@ export async function createPlanRun(clientId: string, doc: Record<string, unknow
  * The (clientId, createdAt desc) index is declared in firestore.indexes.json —
  * once it is deployed, move the sort and limit back into the query.
  */
-export async function listPlanRuns(clientId: string, limit = 20) {
+export async function listPlanRuns(
+  clientId: string,
+  limit = 20,
+  /**
+   * Narrow to one campaign's runs. Filtered in memory, like the sort, so this
+   * needs no second index.
+   *
+   * The campaign workspace must pass it. Without it, "the latest run" is the
+   * latest run for the CLIENT — so generating for one campaign and then opening
+   * another shows the second campaign the first one's run, and a page that
+   * filters it to nothing then reports that nothing was written for it.
+   *
+   * Runs predating scoping carry no campaignId and match nothing, which is
+   * correct: a client-wide run is not this campaign's run.
+   */
+  campaignId?: string
+) {
   const snap = await db()
     .collection(COLLECTIONS.planRuns)
     .where("clientId", "==", clientId)
@@ -169,6 +251,7 @@ export async function listPlanRuns(clientId: string, limit = 20) {
 
   return snap.docs
     .map((doc) => serializePlanRun(doc.id, doc.data()))
+    .filter((run) => !campaignId || run.campaign_id === campaignId)
     .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
     .slice(0, limit);
 }
