@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { listApiKeys, createApiKey, revokeApiKey } from "@/lib/api";
 import { CopyButton } from "@/components/shared/copy-button";
+import {
+  ConnectInstructions,
+  SaveKeyFirst,
+} from "@/components/shared/connect-instructions";
 import { banner, btn, field, surface, text } from "@/lib/ui";
 import { statusPill } from "@/lib/ui-status";
 import type { ApiKey, ApiKeyScope } from "@/lib/types";
@@ -141,10 +145,13 @@ export default function ApiAccessPage() {
               Done
             </button>
           </div>
+          <SaveKeyFirst />
+          <ConnectInstructions scope="client" />
+
           <p className={`${text.micro} mt-3`}>
-            Send it as{" "}
+            Or use it directly:{" "}
             <code className="font-mono">Authorization: Bearer {minted.prefix}…</code>{" "}
-            to <code className="font-mono">/api/agent/v1/schedule</code>.
+            against <code className="font-mono">/api/agent/v1/schedule</code>.
           </p>
         </div>
       )}
@@ -239,6 +246,14 @@ export default function ApiAccessPage() {
           )}
         </>
       )}
+
+      {/* Key-free, so it outlives the one moment the secret is visible and can
+          be handed to whoever is doing the connecting. */}
+      <ConnectInstructions
+        scope="client"
+        title="How anyone connects"
+        hint="The same instructions without a key — paste your own in where it says so, then paste the whole thing into Claude."
+      />
     </div>
   );
 }

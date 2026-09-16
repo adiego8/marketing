@@ -6,6 +6,10 @@ import { listAgencyKeys, createAgencyKey, revokeAgencyKey } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { NumericoLockup } from "@/components/brand/numerico-mark";
 import { CopyButton } from "@/components/shared/copy-button";
+import {
+  ConnectInstructions,
+  SaveKeyFirst,
+} from "@/components/shared/connect-instructions";
 import { banner, btn, field, surface, text } from "@/lib/ui";
 import { statusPill } from "@/lib/ui-status";
 import type { ApiKey, ApiKeyScope } from "@/lib/types";
@@ -163,6 +167,11 @@ export default function SettingsPage() {
                 Done
               </button>
             </div>
+
+            {/* The key is shown once, so this is where it has to be saved.
+                The instructions carry only the path — never the secret. */}
+            <SaveKeyFirst />
+            <ConnectInstructions scope="agency" />
           </div>
         )}
 
@@ -225,6 +234,15 @@ export default function SettingsPage() {
             Want a key limited to one client instead? Open that client and use its
             API access page.
           </p>
+
+          {/* Deliberately without a key. A file or page carrying a live secret
+              would outlive the moment it was needed; this is the shape, and the
+              reader pastes their own key into it. */}
+          <ConnectInstructions
+            scope="agency"
+            title="How anyone connects"
+            hint="The same instructions without a key — paste your own in where it says so, then paste the whole thing into Claude."
+          />
         </section>
 
         {loading ? (
