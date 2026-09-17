@@ -11,7 +11,6 @@ import {
   loadPlannerSlots,
   loadRecentThemes,
   scopeToCampaign,
-  themesFromOpenRuns,
   toCampaignWindow,
 } from "./plan-runs";
 import { mintSlotId } from "./slot-id";
@@ -224,18 +223,19 @@ export async function previewPlan(
   // happens later and by hand. An empty one is entirely workable.
   const quota = (strategy.content_quota?.weekly ?? {}) as Record<string, QuotaEntry>;
 
-  const [campaign, allSlots, committedThemes, openThemes, lessons] = await Promise.all([
+  const [campaign, allSlots, recentThemes, lessons] = await Promise.all([
     getCampaign(clientId, opts.campaignId),
     loadPlannerSlots(clientId),
+    // Every theme this client has, whatever its status. No merge with
+    // uncommitted runs any more: generation commits in the same request, so a
+    // piece written a second ago is already a slot loadRecentThemes can see.
+    //
+    // No status filter is what makes turning a piece down work — the cancelled
+    // theme stays in the avoid-list, so refilling the gap it reopened does not
+    // hand back the angle that was just rejected.
     loadRecentThemes(clientId),
-    themesFromOpenRuns(clientId, opts.campaignId),
     lessonsForPrompt(clientId, "plan_themes"),
   ]);
-
-  // Everything already scheduled, PLUS what other campaigns have open but not
-  // committed. The second half exists because scoping split what used to be
-  // one model call per client into one per campaign — see themesFromOpenRuns.
-  const recentThemes = [...committedThemes, ...openThemes];
 
   // getCampaign returns null for another client's campaign too, so this is the
   // tenancy check as well as the existence one.

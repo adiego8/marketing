@@ -224,8 +224,15 @@ describe("staleness", () => {
     expect(sourceHash({ ...s, hook: "other" })).not.toBe(base);
     expect(sourceHash({ ...s, cta: "other" })).not.toBe(base);
     expect(sourceHash({ ...s, body: ["one"] })).not.toBe(base);
-    expect(sourceHash({ ...s, rationale: "other" })).toBe(base);
-    expect(sourceHash({ ...s, brief: "other" })).toBe(base);
+
+    // Typed locals rather than inline literals: sourceHash takes HasBrief now,
+    // which does not name `rationale` or `brief`, and TypeScript excess-property
+    // checks a fresh literal. That the two fields are absent from the parameter
+    // type is the same claim this test makes at runtime.
+    const otherRationale: Slot = { ...s, rationale: "other" };
+    const otherBrief: Slot = { ...s, brief: "other" };
+    expect(sourceHash(otherRationale)).toBe(base);
+    expect(sourceHash(otherBrief)).toBe(base);
   });
 
   it("notices a reordering of the beats", () => {

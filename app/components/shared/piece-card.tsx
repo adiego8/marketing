@@ -78,6 +78,15 @@ export function PieceCard({
   action,
   /** A state line along the bottom: status, sync, copy readiness. */
   footer,
+  /**
+   * An expanded region below the footer — the finished copy, and the controls
+   * for writing it.
+   *
+   * Rendered only when the surrounding screen decides this piece is open, so
+   * the card itself holds no open/closed state: a list of them needs exactly
+   * one id open at a time, which is the page's business, not the card's.
+   */
+  children,
   muted = false,
   showCampaign = false,
 }: {
@@ -85,6 +94,7 @@ export function PieceCard({
   lead?: React.ReactNode;
   action?: React.ReactNode;
   footer?: React.ReactNode;
+  children?: React.ReactNode;
   muted?: boolean;
   showCampaign?: boolean;
 }) {
@@ -138,6 +148,10 @@ export function PieceCard({
           {footer}
         </div>
       )}
+
+      {/* Below the footer, not above: the state line says what this piece is,
+          and the expansion is the answer to it. */}
+      {children && <div className="mt-3 space-y-3">{children}</div>}
     </article>
   );
 }

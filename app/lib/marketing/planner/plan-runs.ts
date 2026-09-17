@@ -54,46 +54,6 @@ export async function loadRecentThemes(clientId: string, limit = 20) {
     }));
 }
 
-/**
- * Themes sitting in other campaigns' OPEN, uncommitted runs.
- *
- * loadRecentThemes reads committed slots, which was enough while one run
- * covered every campaign: all their gaps went into a single model call that
- * saw them together. Scoped runs decide each campaign separately, so without
- * this, previewing campaign A and then campaign B in the same session can hand
- * both the same angle — A's ten themes are invisible to B because none of them
- * are slots yet.
- *
- * Same blind spot, and same remedy, as rejectedThemes in replace.ts: an idea
- * that exists but is not yet a slot still has to count as taken.
- *
- * Committed runs are skipped because their themes ARE slots by then, and
- * loadRecentThemes already has them.
- */
-export async function themesFromOpenRuns(
-  clientId: string,
-  excludeCampaignId: string
-): Promise<{ date: string | null; type: string; theme: string }[]> {
-  const snap = await db()
-    .collection(COLLECTIONS.planRuns)
-    .where("clientId", "==", clientId)
-    .get();
-
-  const out: { date: string | null; type: string; theme: string }[] = [];
-  for (const doc of snap.docs) {
-    const d = doc.data();
-    if (d.committedAt) continue;
-    if (d.campaignId === excludeCampaignId) continue;
-    if (!Array.isArray(d.proposedSlots)) continue;
-
-    for (const slot of d.proposedSlots) {
-      const theme = typeof slot?.theme === "string" ? slot.theme : "";
-      if (theme) out.push({ date: null, type: String(slot?.type ?? ""), theme });
-    }
-  }
-  return out;
-}
-
 /** Map a serialized campaign into the shape the planner reasons about. */
 export function toCampaignWindow(campaign: {
   id: string;

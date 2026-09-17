@@ -146,13 +146,18 @@ export const getAuthMe = () =>
 
 // Planner
 /**
- * Writes everything ONE campaign still owes. Undated; no horizon.
+ * Writes everything ONE campaign still owes, and creates the pieces for real.
  *
- * campaignId is required. A run belongs to a campaign, so what the campaign
- * page shows is exactly what accepting it will commit.
+ * Undated, status "planned" — days are chosen afterwards, by a person. One
+ * action rather than a preview and an accept: a piece that does not exist yet
+ * cannot be opened, edited or given copy, which is why the two became one.
+ *
+ * A run with no proposed slots means the campaign owed nothing and nothing was
+ * created. Rejecting a piece is cancel-then-generate-again: cancelling reopens
+ * the gap, and the cancelled theme stays in the model's avoid-list.
  */
-export const previewPlan = (clientId: string, campaignId: string) =>
-  request<PlanRun>(`${c(clientId)}/plan/preview`, {
+export const generatePlan = (clientId: string, campaignId: string) =>
+  request<PlanRun>(`${c(clientId)}/plan/generate`, {
     method: "POST",
     body: JSON.stringify({ campaign_id: campaignId }),
   });
@@ -446,41 +451,3 @@ export const deletePlanRun = (clientId: string, runId: string) =>
     wasCommitted: boolean;
   }>(`${c(clientId)}/plan/runs/${runId}`, { method: "DELETE" });
 
-export const commitPlan = (clientId: string, runId: string) =>
-  request<PlanRun>(`${c(clientId)}/plan/runs/${runId}/commit`, { method: "POST" });
-
-/**
- * Editing a preview before it is committed.
- *
- * All three return the whole run, so the page replaces its state rather than
- * patching it — the same habit as commitPlan. `drop_warnings` carries what
- * could not be done (a slot already replaced, say) without failing the call.
- */
-type PlanRunEdit = PlanRun & { drop_warnings?: string[]; replaced?: number };
-
-export const dropPlanSlots = (
-  clientId: string,
-  runId: string,
-  drops: { slotId: string; reason?: string }[]
-) =>
-  request<PlanRunEdit>(`${c(clientId)}/plan/runs/${runId}/drop`, {
-    method: "POST",
-    body: JSON.stringify({ drops }),
-  });
-
-export const restorePlanSlots = (clientId: string, runId: string, slotIds: string[]) =>
-  request<PlanRunEdit>(`${c(clientId)}/plan/runs/${runId}/restore`, {
-    method: "POST",
-    body: JSON.stringify({ slotIds }),
-  });
-
-/** One model call for every dropped slot. Empty `slotIds` means all of them. */
-export const replaceDroppedSlots = (
-  clientId: string,
-  runId: string,
-  slotIds: string[] = []
-) =>
-  request<PlanRunEdit>(`${c(clientId)}/plan/runs/${runId}/replace`, {
-    method: "POST",
-    body: JSON.stringify({ slotIds }),
-  });

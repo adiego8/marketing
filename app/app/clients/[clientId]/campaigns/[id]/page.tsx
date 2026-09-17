@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { StageRail, type Stage } from "@/components/shared/stage-rail";
-import { PieceCard, fromProposed, fromSlot } from "@/components/shared/piece-card";
+import { PieceCard, fromSlot } from "@/components/shared/piece-card";
 import { backLink, banner, btn, field, surface, table, text } from "@/lib/ui";
 import { ChevronLeft } from "lucide-react";
-import { PILL, statusColor, statusLabel } from "@/lib/ui-status";
+import { PILL, statusColor, statusLabel, statusPill } from "@/lib/ui-status";
 import {
   getCampaign,
   improveCampaign,
@@ -20,11 +20,8 @@ import {
   getStrategy,
   listPlanRuns,
   listSlots,
-  previewPlan,
-  commitPlan,
-  dropPlanSlots,
-  restorePlanSlots,
-  replaceDroppedSlots,
+  generatePlan,
+  updateSlot,
   scheduleSlot,
   getClient,
   getGoogleStatus,
@@ -34,12 +31,13 @@ import {
 } from "@/lib/api";
 import { calendarOpenUrl } from "@/lib/marketing/calendar-links";
 import { readGoogleResult } from "@/lib/google-result";
+import { StateLabel } from "@/components/shared/state-label";
+import { readCopy, isCopyStale } from "@/lib/marketing/copy";
 import type {
   Campaign,
   QuotaEntry,
   PlanRun,
   Slot,
-  DroppedSlot,
 } from "@/lib/types";
 import { CONTENT_TYPES, contentTypeLabel } from "@/lib/marketing/content-types";
 
@@ -94,12 +92,14 @@ export default function CampaignWorkspace() {
   const [planSaved, setPlanSaved] = useState(false);
 
   // ② Content
+  //
+  // The run is kept only for what it says ABOUT a generation — warnings, a
+  // degraded model answer, whether it wrote nothing. The pieces themselves are
+  // real slots now, read from `slots` below, so there is no preview state to
+  // hold and nothing to accept.
   const [run, setRun] = useState<PlanRun | null>(null);
   const [planning, setPlanning] = useState(false);
-  const [committing, setCommitting] = useState(false);
   const [busySlot, setBusySlot] = useState<string | null>(null);
-  const [replacing, setReplacing] = useState(false);
-  const [reasons, setReasons] = useState<Record<string, string>>({});
 
   // ③ Schedule
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -255,13 +255,22 @@ export default function CampaignWorkspace() {
 
   /* ----------------------------------------------------------- ② content -- */
 
-  const applyEdit = (next: PlanRun) => setRun(next);
-
-  const handlePreview = async () => {
+  /**
+   * Write what this campaign still owes, and create the pieces for real.
+   *
+   * One action, where this used to be generate-then-accept. A piece that does
+   * not exist cannot be opened, edited or given copy, so reviewing a preview
+   * meant deciding about content you could not properly look at.
+   *
+   * Safe to press again: demand is what the campaign asked for minus the
+   * pieces it already has, so with nothing owed this writes nothing.
+   */
+  const handleGenerate = async () => {
     setPlanning(true);
     setError(null);
     try {
-      setRun(await previewPlan(clientId, campaignId));
+      setRun(await generatePlan(clientId, campaignId));
+      loadSlots();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Writing failed");
     } finally {
@@ -269,68 +278,33 @@ export default function CampaignWorkspace() {
     }
   };
 
-  const handleCommit = async () => {
-    if (!run) return;
-    setCommitting(true);
-    setError(null);
-    try {
-      applyEdit(await commitPlan(clientId, run.id));
-      loadSlots();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not accept the plan");
-    } finally {
-      setCommitting(false);
+  /**
+   * Turn down a piece.
+   *
+   * Cancelling rather than deleting, and that is the mechanism rather than a
+   * soft-delete habit: countsAgainstQuota excludes "cancelled", so the gap
+   * reopens and the next Write content refills it — while loadRecentThemes
+   * still sees this theme and keeps the model off the angle just rejected.
+   */
+  const handleCancelPiece = async (slot: Slot) => {
+    if (
+      !confirm(
+        `Turn down "${slot.theme || contentTypeLabel(slot.type)}"?\n\n` +
+          "It stops counting towards what this campaign owes, so pressing Write " +
+          "content again writes a replacement on a different angle."
+      )
+    ) {
+      return;
     }
-  };
-
-  const handleDrop = async (slotId: string) => {
-    if (!run) return;
-    setBusySlot(slotId);
+    setBusySlot(slot.id);
     setError(null);
     try {
-      applyEdit(await dropPlanSlots(clientId, run.id, [{ slotId }]));
+      const updated = await updateSlot(clientId, slot.id, { status: "cancelled" });
+      setSlots((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not drop that idea");
-    } finally {
-      setBusySlot(null);
-    }
-  };
-
-  const handleRestore = async (slotId: string) => {
-    if (!run) return;
-    setBusySlot(slotId);
-    setError(null);
-    try {
-      applyEdit(await restorePlanSlots(clientId, run.id, [slotId]));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not restore that idea");
+      setError(e instanceof Error ? e.message : "Could not turn that piece down");
     } finally {
       setBusySlot(null);
-    }
-  };
-
-  /** Saved on blur, and only when the text actually changed. */
-  const handleReason = async (slotId: string, saved: string) => {
-    if (!run) return;
-    const reason = (reasons[slotId] ?? saved).trim();
-    if (reason === saved.trim()) return;
-    try {
-      applyEdit(await dropPlanSlots(clientId, run.id, [{ slotId, reason }]));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save that reason");
-    }
-  };
-
-  const handleReplace = async () => {
-    if (!run) return;
-    setReplacing(true);
-    setError(null);
-    try {
-      applyEdit(await replaceDroppedSlots(clientId, run.id));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not write replacements");
-    } finally {
-      setReplacing(false);
     }
   };
 
@@ -448,17 +422,18 @@ export default function CampaignWorkspace() {
   const owed = breakdown.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
 
   /**
-   * The run as it stands — NOT filtered.
+   * The campaign's pieces, as real slots.
    *
-   * A run is fetched by campaign and generated for one, so there is nothing to
-   * filter out. Deliberately left unfiltered rather than kept "for safety":
-   * hiding part of a run while the accept button commits all of it is the
-   * exact defect this replaced. If a run ever holds something unexpected, it
-   * should be visible before you accept it.
+   * Generation creates them, so "what this campaign has written" and "what it
+   * has scheduled" are the same list seen at two stages — live at ②, and
+   * narrowed to the undated ones at ③.
+   *
+   * Turned-down pieces are held back: cancelling is how a piece is rejected,
+   * and a rejected idea sitting in the list it was rejected from would read as
+   * still owed. It stays in the client's history, and in the model's
+   * avoid-list, which is what matters.
    */
-  const mine = run?.proposed_slots ?? [];
-  const myDropped = run?.dropped_slots ?? [];
-  const openDropped = myDropped.filter((d: DroppedSlot) => d.replacedAt === null);
+  const live = slots.filter((s) => s.status !== "cancelled" && s.status !== "skipped");
 
   const dated = slots
     .filter((s) => s.date)
@@ -468,6 +443,10 @@ export default function CampaignWorkspace() {
   // A piece is on Google once it has an event id. "pending" and "error" both
   // mean it is not there yet; "stale" means it is, but out of date.
   const onGoogle = dated.filter((s) => s.google_event_id);
+
+  // How much of this campaign has words, not just a brief — the one number that
+  // says whether the content is ready to be judged or only ready to be read.
+  const withCopy = live.filter((s) => readCopy(s)).length;
   const span =
     dated.length > 0
       ? { start: dated[0].date as string, end: dated[dated.length - 1].date as string }
@@ -484,12 +463,9 @@ export default function CampaignWorkspace() {
       value: "content",
       label: "Content",
       detail:
-        mine.length === 0 && myDropped.length === 0
+        live.length === 0
           ? "Nothing written yet"
-          : [
-              `${mine.length} written`,
-              openDropped.length > 0 ? `${openDropped.length} dropped` : null,
-            ]
+          : [`${live.length} written`, withCopy > 0 ? `${withCopy} with copy` : null]
               .filter(Boolean)
               .join(" · "),
       ready: campaign.status === "active",
@@ -861,19 +837,18 @@ export default function CampaignWorkspace() {
             <>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-slate-500">
-                  {mine.length > 0
-                    ? `${mine.length} piece${mine.length === 1 ? "" : "s"} written for this campaign. Nothing is scheduled — you pick the days afterwards.`
+                  {live.length > 0
+                    ? `${live.length} piece${live.length === 1 ? "" : "s"} written for this campaign. Nothing is scheduled — you pick the days afterwards.`
                     : "Write everything this campaign still owes."}
                 </p>
                 <button
-                  onClick={handlePreview}
+                  onClick={handleGenerate}
                   disabled={planning}
                   className={btn.primarySm}
                 >
                   {planning ? "Writing… (30-90s)" : "Write content"}
                 </button>
               </div>
-
 
               {run?.status === "degraded" && (
                 <p className={banner.warn}>
@@ -882,16 +857,26 @@ export default function CampaignWorkspace() {
                 </p>
               )}
 
-              {mine.length === 0 && myDropped.length === 0 ? (
+              {/* A run that wrote nothing is an answer, not a failure — and only
+                  worth saying while there are already pieces, since the empty
+                  state below says it better when there are none. */}
+              {run?.status === "noop" && live.length > 0 && (
+                <p className={banner.info}>
+                  That wrote nothing: this campaign already has everything it asks
+                  for. Turn a piece down to make room for a different angle.
+                </p>
+              )}
+
+              {live.length === 0 ? (
                 <div className={surface.empty}>
                   <p className="text-slate-700 text-lg">Nothing written yet.</p>
                   <p className="text-slate-500 text-sm mt-1">
                     {run
                       ? "The last run wrote nothing for this campaign — everything it asks for may already be delivered."
-                      : "Write the content this campaign owes, then keep what you like."}
+                      : "Write the content this campaign owes, then read each piece and give it its words."}
                   </p>
                   <button
-                    onClick={handlePreview}
+                    onClick={handleGenerate}
                     disabled={planning}
                     className={`${btn.primary} mt-6`}
                   >
@@ -899,159 +884,51 @@ export default function CampaignWorkspace() {
                   </button>
                 </div>
               ) : (
-                <>
-                  <div className="space-y-3">
-                    {mine.map((slot) => (
+                <div className="space-y-3">
+                  {live.map((slot) => {
+                    const copy = readCopy(slot);
+                    const stale = isCopyStale(slot);
+                    return (
                       <PieceCard
-                        key={slot.slotId}
-                        piece={fromProposed(slot)}
+                        key={slot.id}
+                        piece={fromSlot(slot)}
                         action={
                           <button
-                            onClick={() => handleDrop(slot.slotId)}
-                            disabled={busySlot === slot.slotId || !!run?.committed_at}
+                            onClick={() => handleCancelPiece(slot)}
+                            disabled={busySlot === slot.id}
                             className={btn.ghost}
                           >
-                            {busySlot === slot.slotId ? "…" : "Drop"}
+                            {busySlot === slot.id ? "…" : "Turn down"}
                           </button>
                         }
-                      />
-                    ))}
-                  </div>
-
-                  {myDropped.length > 0 && (
-                    <section className={`${surface.card} ${surface.pad}`}>
-                      <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
-                        <h2 className={text.cardTitle}>
-                          Dropped
-                          <span className={`${PILL} ml-2 bg-slate-100 text-slate-500`}>
-                            {openDropped.length}
-                          </span>
-                        </h2>
-                        {openDropped.length > 0 && !run?.committed_at && (
-                          <button
-                            onClick={handleReplace}
-                            disabled={replacing}
-                            className={btn.primarySm}
-                          >
-                            {replacing
-                              ? "Rethinking… (15-30s)"
-                              : `Rewrite ${openDropped.length} idea${
-                                  openDropped.length === 1 ? "" : "s"
-                                }`}
-                          </button>
-                        )}
-                      </div>
-                      <p className="text-sm text-slate-500 mb-4">
-                        Say what was wrong and rewrite to get a different idea for
-                        the same slot — one model call for all of them. Or leave
-                        them: the campaign still owes the piece, so the next run
-                        writes it again.
-                      </p>
-
-                      <div className="space-y-3">
-                        {myDropped.map((entry) => {
-                          const replaced = entry.replacedAt !== null;
-                          return (
-                            <div
-                              key={`${entry.slotId}-${entry.droppedAt}`}
-                              className={`rounded-lg border p-3 ${
-                                replaced
-                                  ? "border-slate-100 bg-stone-50/60"
-                                  : "border-slate-200"
-                              }`}
+                        footer={
+                          <>
+                            <span className={statusPill(slot.status)}>
+                              {statusLabel(slot.status)}
+                            </span>
+                            {copy ? (
+                              <StateLabel tone={stale ? "warn" : "good"}>
+                                {stale ? "copy is older than the brief" : "copy ready"}
+                              </StateLabel>
+                            ) : (
+                              <StateLabel tone="muted">no copy yet</StateLabel>
+                            )}
+                            {/* The one way into a piece from here. Everything
+                                about it — the brief, a new angle, the words —
+                                lives on its own page, and ?from= brings you
+                                back to this stage rather than the calendar. */}
+                            <Link
+                              href={`/clients/${clientId}/schedule/${slot.id}?from=${campaignId}&stage=content`}
+                              className={btn.link}
                             >
-                              <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="text-xs text-slate-400">
-                                    {contentTypeLabel(entry.type)} · {entry.channel}
-                                  </p>
-                                  <p
-                                    className={`font-medium ${
-                                      replaced
-                                        ? "text-slate-400 line-through"
-                                        : "text-slate-700"
-                                    }`}
-                                  >
-                                    {entry.theme || "(no theme)"}
-                                  </p>
-                                </div>
-                                {replaced ? (
-                                  <span className={`${PILL} bg-teal-50 text-teal-700 shrink-0`}>
-                                    rewritten
-                                  </span>
-                                ) : (
-                                  !run?.committed_at && (
-                                    <button
-                                      onClick={() => handleRestore(entry.slotId)}
-                                      disabled={busySlot === entry.slotId}
-                                      className={`${btn.outlineSm} shrink-0`}
-                                    >
-                                      {busySlot === entry.slotId ? "…" : "Put back"}
-                                    </button>
-                                  )
-                                )}
-                              </div>
-
-                              {!replaced && !run?.committed_at && (
-                                <input
-                                  value={reasons[entry.slotId] ?? entry.reason}
-                                  onChange={(e) =>
-                                    setReasons((r) => ({
-                                      ...r,
-                                      [entry.slotId]: e.target.value,
-                                    }))
-                                  }
-                                  onBlur={() => handleReason(entry.slotId, entry.reason)}
-                                  maxLength={300}
-                                  placeholder="What was wrong? — e.g. too salesy, we said this in March"
-                                  className={`${field.inputSm} mt-2`}
-                                />
-                              )}
-                              {replaced && entry.reason && (
-                                <p className="text-xs text-slate-400 mt-1">
-                                  Rejected: {entry.reason}
-                                </p>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  )}
-
-                  {run &&
-                    (run.committed_at ? (
-                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 p-4">
-                        <p className="text-sm text-teal-800">
-                          Accepted {new Date(run.committed_at).toLocaleString()}.
-                          The pieces are waiting for days.
-                        </p>
-                        <button
-                          onClick={() => setStage("schedule")}
-                          className={`${btn.primarySm} shrink-0`}
-                        >
-                          Give them days
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
-                        <p className="text-sm text-slate-500">
-                          Nothing is on the calendar yet.
-                        </p>
-                        <button
-                          onClick={handleCommit}
-                          disabled={committing || run.proposed_slots.length === 0}
-                          className={`${btn.primarySm} shrink-0`}
-                        >
-                          {committing
-                            ? "Accepting…"
-                            : `Accept ${run.proposed_slots.length} piece${
-                                run.proposed_slots.length === 1 ? "" : "s"
-                              }`}
-                        </button>
-                      </div>
-                    ))}
-                </>
+                              Open
+                            </Link>
+                          </>
+                        }
+                      />
+                    );
+                  })}
+                </div>
               )}
             </>
           )}
@@ -1065,10 +942,10 @@ export default function CampaignWorkspace() {
 
           {slots.length === 0 ? (
             <div className={surface.empty}>
-              <p className="text-slate-700 text-lg">Nothing accepted yet.</p>
+              <p className="text-slate-700 text-lg">Nothing written yet.</p>
               <p className="text-slate-500 text-sm mt-1">
-                Write this campaign&rsquo;s content and accept it, and the pieces
-                land here waiting for days.
+                Write this campaign&rsquo;s content and the pieces land here
+                waiting for days.
               </p>
               <button onClick={() => setStage("content")} className={`${btn.primary} mt-6`}>
                 Go to content
@@ -1126,6 +1003,17 @@ export default function CampaignWorkspace() {
                           {datingId === slot.id ? "Setting…" : "Schedule"}
                         </button>
                       </div>
+                    }
+                    footer={
+                      /* The same way in as stage ②. Dating a piece you cannot
+                         open means choosing a day for something you have not
+                         read since it was written. */
+                      <Link
+                        href={`/clients/${clientId}/schedule/${slot.id}?from=${campaignId}&stage=schedule`}
+                        className={btn.link}
+                      >
+                        Open
+                      </Link>
                     }
                   />
                 ))}

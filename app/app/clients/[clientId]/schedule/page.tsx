@@ -19,6 +19,7 @@ import {
 import { banner, btn, field, surface, toggle, text } from "@/lib/ui";
 import { statusPill, statusLabel, PILL } from "@/lib/ui-status";
 import { PieceCard, fromSlot } from "@/components/shared/piece-card";
+import { StateLabel } from "@/components/shared/state-label";
 import { readCopy, isCopyStale } from "@/lib/marketing/copy";
 import { calendarOpenUrl } from "@/lib/marketing/calendar-links";
 import { readGoogleResult } from "@/lib/google-result";
@@ -56,35 +57,6 @@ function dayLabel(date: string) {
 
 function isoDate(d: Date) {
   return d.toISOString().slice(0, 10);
-}
-
-/**
- * A read-only state word under a piece: sync health, copy readiness.
- *
- * These used to stack inside the Schedule table's Status cell alongside a
- * pill, a select, a link and a button — nine controls under one column header.
- * They are the same words; they just have room now.
- */
-function StateLabel({
-  tone,
-  title,
-  children,
-}: {
-  tone: "good" | "warn" | "bad" | "muted";
-  title?: string;
-  children: React.ReactNode;
-}) {
-  const color = {
-    good: "text-teal-700",
-    warn: "text-amber-700",
-    bad: "text-red-700",
-    muted: "text-slate-400",
-  }[tone];
-  return (
-    <span className={`text-[11px] uppercase tracking-wide ${color}`} title={title}>
-      {children}
-    </span>
-  );
 }
 
 export default function SchedulePage() {
@@ -308,8 +280,9 @@ export default function SchedulePage() {
    * page now. No steer here — that belongs where you can see what you are
    * steering.
    *
-   * Shares savingId with the status select, because a row should be busy as a
-   * whole rather than per control.
+   * Has its own busy id rather than sharing savingId: a copy write can take
+   * minutes, and a row frozen that long by the status select's flag would read
+   * as broken.
    */
   const handleWriteCopy = async (slot: Slot) => {
     setWritingId(slot.id);
@@ -326,7 +299,9 @@ export default function SchedulePage() {
         `${slot.date ? dayLabel(slot.date) : "Unscheduled"} · ${contentTypeLabel(slot.type)}: ${why}`
       );
     } finally {
-      setSavingId(null);
+      // writingId, not savingId. Clearing the wrong one left the button stuck
+      // on "Writing…" for the rest of the session after a single use.
+      setWritingId(null);
     }
   };
 

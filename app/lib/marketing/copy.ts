@@ -25,7 +25,11 @@
 import { createHash } from "node:crypto";
 import { clamp, clampList } from "./planner/decide";
 import { limitsFor } from "./posting-windows";
-import type { Slot } from "../types";
+
+// No import of Slot, deliberately. Every function here takes the fields it
+// reads (see HasBrief and friends below), which is what lets the same decisions
+// serve a committed slot and an uncommitted proposal without a second code
+// path — and keeps "what does copy depend on?" answerable from this file alone.
 
 /**
  * One unit of the piece: a slide, a shot, a tweet, or the whole post.
@@ -45,6 +49,42 @@ export interface CopyBlock {
   onScreen?: string;
   /** Production direction — camera, art, framing. Never published. */
   note?: string;
+}
+
+/**
+ * What these helpers actually need, named as fields rather than as `Slot`.
+ *
+ * Every function below reads two or three properties, and both a committed
+ * `Slot` and an uncommitted `ProposedSlot` carry them under exactly the same
+ * names — so structural parameters let one implementation serve copy written
+ * before a plan is accepted and copy written after, with no adapter and no
+ * second code path to keep in step.
+ *
+ * Deliberately NOT `Slot | ProposedSlot`: a union would drag in every field of
+ * both and re-couple this module to two type declarations it does not care
+ * about. Naming the fields is also the honest documentation of what a copy
+ * decision depends on.
+ */
+export interface HasChannel {
+  channel: string;
+}
+
+/** Format is (type, channel) — what shape the words take and where they go. */
+export interface HasFormat extends HasChannel {
+  type: string;
+}
+
+/** The brief the copy was written from; what sourceHash fingerprints. */
+export interface HasBrief {
+  theme: string;
+  hook: string;
+  body?: string[];
+  cta: string;
+}
+
+/** Carries written copy, or does not yet. */
+export interface HasContent {
+  content: Record<string, unknown> | null;
 }
 
 export interface SlotCopy {
@@ -160,7 +200,7 @@ const FORMAT_SHAPES: Record<CopyFormat, FormatShape> = {
   newsletter: { unit: "section", hasCaption: false },
 };
 
-export function formatShape(slot: Slot): FormatShape {
+export function formatShape(slot: HasFormat): FormatShape {
   return FORMAT_SHAPES[normalizeFormat(slot.type, slot.channel)];
 }
 
@@ -182,7 +222,7 @@ export function blockLabelFor(format: CopyFormat, index: number): string {
  * to be defensive rather than a cast: the field is hand-editable JSON and will
  * eventually hold a shape written by an older version of this file.
  */
-export function readCopy(slot: Slot): SlotCopy | null {
+export function readCopy(slot: HasContent): SlotCopy | null {
   const value = slot.content;
   if (!value || typeof value !== "object") return null;
   const v = value as Record<string, unknown>;
@@ -225,7 +265,7 @@ export function readCopy(slot: Slot): SlotCopy | null {
  * compare, and handleSaveEdit sends all six brief fields on every save, so
  * correcting one word would silently delete the copy.
  */
-export function sourceHash(slot: Slot): string {
+export function sourceHash(slot: HasBrief): string {
   return createHash("sha256")
     .update(JSON.stringify([slot.theme, slot.hook, slot.body ?? [], slot.cta]))
     .digest("hex")
@@ -233,7 +273,7 @@ export function sourceHash(slot: Slot): string {
 }
 
 /** Was this copy written from an older version of the brief? */
-export function isCopyStale(slot: Slot): boolean {
+export function isCopyStale(slot: HasContent & HasBrief): boolean {
   const copy = readCopy(slot);
   if (!copy) return false;
   return copy.sourceHash !== sourceHash(slot);
@@ -258,7 +298,7 @@ export type AuthoredCopy = Pick<
  * working piece with an empty one because the model was unreachable is strictly
  * worse than leaving it alone.
  */
-export function parseCopy(raw: unknown, slot: Slot): AuthoredCopy | null {
+export function parseCopy(raw: unknown, slot: HasFormat): AuthoredCopy | null {
   const root = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const format = normalizeFormat(slot.type, slot.channel);
 
@@ -390,7 +430,7 @@ export function copyToLines(copy: SlotCopy): string[] {
  * someone hand-edits the copy through PATCH, and would then be reporting a
  * problem that no longer exists.
  */
-export function copyWarnings(copy: SlotCopy, slot: Slot): string[] {
+export function copyWarnings(copy: SlotCopy, slot: HasChannel): string[] {
   const limits = limitsFor(slot.channel);
   const warnings: string[] = [];
 
