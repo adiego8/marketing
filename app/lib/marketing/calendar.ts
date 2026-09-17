@@ -351,10 +351,13 @@ async function reconcileSlots(
   const claimed = slots.filter((s) => s.google_event_id);
   const recognisedAny = claimed.some((s) => events.has(s.google_event_id!));
 
-  // Nothing we stored came back. Either the calendar is gone, the token lost
-  // its scope, or googleCalendarId is stale — and in all three cases treating
-  // "absent" as "deleted" would cancel the client's entire schedule in one
-  // click. Say so instead.
+  // Nothing we stored came back. The token may have lost its scope, or every
+  // event may have been moved or deleted by hand — and treating "absent" as
+  // "deleted" would cancel the client's entire schedule in one click. Say so
+  // instead.
+  //
+  // A missing calendar no longer reaches here: syncSlots returns on a 404 from
+  // the listing, because that case has a cure this one does not.
   if (claimed.length > 0 && !recognisedAny) {
     tally.warnings.push(
       `${claimed.length} slot${claimed.length === 1 ? "" : "s"} point at events that are ` +
@@ -467,6 +470,15 @@ export interface SyncResult {
   /** Slots newly handed to Google this run. */
   locked: number;
   calendarId: string;
+  /**
+   * The calendar itself is gone — a 404 on the listing, not on one event.
+   *
+   * A flag rather than prose in `warnings` because the UI has to act on it: it
+   * is the one sync failure with a specific cure (Reset calendar), and pattern
+   * matching a sentence to decide whether to offer a button is how that button
+   * silently disappears the next time the wording changes.
+   */
+  calendarMissing: boolean;
   errors: string[];
   /** Reconcile refused or degraded — not a per-slot failure. */
   warnings: string[];
@@ -520,6 +532,7 @@ export async function syncSlots(
     cancelled: 0,
     locked: 0,
     calendarId,
+    calendarMissing: false,
     errors: [],
     warnings: [],
     changes: [],
@@ -533,10 +546,29 @@ export async function syncSlots(
   try {
     remoteEvents = await listCalendarEvents(calendar, calendarId);
   } catch (e) {
+    // A 404 on the LISTING is the calendar itself, not an event: it was deleted
+    // in Google, or googleCalendarId belongs to an account that is no longer
+    // connected. Either way every write below would 404 too, so pushing turns
+    // one legible problem into one warning plus a red error per slot — none of
+    // which say anything the warning does not. Stop here instead.
+    const code = (e as { code?: number })?.code;
+    if (code === 404) {
+      result.calendarMissing = true;
+      result.warnings.push(
+        `This client's Google calendar no longer exists, so nothing was read ` +
+          `or written. It was either deleted in Google, or it belongs to an ` +
+          `account that is no longer connected. Reset the calendar to build a ` +
+          `fresh one — the old calendar and its events are not touched.`
+      );
+      return result;
+    }
+
     const message = e instanceof Error ? e.message : String(e);
     result.warnings.push(
+      // "attempted", not "pushed": the push below can fail, and claiming the
+      // slots landed when they did not is worse than saying nothing.
       `Could not read the calendar (${message}): nothing was reconciled, ` +
-        `${slots.length} slot${slots.length === 1 ? "" : "s"} still pushed.`
+        `${slots.length} slot${slots.length === 1 ? "" : "s"} still attempted.`
     );
   }
 

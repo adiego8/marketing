@@ -245,6 +245,8 @@ export const getGoogleStatus = () =>
     email: string | null;
     scopes: string[];
     needs_reconnect: boolean;
+    /** Clients currently holding a calendar link — what disconnect would drop. */
+    linked_clients: number;
   }>("/google/status");
 
 export const startGoogleConnect = (returnTo?: string) =>
@@ -254,7 +256,13 @@ export const startGoogleConnect = (returnTo?: string) =>
   });
 
 export const disconnectGoogle = () =>
-  request<{ connected: boolean }>("/google/disconnect", { method: "POST" });
+  request<{
+    connected: boolean;
+    /** Clients whose calendar link was dropped. */
+    cleared_clients: number;
+    /** Slots that no longer point at an event in the old account. */
+    cleared_slots: number;
+  }>("/google/disconnect", { method: "POST" });
 
 // --- API keys (the agent rail's credentials, managed from a human session) ---
 
@@ -329,6 +337,8 @@ export const syncCalendar = (
     /** Slots whose text Google now owns. */
     locked: number;
     calendarId: string;
+    /** The calendar is gone. Offer Reset calendar; nothing else will help. */
+    calendarMissing: boolean;
     errors: string[];
     /** Reconcile refused or degraded — not a per-slot failure. */
     warnings: string[];
@@ -340,6 +350,17 @@ export const syncCalendar = (
     method: "POST",
     body: JSON.stringify(params ?? {}),
   });
+
+/**
+ * Forget this client's calendar so the next sync builds a fresh one.
+ *
+ * The cure for `calendarMissing`. Nothing is removed from Google.
+ */
+export const resetClientCalendar = (clientId: string) =>
+  request<{ cleared_calendar: boolean; cleared_slots: number }>(
+    `${c(clientId)}/calendar/reset`,
+    { method: "POST" }
+  );
 
 // Slots
 export const listSlots = (

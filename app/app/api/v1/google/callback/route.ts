@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import {
+  decideConnect,
   exchangeCode,
+  getConnectionStatus,
   googleConfigured,
+  revokeRefreshToken,
   saveGoogleCredentials,
   verifyState,
 } from "@/lib/marketing/google";
@@ -45,6 +48,20 @@ export async function GET(request: Request) {
       // state — revoking access in the Google account and retrying fixes it.
       return back(request, { google: "no-refresh-token" }, home);
     }
+    // One Google account per agency, and switching means disconnecting first.
+    //
+    // This cannot live in /google/start: the account is unknown until the
+    // id_token comes back from the exchange above. So the refusal lands after
+    // the user has already cleared Google's consent screen — unavoidable, and
+    // the reason the copy for this code points straight at Settings.
+    const current = await getConnectionStatus(state.agencyId);
+    const decision = decideConnect(current, email);
+    if (!decision.allow) {
+      // We are holding a live grant for an account we are not going to store.
+      await revokeRefreshToken(refreshToken);
+      return back(request, { google: decision.reason }, home);
+    }
+
     await saveGoogleCredentials(state.agencyId, { refreshToken, email, scopes });
     return back(request, { google: "connected" }, state.returnTo);
   } catch (error) {
