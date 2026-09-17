@@ -163,8 +163,6 @@ export interface ProposedSlot extends PieceStructure {
   theme: string;
   brief: string;
   rationale: string;
-  /** The finished copy, written before accept. See ProposedSlot in types.ts. */
-  content: Record<string, unknown> | null;
   needsTheme: boolean;
 }
 

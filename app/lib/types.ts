@@ -269,16 +269,6 @@ export interface ProposedSlot {
   body: string[];
   /** The ask at the end. */
   cta: string;
-  /**
-   * The finished, publishable copy — written BEFORE this is accepted, so the
-   * words can be judged alongside the brief rather than after committing to it.
-   *
-   * Untyped for the same reason Slot.content is: it round-trips through
-   * Firestore unvalidated and readCopy() is the single narrowing point. Null on
-   * every proposal until somebody asks for the copy, and on every run made
-   * before this existed.
-   */
-  content: Record<string, unknown> | null;
   /** The model gave no theme; the campaign and channel are still correct. */
   needsTheme: boolean;
 }

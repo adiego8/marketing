@@ -243,42 +243,8 @@ export function replacementSlot(original: DroppedSlot, fill: Fill): ProposedSlot
     hook: fill.hook,
     body: fill.body,
     cta: fill.cta,
-    /**
-     * Explicitly, because the spread above would otherwise carry it.
-     *
-     * A replacement is a DIFFERENT idea occupying the same day and channel, so
-     * copy written for the idea that was dropped describes something else
-     * entirely. Left in place it would read as this piece's words under this
-     * piece's new theme — wrong, and only flagged as "older than the brief"
-     * rather than as belonging to another piece.
-     *
-     * Restoring a drop is the opposite case and needs nothing: the brief comes
-     * back unchanged, so its copy is still the copy for it.
-     */
-    content: null,
     needsTheme: fill.needsTheme,
   };
-}
-
-/**
- * Put freshly written copy onto one proposal.
- *
- * Pure, and returns whether it landed: a slotId that matches nothing means the
- * proposal was dropped between the model call starting and finishing, and the
- * caller must say so rather than reporting a write that did not happen.
- */
-export function applyCopyToProposed(
-  proposed: ProposedSlot[],
-  slotId: string,
-  copy: Record<string, unknown>
-): { proposed: ProposedSlot[]; found: boolean } {
-  let found = false;
-  const next = proposed.map((slot) => {
-    if (slot.slotId !== slotId) return slot;
-    found = true;
-    return { ...slot, content: copy };
-  });
-  return { proposed: next, found };
 }
 
 export interface ReplaceResult {

@@ -21,7 +21,7 @@ import {
   sourceHash,
   type SlotCopy,
 } from "./copy";
-import type { ProposedSlot, Slot } from "../types";
+import type { Slot } from "../types";
 
 /**
  * The model answered, but with nothing usable — or it was never asked.
@@ -60,13 +60,11 @@ export interface WriteCopyOptions {
 /**
  * Everything writing copy depends on, in one shape.
  *
- * It exists because the same generation now serves two callers whose field
- * names disagree: a committed `Slot` spells things `campaign_id` and
- * `needs_theme`, an uncommitted `ProposedSlot` spells them `campaignId` and
- * `needsTheme`. Normalising once, in a pure function with a test, is the whole
- * defence against that drift — `firestore.test.ts` exists because a
- * `calendarEventId`/`googleEventId` mismatch once made every committed slot
- * read back as unsynced, and this is the same hazard.
+ * Named as fields rather than taking a `Slot`, which is what makes the
+ * generation below testable: generateCopy needs a brief and a model, not a
+ * Firestore document, so the whole path gets tests in a repo that mocks
+ * nothing. It also answers "what does the copy actually depend on?" from one
+ * place — previously you had to read the payload builder to find out.
  */
 export interface CopyBrief {
   type: string;
@@ -93,23 +91,6 @@ export function copyBriefOfSlot(slot: Slot): CopyBrief {
     needsTheme: slot.needs_theme,
     campaignId: slot.campaign_id,
     campaignTitle: slot.campaign_title,
-    content: slot.content,
-  };
-}
-
-export function copyBriefOfProposed(slot: ProposedSlot): CopyBrief {
-  return {
-    type: slot.type,
-    channel: slot.channel,
-    theme: slot.theme,
-    hook: slot.hook,
-    body: slot.body ?? [],
-    cta: slot.cta,
-    needsTheme: slot.needsTheme,
-    // Never null on a proposal — a piece exists because a campaign asked for
-    // it — but the brief allows null because a Slot's may be.
-    campaignId: slot.campaignId,
-    campaignTitle: slot.campaignTitle,
     content: slot.content,
   };
 }

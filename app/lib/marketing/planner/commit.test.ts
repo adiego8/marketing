@@ -21,7 +21,6 @@ const SLOT: ProposedSlot = {
   hook: "Nobody diarises the deadline. That is the whole problem.",
   body: ["Name the date everyone misses.", "What it costs.", "The fix."],
   cta: "Book the 20-minute check.",
-  content: null,
   needsTheme: false,
 };
 
@@ -152,30 +151,5 @@ describe("slotDoc", () => {
     expect(doc.timeLocal).toBeNull();
     expect(doc.weekKey).toBeNull();
     expect(doc.scheduledAt).toBeNull();
-  });
-});
-
-/**
- * Copy written before the plan was accepted has to survive the commit.
- *
- * If it does not, the operator reviews and approves specific words, presses
- * Accept, and gets a piece with no copy — then pays for a second model call to
- * generate something different from what they approved.
- */
-describe("slotDoc — copy written before accept", () => {
-  const COPY = { blocks: [{ label: "Slide 1", text: "Words." }], sourceHash: "abc" };
-
-  it("carries the copy onto the committed slot", () => {
-    const doc = slotDoc("c1", "run1", { ...SLOT, content: COPY });
-    expect(doc.content).toEqual(COPY);
-  });
-
-  it("marks a piece that already has copy as drafted", () => {
-    expect(slotDoc("c1", "run1", { ...SLOT, content: COPY }).status).toBe("drafted");
-  });
-
-  it("leaves a piece with no copy as planned", () => {
-    expect(slotDoc("c1", "run1", SLOT).status).toBe("planned");
-    expect(slotDoc("c1", "run1", SLOT).content).toBeNull();
   });
 });
