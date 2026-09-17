@@ -8,6 +8,7 @@ import {
   decrypt,
   googleConfigured,
   googleMissingEnv,
+  decideConnect,
 } from "./google";
 
 // The state is the only thing standing between the callback and anyone who can
@@ -131,5 +132,56 @@ describe("googleConfigured", () => {
     expect(googleConfigured()).toBe(false);
     expect(googleMissingEnv()).toContain("GOOGLE_OAUTH_CLIENT_ID");
     if (saved) process.env.GOOGLE_OAUTH_CLIENT_ID = saved;
+  });
+});
+
+/**
+ * The gate that keeps one Google account per agency.
+ *
+ * Both failure directions are silent and expensive. Too loose and a different
+ * account takes over, leaving every client pointing at a calendar it cannot
+ * see — no error until the next sync 404s on every slot. Too strict and the
+ * needsReconnect scope upgrade becomes impossible, stranding exactly the grants
+ * that cannot do anything useful.
+ */
+describe("decideConnect", () => {
+  const connected = (email: string | null) => ({ connected: true, email });
+
+  it("allows the first connection", () => {
+    expect(decideConnect({ connected: false, email: null }, "a@x.com")).toEqual({
+      allow: true,
+    });
+  });
+
+  /**
+   * The reason this is not simply "refuse while connected": reconnecting the
+   * same account is the only way to widen a grant that predates the calendar
+   * scope, which getConnectionStatus surfaces as needsReconnect.
+   */
+  it("allows the same account to reconnect, which is the scope-upgrade path", () => {
+    expect(decideConnect(connected("a@x.com"), "a@x.com")).toEqual({ allow: true });
+  });
+
+  it("treats case and stray whitespace as the same account", () => {
+    expect(decideConnect(connected("Team.Leader@Numerico.co"), "team.leader@numerico.co"))
+      .toEqual({ allow: true });
+    expect(decideConnect(connected("a@x.com"), "  a@x.com  ")).toEqual({ allow: true });
+  });
+
+  /** The bug this whole change exists for. */
+  it("refuses a different account", () => {
+    expect(decideConnect(connected("info@numericosoftware.com"), "team.leader@numerico.co"))
+      .toEqual({ allow: false, reason: "account-mismatch" });
+  });
+
+  /**
+   * An email we do not have is not evidence of a mismatch. Refusing on unknown
+   * would lock out an agency whose stored credential predates the email being
+   * recorded, with disconnect as the only escape.
+   */
+  it("allows when either side's email is unknown", () => {
+    expect(decideConnect(connected(null), "a@x.com")).toEqual({ allow: true });
+    expect(decideConnect(connected("a@x.com"), null)).toEqual({ allow: true });
+    expect(decideConnect(connected(""), "a@x.com")).toEqual({ allow: true });
   });
 });

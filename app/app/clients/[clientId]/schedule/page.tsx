@@ -10,6 +10,7 @@ import {
   getGoogleStatus,
   startGoogleConnect,
   syncCalendar,
+  resetClientCalendar,
   downloadPlanPdf,
   writeSlotCopy,
   scheduleSlot,
@@ -20,6 +21,7 @@ import { statusPill, statusLabel, PILL } from "@/lib/ui-status";
 import { PieceCard, fromSlot } from "@/components/shared/piece-card";
 import { readCopy, isCopyStale } from "@/lib/marketing/copy";
 import { calendarOpenUrl } from "@/lib/marketing/calendar-links";
+import { readGoogleResult } from "@/lib/google-result";
 import { planMarkdown, planFilename } from "@/lib/marketing/export/plan-markdown";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
 import { weekLabel } from "@/lib/marketing/planner/weeks";
@@ -30,17 +32,6 @@ import type { Slot, SlotStatus } from "@/lib/types";
 // and is actually scheduled.
 
 const HORIZONS = [2, 4, 12];
-
-// The callback can only pass a code in the URL, so the copy lives here.
-const GOOGLE_ERRORS: Record<string, string> = {
-  access_denied: "You declined the Google permissions, so nothing was connected.",
-  "invalid-state": "That sign-in link expired. Press Connect Google again.",
-  "no-code": "Google did not return an authorisation code. Try again.",
-  "no-refresh-token":
-    "Google withheld a refresh token. Remove this app under your Google account permissions, then connect again.",
-  "exchange-failed": "Google rejected the authorisation. Check the OAuth client's redirect URI.",
-  "not-configured": "Google OAuth is not configured on this server.",
-};
 
 // The statuses a human sets from here. Quota-freeing ones last, so the
 // destructive choice is never the one next to the cursor by default.
@@ -124,6 +115,9 @@ export default function SchedulePage() {
   // deserve to be read rather than counted.
   const [syncChanges, setSyncChanges] = useState<string[]>([]);
   const [syncWarnings, setSyncWarnings] = useState<string[]>([]);
+  // Set by a sync that 404'd on the calendar itself. The one failure with a
+  // specific cure, so it gets a button rather than another line of prose.
+  const [calendarMissing, setCalendarMissing] = useState(false);
   const [calendarUrl, setCalendarUrl] = useState<string | null>(null);
   // The weekly pace, so a week can say when it is over it. Absent is workable:
   // no quota means the operator chose not to pace this client.
@@ -221,14 +215,16 @@ export default function SchedulePage() {
     const w = Number(search.get("weeks"));
     if (HORIZONS.includes(w)) setWeeks(w);
 
-    const result = search.get("google");
+    // readGoogleResult strips the code itself, so a refresh does not replay a
+    // stale error. It returns null when there is nothing to report, and only
+    // then does `weeks` need cleaning out of the URL on its own.
+    const result = readGoogleResult();
     if (!result) {
       if (w) window.history.replaceState({}, "", window.location.pathname);
       return;
     }
-    if (result === "connected") setSyncNote("Google connected");
-    else setError(GOOGLE_ERRORS[result] ?? `Google returned "${result}".`);
-    window.history.replaceState({}, "", window.location.pathname);
+    if (result.connected) setSyncNote("Google connected");
+    else setError(result.message);
   }, []);
 
   const handleConnect = async () => {
@@ -247,8 +243,10 @@ export default function SchedulePage() {
     setSyncNote(null);
     setSyncChanges([]);
     setSyncWarnings([]);
+    setCalendarMissing(false);
     try {
       const r = await syncCalendar(clientId, { start, end });
+      setCalendarMissing(r.calendarMissing);
       setCalendarUrl(r.open_url);
       setSyncNote(
         [
@@ -270,6 +268,35 @@ export default function SchedulePage() {
       setError(e instanceof Error ? e.message : "Sync failed");
     } finally {
       setSyncing(false);
+    }
+  };
+
+  /**
+   * Forget a calendar that is no longer there, so the next sync builds a new
+   * one. Confirmed because it is not reversible from here: the old calendar
+   * stays in Google, but this app will not find its way back to it.
+   */
+  const handleResetCalendar = async () => {
+    if (
+      !confirm(
+        "Build a new calendar for this client?\n\n" +
+          "The pieces here stop pointing at the old calendar's events, and the " +
+          "next sync creates a fresh calendar and writes them again. Nothing is " +
+          "deleted from Google — the old calendar stays exactly as it is."
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    try {
+      await resetClientCalendar(clientId);
+      setCalendarMissing(false);
+      setSyncWarnings([]);
+      setCalendarUrl(null);
+      setSyncNote("Calendar reset — press Sync to Google to build a new one");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not reset the calendar");
     }
   };
 
@@ -495,6 +522,16 @@ export default function SchedulePage() {
           {syncWarnings.map((w) => (
             <p key={w}>{w}</p>
           ))}
+          {/* The cure sits with the problem: a warning that names a fix the
+              user then has to go and find is half a warning. */}
+          {calendarMissing && (
+            <button
+              onClick={handleResetCalendar}
+              className={`${btn.outline} mt-3`}
+            >
+              Reset calendar
+            </button>
+          )}
         </div>
       )}
 

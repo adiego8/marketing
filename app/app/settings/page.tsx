@@ -7,7 +7,11 @@ import {
   createAgencyKey,
   revokeAgencyKey,
   listClients,
+  getGoogleStatus,
+  startGoogleConnect,
+  disconnectGoogle,
 } from "@/lib/api";
+import { readGoogleResult } from "@/lib/google-result";
 import { useAuth } from "@/lib/auth-context";
 import { NumericoLockup } from "@/components/brand/numerico-mark";
 import { CopyButton } from "@/components/shared/copy-button";
@@ -23,6 +27,12 @@ import type { ApiKey, ApiKeyScope, ClientListItem } from "@/lib/types";
  * The agency's own settings — the first screen in this app that is not about
  * one client, and the thing the login page has been promising all along
  * ("Google Calendar can be connected later, from Settings").
+ *
+ * It also holds the Google Calendar connection, which the login page has been
+ * pointing at all along. One account serves every client, and switching
+ * accounts means disconnecting here first — calendars are created by whichever
+ * account is connected, so swapping underneath them strands every client's
+ * schedule on a calendar the new account cannot see.
  *
  * It holds every API key the agency has. There used to be two kinds in two
  * places — an agency key here and a per-client key on each client's own page —
@@ -67,6 +77,17 @@ export default function SettingsPage() {
   const [creating, setCreating] = useState(false);
   const [minted, setMinted] = useState<(ApiKey & { secret: string }) | null>(null);
 
+  const [google, setGoogle] = useState<{
+    configured: boolean;
+    missing: string[];
+    connected: boolean;
+    email: string | null;
+    needs_reconnect: boolean;
+    linked_clients: number;
+  } | null>(null);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [googleNote, setGoogleNote] = useState<string | null>(null);
+
   const load = useCallback(() => {
     Promise.all([listAgencyKeys(), listClients({ status: "active" })])
       .then(([k, c]) => {
@@ -78,6 +99,74 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(load, [load]);
+
+  const loadGoogle = useCallback(() => {
+    getGoogleStatus().then(setGoogle).catch(() => setGoogle(null));
+  }, []);
+
+  useEffect(() => {
+    loadGoogle();
+    // Connecting from here returns here. account-mismatch in particular lands
+    // on this page, because Settings is where the way out of it lives.
+    const result = readGoogleResult();
+    if (!result) return;
+    if (result.connected) setGoogleNote("Google connected");
+    else setError(result.message);
+  }, [loadGoogle]);
+
+  const handleGoogleConnect = async () => {
+    setError(null);
+    setGoogleBusy(true);
+    try {
+      const { url } = await startGoogleConnect("/settings");
+      // A full navigation, not a fetch: this is Google's own consent screen.
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start the Google connection");
+      setGoogleBusy(false);
+    }
+  };
+
+  /**
+   * Drop the account — and with it every calendar link this agency holds.
+   *
+   * The count is the real one from /google/status rather than "every client",
+   * which would overstate the damage for an agency that has never synced. The
+   * distinction between what stays in Google and what this app forgets is the
+   * whole point of the sentence: nothing is deleted, but nothing finds its way
+   * back either.
+   */
+  const handleGoogleDisconnect = async () => {
+    const n = google?.linked_clients ?? 0;
+    const account = google?.email ?? "this Google account";
+    const impact =
+      n === 0
+        ? "No client has a calendar yet, so nothing is lost."
+        : `${n} client${n === 1 ? "" : "s"} will lose ${n === 1 ? "its" : "their"} ` +
+          `calendar link. Events already in that account stay there, but this app ` +
+          `forgets them and builds a fresh calendar on the next sync.`;
+
+    if (!confirm(`Disconnect ${account}?\n\n${impact}`)) return;
+
+    setError(null);
+    setGoogleNote(null);
+    setGoogleBusy(true);
+    try {
+      const r = await disconnectGoogle();
+      setGoogleNote(
+        r.cleared_clients > 0
+          ? `Disconnected — ${r.cleared_clients} calendar link${
+              r.cleared_clients === 1 ? "" : "s"
+            } cleared`
+          : "Disconnected"
+      );
+      loadGoogle();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not disconnect Google");
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -154,9 +243,10 @@ export default function SettingsPage() {
         <header className="mt-4 mb-6">
           <h1 className={text.h1}>Settings</h1>
           <p className={`${text.muted} mt-1 max-w-2xl`}>
-            Agency-wide API keys. One key reaches every client you have, which is
-            what makes it practical to connect an assistant once instead of once
-            per client.
+            The Google account every client&rsquo;s calendar is built under, and
+            the agency-wide API keys. One key reaches every client you have, which
+            is what makes it practical to connect an assistant once instead of
+            once per client.
           </p>
         </header>
 
@@ -192,6 +282,88 @@ export default function SettingsPage() {
             <ConnectInstructions />
           </div>
         )}
+
+        {/* The connection the login page promised lived here, and until now did
+            not. Without a Disconnect the app can never change Google account:
+            connecting a different one is refused, by design. */}
+        <section className={`${surface.card} ${surface.pad} mb-6`}>
+          <h2 className={text.cardTitle}>Google Calendar</h2>
+          <p className={`${text.muted} mt-1 max-w-2xl`}>
+            One account for every client. Each client gets its own calendar,
+            created by the account connected here — so changing account means
+            disconnecting first, and the calendars are rebuilt under the new one.
+          </p>
+
+          {google === null ? (
+            <p className={`${text.muted} mt-3`}>Checking…</p>
+          ) : !google.configured ? (
+            <p className={`${banner.warn} mt-3`}>
+              Google OAuth is not configured on this server. Missing:{" "}
+              {google.missing.join(", ")}.
+            </p>
+          ) : (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                {google.connected ? (
+                  <>
+                    <p className="text-sm text-slate-800">
+                      Connected as{" "}
+                      <span className="font-medium">{google.email ?? "an account"}</span>
+                    </p>
+                    <p className={`${text.muted} mt-0.5`}>
+                      {google.linked_clients === 0
+                        ? "No client has a calendar yet."
+                        : `${google.linked_clients} client${
+                            google.linked_clients === 1 ? "" : "s"
+                          } linked.`}
+                      {googleNote && (
+                        <span className="text-teal-700 font-medium"> — {googleNote}</span>
+                      )}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-800">
+                    Not connected.
+                    {googleNote && (
+                      <span className="text-teal-700 font-medium"> {googleNote}</span>
+                    )}
+                  </p>
+                )}
+              </div>
+
+              <span className="flex gap-2 shrink-0">
+                {google.connected && google.needs_reconnect && (
+                  // Reconnecting the SAME account is how a grant that predates
+                  // the calendar scope gets widened, and the gate allows it.
+                  <button
+                    onClick={handleGoogleConnect}
+                    disabled={googleBusy}
+                    className={btn.primarySm}
+                  >
+                    Reconnect
+                  </button>
+                )}
+                {google.connected ? (
+                  <button
+                    onClick={handleGoogleDisconnect}
+                    disabled={googleBusy}
+                    className={btn.outline}
+                  >
+                    {googleBusy ? "Working…" : "Disconnect"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleGoogleConnect}
+                    disabled={googleBusy}
+                    className={btn.primarySm}
+                  >
+                    {googleBusy ? "Opening…" : "Connect Google"}
+                  </button>
+                )}
+              </span>
+            </div>
+          )}
+        </section>
 
         <section className={`${surface.card} ${surface.pad} mb-6`}>
           <h2 className={text.cardTitle}>New agency key</h2>

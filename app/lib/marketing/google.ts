@@ -28,6 +28,7 @@ import {
 } from "crypto";
 import { google } from "googleapis";
 import { db, COLLECTIONS, FieldValue } from "../firestore";
+import { clearAgencyGoogleState, type ClearedGoogleState } from "./google-reset";
 
 export const GOOGLE_SCOPES = [
   "openid",
@@ -73,9 +74,18 @@ function oauthClient() {
 export function authUrl(state: string): string {
   return oauthClient().generateAuthUrl({
     access_type: "offline",
-    // Google returns a refresh token only on first consent. Without this, a
-    // reconnect silently yields no refresh token and the grant is useless.
-    prompt: "consent",
+    // Two prompts, each load-bearing.
+    //
+    // "consent": Google returns a refresh token only on first consent. Without
+    // this, a reconnect silently yields no refresh token and the grant is
+    // useless.
+    //
+    // "select_account": consent alone shows the permissions screen but NOT the
+    // account chooser, so with a Google session already live in the browser,
+    // "Connect" re-consents as whoever is signed in — which is how an intended
+    // account switch silently reconnects the same account. Without this, the
+    // reconnect after a disconnect cannot reach a different account at all.
+    prompt: "consent select_account",
     scope: GOOGLE_SCOPES,
     include_granted_scopes: true,
     state,
@@ -106,6 +116,53 @@ function emailFromIdToken(idToken: string): string | null {
   } catch {
     return null;
   }
+}
+
+/* ------------------------------------------------- one account per agency -- */
+
+export type ConnectDecision =
+  | { allow: true }
+  /** A different Google account than the one already connected. */
+  | { allow: false; reason: "account-mismatch" };
+
+/**
+ * May this account take over the agency's Google connection?
+ *
+ * One account per agency, and switching means disconnecting first. The reason
+ * is that calendars are created by the connected account but remembered per
+ * client: swapping the account underneath them leaves every client pointing at
+ * a calendar the new account cannot see, with no error until the next sync
+ * 404s on every slot at once. saveGoogleCredentials merges, so before this the
+ * swap was silent.
+ *
+ * This runs in the CALLBACK, not at /google/start, and it has to: the account
+ * is unknown until exchangeCode reads the email out of the id_token. The cost
+ * is that the refusal lands after the user has already completed Google's
+ * consent screen.
+ *
+ * Reconnecting the SAME account stays allowed, and that is not a convenience —
+ * it is the only cure for a grant predating the calendar scope, which is what
+ * getConnectionStatus reports as needsReconnect.
+ *
+ * An email we do not have is not evidence of a mismatch, so it allows. That
+ * should be rare: GOOGLE_SCOPES asks for `email`, and exchangeCode reads it
+ * from the id_token Google returns with the exchange.
+ */
+export function decideConnect(
+  stored: { connected: boolean; email: string | null },
+  incoming: string | null
+): ConnectDecision {
+  if (!stored.connected) return { allow: true };
+
+  const a = normaliseEmail(stored.email);
+  const b = normaliseEmail(incoming);
+  if (!a || !b) return { allow: true };
+
+  return a === b ? { allow: true } : { allow: false, reason: "account-mismatch" };
+}
+
+function normaliseEmail(value: string | null): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
 /* -------------------------------------------------------- signed state --- */
@@ -240,7 +297,27 @@ export async function getConnectionStatus(agencyId: string): Promise<{
   };
 }
 
-export async function disconnect(agencyId: string): Promise<void> {
+/**
+ * Drop the agency's Google account, and everything that pointed at it.
+ *
+ * The clearing is the whole point, not a tidy-up. Calendars are created by the
+ * connected account and remembered per client, so the moment the grant goes,
+ * every googleCalendarId we hold names a calendar the next account cannot see —
+ * and ensureClientCalendar hands stored ids back without checking, so those
+ * 404s would never heal on their own.
+ *
+ * Nothing is removed from Google. The calendars and their events stay in the
+ * account that owns them, as the client's record; we forget where they are.
+ *
+ * Clearing runs BEFORE the credential is deleted. If it fails half-way the
+ * agency is still connected, so a retry is a plain retry — whereas losing the
+ * token first would leave stale ids with no path back to this function.
+ *
+ * @returns what was forgotten, so the UI can report it.
+ */
+export async function disconnect(agencyId: string): Promise<ClearedGoogleState> {
+  const cleared = await clearAgencyGoogleState(agencyId);
+
   const ref = db().collection(COLLECTIONS.googleCredentials).doc(agencyId);
   const snap = await ref.get();
   if (snap.exists && snap.data()?.refreshTokenEnc && googleConfigured()) {
@@ -248,10 +325,31 @@ export async function disconnect(agencyId: string): Promise<void> {
       await oauthClient().revokeToken(decrypt(snap.data()!.refreshTokenEnc));
     } catch {
       // Best effort. The record goes regardless — leaving it would show
-      // "connected" for a grant we can no longer use.
+      // "connected" for a grant we can no longer use. It also means an account
+      // nobody can sign into any more can still be disconnected.
     }
   }
   await ref.delete();
+  return cleared;
+}
+
+/**
+ * Hand back a refresh token we obtained and then decided not to keep.
+ *
+ * The account-mismatch refusal happens after the code exchange, so by the time
+ * we say no we are holding a live grant for an account we are not going to
+ * store. Dropping it on the floor would leave the app listed under that
+ * account's third-party access with nothing on our side referring to it.
+ *
+ * Best effort, like the revoke in disconnect: the refusal stands either way.
+ */
+export async function revokeRefreshToken(token: string): Promise<void> {
+  if (!googleConfigured()) return;
+  try {
+    await oauthClient().revokeToken(token);
+  } catch {
+    // Nothing to do. We never stored it.
+  }
 }
 
 /**

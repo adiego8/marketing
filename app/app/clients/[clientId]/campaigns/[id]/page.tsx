@@ -30,8 +30,10 @@ import {
   getGoogleStatus,
   startGoogleConnect,
   syncCalendar,
+  resetClientCalendar,
 } from "@/lib/api";
 import { calendarOpenUrl } from "@/lib/marketing/calendar-links";
+import { readGoogleResult } from "@/lib/google-result";
 import type {
   Campaign,
   QuotaEntry,
@@ -119,12 +121,23 @@ export default function CampaignWorkspace() {
   // changes a person made in their own calendar, so they are read, not counted.
   const [syncChanges, setSyncChanges] = useState<string[]>([]);
   const [syncWarnings, setSyncWarnings] = useState<string[]>([]);
+  // Set by a sync that 404'd on the calendar itself — the one failure with a
+  // specific cure, so it gets a button rather than another line of prose.
+  const [calendarMissing, setCalendarMissing] = useState(false);
   const [calendarUrl, setCalendarUrl] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getGoogleStatus().then(setGoogle).catch(() => setGoogle(null));
+    // handleConnect sends this page's own path as returnTo, so the callback
+    // lands back here — and until now nothing read the result, which meant a
+    // failed connection from this page reported nothing at all.
+    const result = readGoogleResult();
+    if (result) {
+      if (result.connected) setSyncNote("Google connected");
+      else setError(result.message);
+    }
     getClient(clientId)
       .then((c) => {
         // The id is on the client the moment the calendar exists, so the link
@@ -369,8 +382,10 @@ export default function CampaignWorkspace() {
     setSyncNote(null);
     setSyncChanges([]);
     setSyncWarnings([]);
+    setCalendarMissing(false);
     try {
       const r = await syncCalendar(clientId, { start, end });
+      setCalendarMissing(r.calendarMissing);
       setCalendarUrl(r.open_url);
       setSyncNote(
         [
@@ -392,6 +407,31 @@ export default function CampaignWorkspace() {
       setError(e instanceof Error ? e.message : "Sync failed");
     } finally {
       setSyncing(false);
+    }
+  };
+
+  /** Forget a calendar that is no longer there. See the schedule page. */
+  const handleResetCalendar = async () => {
+    if (
+      !confirm(
+        "Build a new calendar for this client?\n\n" +
+          "The pieces here stop pointing at the old calendar's events, and the " +
+          "next push creates a fresh calendar and writes them again. Nothing is " +
+          "deleted from Google — the old calendar stays exactly as it is."
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    try {
+      await resetClientCalendar(clientId);
+      setCalendarMissing(false);
+      setSyncWarnings([]);
+      setCalendarUrl(null);
+      setSyncNote("Calendar reset — press Push to Google to build a new one");
+      loadSlots();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not reset the calendar");
     }
   };
 
@@ -1192,6 +1232,15 @@ export default function CampaignWorkspace() {
                   {syncWarnings.map((w) => (
                     <p key={w}>{w}</p>
                   ))}
+                  {/* The cure sits with the problem. */}
+                  {calendarMissing && (
+                    <button
+                      onClick={handleResetCalendar}
+                      className={`${btn.outline} mt-3`}
+                    >
+                      Reset calendar
+                    </button>
+                  )}
                 </div>
               )}
 

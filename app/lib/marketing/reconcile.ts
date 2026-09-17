@@ -209,13 +209,16 @@ function sameInstant(a: string | null | undefined, b: string | null | undefined)
  *    start to a master rewrites the whole series, and adopting an instance's
  *    time is meaningless. So: never adopt, never lock, never cancel.
  *
- * 2. Absent does NOT mean deleted unless we recognised something. A deleted
- *    calendar, a revoked scope, a stale googleCalendarId or an event the user
- *    moved to a different calendar all produce an absent event — and the first
- *    two produce it for EVERY slot, which under rule 2 would cancel a client's
- *    entire schedule in one click. One recognised id proves the calendar, the
- *    token and the id space are all sound. Zero proves nothing, so we do
- *    nothing.
+ * 2. Absent does NOT mean deleted unless we recognised something. A revoked
+ *    scope, or an event the user moved to a different calendar, both produce an
+ *    absent event — and the first produces it for EVERY slot, which under rule
+ *    2 would cancel a client's entire schedule in one click. One recognised id
+ *    proves the calendar, the token and the id space are all sound. Zero proves
+ *    nothing, so we do nothing.
+ *
+ *    A missing calendar no longer reaches here at all: syncSlots returns on a
+ *    404 from the listing and offers a reset, because unlike the cases above
+ *    that one has a cure.
  *
  * 3. Text is only locked when the remote differs from BOTH the fingerprint and
  *    what we would write right now. The second half matters more than it looks:
