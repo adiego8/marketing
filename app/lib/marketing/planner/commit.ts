@@ -132,15 +132,22 @@ export function slotDoc(clientId: string, runId: string, slot: ProposedSlot) {
     body: slot.body,
     cta: slot.cta,
     needsTheme: slot.needsTheme,
-    status: "planned",
+    // "drafted" means a draft exists, which is true the moment copy does. Same
+    // promotion write-copy.ts makes after a post-commit write, so a piece whose
+    // copy was written before accepting does not read as untouched.
+    status: slot.content ? "drafted" : "planned",
     // Human edits set this; the planner never moves a pinned slot.
     pinned: false,
     // Distinguishes planner output from a slot someone added by hand.
     source: "agent",
-    // The finished copy, written after commit by write-copy.ts. See
-    // lib/marketing/copy.ts for the shape and readCopy for the one place
-    // it is narrowed.
-    content: null,
+    // The finished copy, carried through from the proposal when it was written
+    // before accepting, and null when it was not. See lib/marketing/copy.ts for
+    // the shape and readCopy for the one place it is narrowed.
+    //
+    // Carrying it is what makes accepting free: the words were already paid for
+    // at review time, and re-writing them here would spend a second model call
+    // to produce something different from what the operator approved.
+    content: slot.content ?? null,
     // Phase 4 fills these when the slot reaches Google Calendar. The names
     // must match serializeSlot — this was `calendarEventId` and so every
     // committed slot read back as unsynced regardless of the truth.

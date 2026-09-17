@@ -21,7 +21,7 @@ import {
   sourceHash,
   type SlotCopy,
 } from "./copy";
-import type { Slot } from "../types";
+import type { ProposedSlot, Slot } from "../types";
 
 /**
  * The model answered, but with nothing usable — or it was never asked.
@@ -57,27 +57,84 @@ export interface WriteCopyOptions {
  * stage that picks themes. This stage has one fixed brief and no discretion, so
  * carrying that list would be a large payload bought for nothing.
  */
+/**
+ * Everything writing copy depends on, in one shape.
+ *
+ * It exists because the same generation now serves two callers whose field
+ * names disagree: a committed `Slot` spells things `campaign_id` and
+ * `needs_theme`, an uncommitted `ProposedSlot` spells them `campaignId` and
+ * `needsTheme`. Normalising once, in a pure function with a test, is the whole
+ * defence against that drift — `firestore.test.ts` exists because a
+ * `calendarEventId`/`googleEventId` mismatch once made every committed slot
+ * read back as unsynced, and this is the same hazard.
+ */
+export interface CopyBrief {
+  type: string;
+  channel: string;
+  theme: string;
+  hook: string;
+  body: string[];
+  cta: string;
+  needsTheme: boolean;
+  campaignId: string | null;
+  campaignTitle: string | null;
+  /** Existing copy, which makes a steer a rejection rather than direction. */
+  content: Record<string, unknown> | null;
+}
+
+export function copyBriefOfSlot(slot: Slot): CopyBrief {
+  return {
+    type: slot.type,
+    channel: slot.channel,
+    theme: slot.theme,
+    hook: slot.hook,
+    body: slot.body ?? [],
+    cta: slot.cta,
+    needsTheme: slot.needs_theme,
+    campaignId: slot.campaign_id,
+    campaignTitle: slot.campaign_title,
+    content: slot.content,
+  };
+}
+
+export function copyBriefOfProposed(slot: ProposedSlot): CopyBrief {
+  return {
+    type: slot.type,
+    channel: slot.channel,
+    theme: slot.theme,
+    hook: slot.hook,
+    body: slot.body ?? [],
+    cta: slot.cta,
+    needsTheme: slot.needsTheme,
+    // Never null on a proposal — a piece exists because a campaign asked for
+    // it — but the brief allows null because a Slot's may be.
+    campaignId: slot.campaignId,
+    campaignTitle: slot.campaignTitle,
+    content: slot.content,
+  };
+}
+
 export function buildCopyPayload(
-  slot: Slot,
+  brief: CopyBrief,
   strategy: Record<string, unknown> | null,
   opts: WriteCopyOptions,
   /** Rules taught for this client. Always passed, often empty. */
   lessons: string[] = []
 ) {
-  const limits = limitsFor(slot.channel);
+  const limits = limitsFor(brief.channel);
   return {
     slot: {
-      type: normalizeFormat(slot.type, slot.channel),
-      channel: slot.channel,
-      theme: slot.theme,
-      hook: slot.hook,
-      body: slot.body,
-      cta: slot.cta,
+      type: normalizeFormat(brief.type, brief.channel),
+      channel: brief.channel,
+      theme: brief.theme,
+      hook: brief.hook,
+      body: brief.body,
+      cta: brief.cta,
     },
     steer: opts.steer?.trim() || "",
     lessons,
-    campaign: slot.campaign_id
-      ? { campaign_id: slot.campaign_id, title: slot.campaign_title }
+    campaign: brief.campaignId
+      ? { campaign_id: brief.campaignId, title: brief.campaignTitle }
       : null,
     limits,
     business: {
@@ -89,23 +146,74 @@ export function buildCopyPayload(
   };
 }
 
-export async function writeCopy(
-  clientId: string,
-  slotId: string,
-  opts: WriteCopyOptions = {}
-): Promise<{ slot: Slot; warnings: string[] }> {
-  const slot = await getSlot(clientId, slotId);
-  if (!slot) throw new SlotNotFoundError();
+/** The model call, injectable so the orchestration above it can be tested. */
+export type CopyFn = (payload: Record<string, unknown>) => Promise<unknown>;
 
+const callModel: CopyFn = (payload) =>
+  llmJson({ systemPrompt: WRITE_COPY_PROMPT, payload, temperature: TEMPERATURE });
+
+/**
+ * Brief in, finished copy out. No Firestore, no knowledge of where the piece
+ * lives — which is what lets one implementation serve a committed slot and an
+ * uncommitted proposal.
+ *
+ * @throws WriteCopyFailedError when there is no theme, the model call fails, or
+ *   the answer contains nothing usable. Never returns half a result: a slot may
+ *   already carry copy somebody has polished, and overwriting it because the
+ *   model was unreachable is strictly worse than leaving it alone.
+ */
+export async function generateCopy(
+  brief: CopyBrief,
+  strategy: Record<string, unknown> | null,
+  opts: WriteCopyOptions = {},
+  lessons: string[] = [],
+  copyFn: CopyFn = callModel
+): Promise<{ copy: SlotCopy; warnings: string[] }> {
   // Writing publishable copy from "Theme not set" produces confident nonsense.
   // Refusing costs a model call and says something actionable instead.
-  if (slot.needs_theme || !slot.theme) {
+  if (brief.needsTheme || !brief.theme) {
     throw new WriteCopyFailedError(
       "this slot has no theme yet — regenerate it before writing the copy"
     );
   }
 
-  const strategy = await getStrategy(clientId);
+  let raw: unknown;
+  try {
+    raw = await copyFn(buildCopyPayload(brief, strategy, opts, lessons));
+  } catch (error) {
+    throw new WriteCopyFailedError(
+      error instanceof Error ? error.message : "the model call failed"
+    );
+  }
+
+  const authored = parseCopy(raw, brief);
+  if (!authored) {
+    throw new WriteCopyFailedError("the model returned no usable copy");
+  }
+
+  const copy: SlotCopy = {
+    ...authored,
+    // Stamped from the brief as it stands right now, so editing the brief
+    // afterwards marks this copy rather than silently invalidating it.
+    sourceHash: sourceHash(brief),
+    generatedAt: new Date().toISOString(),
+    model: DEFAULT_MODEL,
+    editedAt: null,
+  };
+
+  return { copy, warnings: copyWarnings(copy, brief) };
+}
+
+export async function writeCopy(
+  clientId: string,
+  slotId: string,
+  opts: WriteCopyOptions = {},
+  copyFn?: CopyFn
+): Promise<{ slot: Slot; warnings: string[] }> {
+  const slot = await getSlot(clientId, slotId);
+  if (!slot) throw new SlotNotFoundError();
+
+  const brief = copyBriefOfSlot(slot);
 
   // A steer on a piece that already has copy is a rejection of that copy. On a
   // first write it is just direction, not feedback, so it teaches nothing.
@@ -124,40 +232,14 @@ export async function writeCopy(
     });
   }
 
-  const payload = buildCopyPayload(
-    slot,
-    strategy as Record<string, unknown> | null,
+  // The no-theme refusal lives in generateCopy, so both callers make it.
+  const { copy } = await generateCopy(
+    brief,
+    (await getStrategy(clientId)) as Record<string, unknown> | null,
     opts,
-    await lessonsForPrompt(clientId, "copy")
+    await lessonsForPrompt(clientId, "copy"),
+    copyFn
   );
-
-  let raw: unknown;
-  try {
-    raw = await llmJson({
-      systemPrompt: WRITE_COPY_PROMPT,
-      payload,
-      temperature: TEMPERATURE,
-    });
-  } catch (error) {
-    throw new WriteCopyFailedError(
-      error instanceof Error ? error.message : "the model call failed"
-    );
-  }
-
-  const authored = parseCopy(raw, slot);
-  if (!authored) {
-    throw new WriteCopyFailedError("the model returned no usable copy");
-  }
-
-  const copy: SlotCopy = {
-    ...authored,
-    // Stamped from the brief as it stands right now, so editing the brief
-    // afterwards marks this copy rather than silently invalidating it.
-    sourceHash: sourceHash(slot),
-    generatedAt: new Date().toISOString(),
-    model: DEFAULT_MODEL,
-    editedAt: null,
-  };
 
   const updated = await updateSlot(
     clientId,

@@ -25,6 +25,7 @@ import {
   dropPlanSlots,
   restorePlanSlots,
   replaceDroppedSlots,
+  writeProposedSlotCopy,
   scheduleSlot,
   getClient,
   getGoogleStatus,
@@ -34,6 +35,9 @@ import {
 } from "@/lib/api";
 import { calendarOpenUrl } from "@/lib/marketing/calendar-links";
 import { readGoogleResult } from "@/lib/google-result";
+import { CopyView } from "@/components/shared/copy-view";
+import { StateLabel } from "@/components/shared/state-label";
+import { readCopy, isCopyStale } from "@/lib/marketing/copy";
 import type {
   Campaign,
   QuotaEntry,
@@ -100,6 +104,14 @@ export default function CampaignWorkspace() {
   const [busySlot, setBusySlot] = useState<string | null>(null);
   const [replacing, setReplacing] = useState(false);
   const [reasons, setReasons] = useState<Record<string, string>>({});
+  /**
+   * The one piece whose copy is open. A single id rather than a set: reading
+   * two pieces' words side by side is not the job here, and one open card keeps
+   * the list scannable.
+   */
+  const [openPiece, setOpenPiece] = useState<string | null>(null);
+  const [copySteer, setCopySteer] = useState("");
+  const [writingCopy, setWritingCopy] = useState<string | null>(null);
 
   // ③ Schedule
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -334,6 +346,29 @@ export default function CampaignWorkspace() {
     }
   };
 
+  /**
+   * Write one proposed piece's copy, before the plan is accepted.
+   *
+   * One model call, and slow — the route allows 300s — so the busy state is per
+   * piece and the button says what it is waiting for. The whole run comes back,
+   * matching every other preview edit, so state is replaced rather than patched.
+   */
+  const handleWriteProposedCopy = async (slotId: string) => {
+    if (!run) return;
+    setWritingCopy(slotId);
+    setError(null);
+    try {
+      applyEdit(
+        await writeProposedSlotCopy(clientId, run.id, slotId, copySteer.trim() || undefined)
+      );
+      setCopySteer("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not write the copy");
+    } finally {
+      setWritingCopy(null);
+    }
+  };
+
   /* ---------------------------------------------------------- ③ schedule -- */
 
   const handleSchedule = async (slot: Slot) => {
@@ -468,6 +503,10 @@ export default function CampaignWorkspace() {
   // A piece is on Google once it has an event id. "pending" and "error" both
   // mean it is not there yet; "stale" means it is, but out of date.
   const onGoogle = dated.filter((s) => s.google_event_id);
+
+  // How much of this campaign has words, not just a brief — the one number that
+  // says whether the content is ready to be judged or only ready to be read.
+  const withCopy = mine.filter((s) => readCopy(s)).length;
   const span =
     dated.length > 0
       ? { start: dated[0].date as string, end: dated[dated.length - 1].date as string }
@@ -488,6 +527,7 @@ export default function CampaignWorkspace() {
           ? "Nothing written yet"
           : [
               `${mine.length} written`,
+              withCopy > 0 ? `${withCopy} with copy` : null,
               openDropped.length > 0 ? `${openDropped.length} dropped` : null,
             ]
               .filter(Boolean)
@@ -901,21 +941,85 @@ export default function CampaignWorkspace() {
               ) : (
                 <>
                   <div className="space-y-3">
-                    {mine.map((slot) => (
-                      <PieceCard
-                        key={slot.slotId}
-                        piece={fromProposed(slot)}
-                        action={
-                          <button
-                            onClick={() => handleDrop(slot.slotId)}
-                            disabled={busySlot === slot.slotId || !!run?.committed_at}
-                            className={btn.ghost}
-                          >
-                            {busySlot === slot.slotId ? "…" : "Drop"}
-                          </button>
-                        }
-                      />
-                    ))}
+                    {mine.map((slot) => {
+                      // readCopy and isCopyStale take the fields they read, so
+                      // a proposal works here exactly as a committed slot does.
+                      const copy = readCopy(slot);
+                      const stale = isCopyStale(slot);
+                      const open = openPiece === slot.slotId;
+                      const writing = writingCopy === slot.slotId;
+                      // The same guard writeCopy enforces server-side: there is
+                      // nothing to write copy from without a theme.
+                      const canWrite = !slot.needsTheme && !!slot.theme && !run?.committed_at;
+
+                      return (
+                        <PieceCard
+                          key={slot.slotId}
+                          piece={fromProposed(slot)}
+                          action={
+                            <button
+                              onClick={() => handleDrop(slot.slotId)}
+                              disabled={busySlot === slot.slotId || !!run?.committed_at}
+                              className={btn.ghost}
+                            >
+                              {busySlot === slot.slotId ? "…" : "Drop"}
+                            </button>
+                          }
+                          footer={
+                            <>
+                              {copy ? (
+                                <StateLabel tone={stale ? "warn" : "good"}>
+                                  {stale ? "copy is older than the brief" : "copy ready"}
+                                </StateLabel>
+                              ) : (
+                                <StateLabel tone="muted">no copy yet</StateLabel>
+                              )}
+                              {canWrite && (
+                                <button
+                                  onClick={() =>
+                                    setOpenPiece(open ? null : slot.slotId)
+                                  }
+                                  className={btn.link}
+                                >
+                                  {open ? "Hide" : copy ? "Read the copy" : "Write the copy"}
+                                </button>
+                              )}
+                            </>
+                          }
+                        >
+                          {open && canWrite && (
+                            <>
+                              {copy && <CopyView copy={copy} />}
+                              {stale && (
+                                <p className={banner.warn}>
+                                  The brief changed after this was written, so the
+                                  two no longer match. Write it again to catch up.
+                                </p>
+                              )}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <input
+                                  className={`${field.inputSm} flex-1 min-w-[16rem]`}
+                                  value={copySteer}
+                                  onChange={(e) => setCopySteer(e.target.value)}
+                                  placeholder="Optional: how to write it — e.g. shorter slides, no questions"
+                                />
+                                <button
+                                  onClick={() => handleWriteProposedCopy(slot.slotId)}
+                                  disabled={writing}
+                                  className={btn.primarySm}
+                                >
+                                  {writing
+                                    ? "Writing… (up to 5 min)"
+                                    : copy
+                                      ? "Write it again"
+                                      : "Write the copy"}
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </PieceCard>
+                      );
+                    })}
                   </div>
 
                   {myDropped.length > 0 && (

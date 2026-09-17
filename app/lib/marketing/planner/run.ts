@@ -184,6 +184,9 @@ export async function planFromInputs(
       hook: fill.hook,
       body: fill.body,
       cta: fill.cta,
+      // The brief, not the words. Copy is written afterwards, per piece, and
+      // before the plan is accepted — see planner/copy-run.ts.
+      content: null,
       needsTheme: fill.needsTheme,
     });
   }

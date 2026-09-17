@@ -474,6 +474,23 @@ export const restorePlanSlots = (clientId: string, runId: string, slotIds: strin
     body: JSON.stringify({ slotIds }),
   });
 
+/**
+ * Write one proposed piece's copy before the plan is accepted.
+ *
+ * One model call, and slow — the route allows 300s. Returns the whole run, like
+ * the other preview edits, so the page swaps its state rather than patching.
+ */
+export const writeProposedSlotCopy = (
+  clientId: string,
+  runId: string,
+  slotId: string,
+  steer?: string
+) =>
+  request<PlanRun>(`${c(clientId)}/plan/runs/${runId}/copy`, {
+    method: "POST",
+    body: JSON.stringify({ slotId, steer }),
+  });
+
 /** One model call for every dropped slot. Empty `slotIds` means all of them. */
 export const replaceDroppedSlots = (
   clientId: string,

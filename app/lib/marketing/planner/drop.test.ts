@@ -9,6 +9,7 @@ import {
   parseSlotIds,
   rejectedThemes,
   replacementSlot,
+  applyCopyToProposed,
 } from "./drop";
 import { buildReplaceGaps, gapIdFor } from "./replace";
 import type { DroppedSlot, ProposedSlot } from "../../types";
@@ -33,6 +34,7 @@ function slot(over: Partial<ProposedSlot> = {}): ProposedSlot {
     hook: "Nobody tells you the price.",
     body: ["beat one", "beat two"],
     cta: "See our pricing.",
+    content: null,
     needsTheme: false,
     ...over,
   };
@@ -367,5 +369,65 @@ describe("buildReplaceGaps", () => {
     expect(gaps.map((g) => g.index_in_set)).toEqual([0, 1]);
     expect(gaps.every((g) => g.of_in_set === 2)).toBe(true);
     expect(new Set(gaps.map((g) => g.gap_id)).size).toBe(2);
+  });
+});
+
+/** Stand-in for a SlotCopy; these functions only move it, never read into it. */
+const COPY = { blocks: [{ label: "Slide 1", text: "Words." }], sourceHash: "abc" };
+
+describe("applyCopyToProposed", () => {
+  it("puts the copy on the named proposal", () => {
+    const result = applyCopyToProposed([slot({ slotId: "a" })], "a", COPY);
+    expect(result.found).toBe(true);
+    expect(result.proposed[0].content).toEqual(COPY);
+  });
+
+  it("leaves every other proposal untouched", () => {
+    const before = [slot({ slotId: "a" }), slot({ slotId: "b" })];
+    const { proposed } = applyCopyToProposed(before, "a", COPY);
+    expect(proposed[1]).toBe(before[1]);
+    expect(proposed[1].content).toBeNull();
+  });
+
+  /**
+   * A miss means the proposal was dropped while the model was still writing.
+   * Reporting it is what stops the caller announcing a write that never landed.
+   */
+  it("reports a miss rather than silently doing nothing", () => {
+    const { proposed, found } = applyCopyToProposed([slot({ slotId: "a" })], "gone", COPY);
+    expect(found).toBe(false);
+    expect(proposed[0].content).toBeNull();
+  });
+
+  it("overwrites copy that was already there", () => {
+    const { proposed } = applyCopyToProposed(
+      [slot({ slotId: "a", content: { blocks: [], sourceHash: "old" } })],
+      "a",
+      COPY
+    );
+    expect(proposed[0].content).toEqual(COPY);
+  });
+});
+
+describe("copy and the drop lifecycle", () => {
+  /**
+   * The silent one. withoutDropFields spreads the whole entry by design, so
+   * without an explicit clear the dropped idea's words ride onto the NEW idea
+   * that replaced it — showing one piece's copy under another piece's theme,
+   * flagged at worst as "older than the brief" rather than as the wrong piece.
+   */
+  it("a replacement starts with no copy", () => {
+    const original = dropped({ slotId: "a", content: COPY });
+    const replaced = replacementSlot(original, fill({ theme: "A different angle" }));
+    expect(replaced.content).toBeNull();
+  });
+
+  /**
+   * Restore is the opposite case: the brief comes back unchanged, so the copy
+   * written for it is still the copy for it and must survive.
+   */
+  it("a restored drop keeps the copy it already had", () => {
+    const { proposed } = applyRestores([], [dropped({ slotId: "a", content: COPY })], ["a"]);
+    expect(proposed[0].content).toEqual(COPY);
   });
 });
