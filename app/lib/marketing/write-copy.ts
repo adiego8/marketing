@@ -10,8 +10,9 @@ import { recordSignal } from "./signals";
 import { snapshotOf } from "./lessons";
 import { lessonsForPrompt } from "./lessons-store";
 import { getStrategy } from "./strategy";
-import { ctaWarnings, languageOf, primaryCtaOf } from "./brand";
+import { ctaWarnings, languageOf, primaryCtaOf, wordsToAvoidOf } from "./brand";
 import { languageWarnings } from "./language";
+import { humanizeWarnings } from "./humanize";
 import { getSlot, updateSlot } from "./slots";
 import { SlotNotFoundError } from "./planner/regenerate";
 import { WRITE_COPY_PROMPT } from "./planner/prompt";
@@ -195,6 +196,10 @@ export async function generateCopy(
       ...copyWarnings(copy, brief),
       ...languageWarnings(copy, languageOf(strategy)),
       ...ctaWarnings(brief.cta, languageOf(strategy)),
+      ...humanizeWarnings(copy, {
+        language: languageOf(strategy),
+        wordsToAvoid: wordsToAvoidOf(strategy),
+      }),
     ],
   };
 }
@@ -263,6 +268,10 @@ export async function writeCopy(
       ...copyWarnings(copy, updated),
       ...languageWarnings(copy, languageOf(strategy)),
       ...ctaWarnings(updated.cta, languageOf(strategy)),
+      ...humanizeWarnings(copy, {
+        language: languageOf(strategy),
+        wordsToAvoid: wordsToAvoidOf(strategy),
+      }),
     ],
   };
 }

@@ -27,8 +27,9 @@ import {
 import { windowFor } from "@/lib/marketing/posting-windows";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
 import { readCopy, isCopyStale, copyWarnings } from "@/lib/marketing/copy";
-import { ctaWarnings, languageOf } from "@/lib/marketing/brand";
+import { ctaWarnings, languageOf, wordsToAvoidOf } from "@/lib/marketing/brand";
 import { languageWarnings } from "@/lib/marketing/language";
+import { humanizeWarnings } from "@/lib/marketing/humanize";
 import { backLink, btn, field, pager, surface, text, banner } from "@/lib/ui";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
@@ -381,6 +382,7 @@ export default function SlotDetailPage() {
     ...(copy ? copyWarnings(copy, slot) : []),
     ...languageWarnings(copy, language),
     ...ctaWarnings(slot.cta, language),
+    ...humanizeWarnings(copy, { language, wordsToAvoid: wordsToAvoidOf(strategy) }),
   ];
   const dropped = slot.status === "cancelled" || slot.status === "skipped";
 

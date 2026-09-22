@@ -350,26 +350,66 @@ deliberate — a model gets clamped, a human gets told — and is preserved.
 
 ### Sounding human
 
-Mostly Tier B by nature. `app/lib/marketing/humanize.ts`, seeded from the
-`ig-humanizer` skill: AI-tell vocabulary by density, reveal bridges, staccato
-stacks, stacked triads, performed sincerity, emoji storms, an em-dash cap. Plus a
-hook check — the first block delivers what `slot.hook` promised inside the first
-125 characters — and actual enforcement of `voice.words_to_avoid`. All of it
-returns warnings through `copyWarnings`.
+Mostly Tier B by nature. `app/lib/marketing/humanize.ts`: AI-tell vocabulary by
+density, reveal bridges, negative parallelism, staccato stacks, stacked triads,
+performed sincerity, emoji storms, an em-dash cap, a hook that has to land before
+the fold, and actual enforcement of `voice.words_to_avoid` — which four prompts
+have asked for since the beginning and nothing has ever checked.
 
-A model critique pass is possible on top: a second call that scores a draft and
-returns its reasoning. Behind a per-agency setting, default off, because it
-doubles the model cost of every piece. Its output is a verdict on the operator's
-screen and a candidate lesson — never an automatic rewrite.
+**"Seeded from the `ig-humanizer` skill" turned out to mean something narrower
+than this spec assumed.** That skill promises a `references/scrub-rules.md`
+holding "V3 regex patterns by tier, density scoring, em dash cap, rhythm rules" —
+precisely the file a port would want — plus five more. None are on this machine;
+only its `SKILL.md` synced. So the rules come from the skill's prose, which does
+name the vocabulary verbatim and give every threshold as a number, but not from
+its patterns. Every threshold here is the skill's own: three markers per block
+(one is not a verdict — "AI vocabulary appears in 10% of human captions"), four
+emoji, three fragments, a third triad, one em dash per hundred words.
+
+Structure is language-agnostic and runs for every client. **Vocabulary exists for
+English and Spanish only.** The English list is the skill's, from a corpus it
+cites; the Spanish list is written by analogy, says so in the module, and should
+be treated as the weaker signal. The other six languages get structure and say
+nothing about vocabulary — the same bargain as hashtags in `language.ts`.
+
+The single most important property is **silence**. This banner already carries
+platform limits, language, CTA, caption echo and missing production notes; a
+check that fired on ordinary writing would make a wall nobody reads and would
+undo the other three phases while appearing to add to them. So the output is
+severity-ordered and capped at four, saying how many it left unsaid — following
+the skill's own guard that "a pass that finds nothing changes nothing."
+
+Several of the skill's rules are deliberately not implemented, because a regex
+cannot judge them: whether a hook "makes sense on its own", whether a paragraph
+"reads machine-flat" (the skill disclaims a number for this outright), whether a
+triad is hollow or natural, and detector scores, which the skill forbids as noise
+under 300 words.
+
+### The critique pass, deferred
+
+A second model call that scores a draft and returns its reasoning is still worth
+having, and is not built. Two reasons to wait.
+
+It costs a call per piece, doubling what writing copy costs, and buying that
+before the free checks have been lived with is paying to solve a problem that may
+already be solved.
+
+And it needs a home that does not exist. There is **no settings surface anywhere
+in this codebase** — no settings object, no flags collection, no boolean config
+field on any document. `Agency` has no TypeScript interface, no serializer and no
+read/write route; it is written once by `auth.ts` and only ever read to check
+existence. Every `process.env` var is a credential, an endpoint or a model name,
+and not one is a behaviour toggle. "Behind a per-agency setting, default off" is
+therefore a feature in its own right, not a flag, and deserves planning as one.
 
 ## What it costs
 
-Nothing, until someone turns on the critique.
+Nothing. All four phases together add **zero model calls**.
 
 Dropping the automatic repair passes removed every conditional extra call this
-would otherwise have introduced. The fields, prompt text, clamps and pure
-functions are free; the deterministic humanizer rules are free; the critique pass
-is one extra call per piece and is off by default.
+would otherwise have introduced, and deferring the critique removed the last one.
+The fields, prompt text, clamps and pure functions are free; so are the
+deterministic humanizer rules.
 
 Worth remembering that `llm.ts:77` already retries up to 3 times on malformed
 JSON, so one logical call can bill more than once. Existing behaviour, not added

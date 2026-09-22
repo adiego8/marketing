@@ -117,6 +117,23 @@ export function primaryCtaOf(strategy: unknown): PrimaryCta | null {
   return cta.destination || cta.intent ? cta : null;
 }
 
+/**
+ * The words this client has said not to use.
+ *
+ * Asked for in four prompts since the beginning and checked in none of them —
+ * `voice.words_to_avoid` was a request the model could decline silently. Read
+ * defensively because `voice`, like every strategy section, is an unvalidated
+ * `Record<string, unknown>`.
+ */
+export function wordsToAvoidOf(strategy: unknown): string[] {
+  const raw = asObject(asObject(strategy).voice).words_to_avoid;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((w): w is string => typeof w === "string")
+    .map((w) => w.trim())
+    .filter((w) => w.length > 0);
+}
+
 /* -------------------------------------------------------------- angles --- */
 
 /** One way to argue for something. The `type` is what gets stored. */
