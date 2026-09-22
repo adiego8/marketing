@@ -22,6 +22,7 @@ function campaign(over: Partial<CampaignWindow> = {}): CampaignWindow {
     endDate: null,
     goal: "",
     keyMessage: "",
+    targetAudience: "",
     plannedByType: { post: 4 },
     plannedTotal: 4,
     channels: ["linkedin"],

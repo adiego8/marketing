@@ -80,7 +80,12 @@ export function toCampaignWindow(campaign: {
   }
 
   const summed = Object.values(plannedByType).reduce((a, b) => a + b, 0);
-  const strategy = campaign.strategy as { goal?: unknown; key_message?: unknown; channels?: unknown };
+  const strategy = campaign.strategy as {
+    goal?: unknown;
+    key_message?: unknown;
+    channels?: unknown;
+    target_audience?: unknown;
+  };
 
   return {
     id: campaign.id,
@@ -90,6 +95,9 @@ export function toCampaignWindow(campaign: {
     endDate: campaign.end_date,
     goal: typeof strategy?.goal === "string" ? strategy.goal : "",
     keyMessage: typeof strategy?.key_message === "string" ? strategy.key_message : "",
+    // Read and forwarded because a campaign often narrows the client's ICP to
+    // one segment, and a piece written for everyone lands for nobody.
+    targetAudience: typeof strategy?.target_audience === "string" ? strategy.target_audience : "",
     plannedByType,
     plannedTotal:
       typeof plan?.total_pieces === "number" && plan.total_pieces > 0

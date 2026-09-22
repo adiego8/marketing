@@ -57,6 +57,8 @@ export interface CampaignWindow {
   endDate: IsoDate | null;
   goal: string;
   keyMessage: string;
+  /** Who this campaign is for, where it says. Narrower than the client's ICP. */
+  targetAudience: string;
   /** From content_plan.breakdown; used to filter which gaps a campaign can serve. */
   plannedByType: Record<string, number>;
   plannedTotal: number;

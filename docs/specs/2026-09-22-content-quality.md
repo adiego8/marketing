@@ -219,30 +219,72 @@ One call asked for N pieces serving one key message will converge. With
 temperature inert there is not even a randomness knob to lean on. Variety has to
 be constructed.
 
-New pure module `app/lib/marketing/planner/angles.ts` assigns each gap, in code,
-before the model is called, a distinct combination of an **angle** (one of the 8
-in `strategy-intake.json`), a **pillar** (round-robined over
-`content_strategy.content_pillars`), and an **entry point** — one `pain_point`,
-`objection`, `trigger_event` or `proof_point`, each used at most once per set.
-`GapRequest` (`decide.ts:29-45`) gains `assigned_angle`, `assigned_pillar`,
-`assigned_entry_point`.
+**The eight angles did not exist in code.** They were defined in
+`strategy-intake.json` and nowhere else — prompt data, read by a human filling in
+a strategy and by the research model drafting one, but never by the product.
+`research/parse.ts` slugifies whatever comes back without checking it against
+anything, and the strategy editor's angle `type` is a bare text input that can
+legitimately be empty, so every stored angle is untrusted. `POSITIONING_ANGLES`
+joins `LANGUAGES` in `brand.ts`, with `angleFor` validating and `anglesOf`
+reading the brand's own choices in order and deduped. A test compares the
+constant against the JSON so the two cannot drift.
 
-Eight pieces are then provably given eight different arguments to make from eight
-different starting points, because a function assigned them. The input constraint
-cannot collide. This is also where the Methodology Layer finally reaches a
-prompt.
+`planner/angles.ts` then assigns each gap, in code, before the model is called:
+an **angle**, a **pillar** round-robined over `content_strategy.content_pillars`,
+and an **entry point** drawn from `icp.pain_points`, `icp.objections`,
+`icp.trigger_events`, `messaging.proof_points` and `messaging.value_props`. The
+sequence leads with the brand's own angles — the campaign's first where it names
+a real one — then fills from the canonical eight. Because the brand's angles are
+a subset, that is a reordering and never a truncation, which is what makes the
+eight-distinct-angles guarantee hold for a client who named only one.
 
-Carry `positioning_angle` and `target_audience` through from the campaign too —
-both exist on `campaign.strategy` and are dropped at `plan-runs.ts:58-95`. The
-campaign's own angle seeds the allocation rather than competing with it.
+Plain index rotation, following `defaultChannelFor` in `observe.ts`. An earlier
+draft called for offset strides to delay repeating combinations; not worth the
+reasoning, because the angles alone carry the guarantee and eight is all a run
+needs.
 
-Tier B on top: `app/lib/marketing/similarity.ts`, trigram / token-set Jaccard.
-After `parseFills`, compare every returned theme and hook against the others in
-the batch and against `recent_themes`, and report collisions on the plan run. No
-repair call — with the allocation in place, a collision means the allocation
-needs tuning or the strategy is thin, and both are things a person should see.
+Allocation runs beside `expandGapIds` rather than inside it, so that function
+stays exactly as tested. The types split: `Gap` is a piece that needs writing,
+`GapRequest extends Gap` adds the assignment. `regenerate` and `replace` build
+gaps by hand and speak `Gap` — both are a human asking for something different
+about ONE piece, which is the opposite of the situation an allocation fixes.
 
-The same function serves the caption check below. One primitive, two consumers.
+A thin strategy never fails, it reports: no pillars, nothing to argue from, more
+pieces than entry points, more pieces than angles. Those are facts about the
+strategy and only a person can fix them.
+
+Also carried through from the campaign: `target_audience`, which
+`toCampaignWindow` was dropping. A campaign often narrows the client's ICP to one
+segment, and a piece written for everyone lands for nobody.
+
+### The net underneath it
+
+Nothing stops a model handed eight different starting points from walking all
+eight back to the campaign's key message. `planner/collisions.ts` is the check
+that says when it did — `jaccard` from `similarity.ts`, whose module comment
+named this as its second consumer. `jaccard` and not `overlap`: two themes are
+comparable in length, so the symmetric measure is right.
+
+It runs after the chunk loop in `decide`, the only point where the whole run's
+fills are in one array — `chunkRequest` splits by campaign, so a check inside the
+loop would miss every cross-chunk collision.
+
+It does no stemming, so "punishes" and "punished" read as two different words and
+a heavily reworded pair can slip through. That is the price of a measure needing
+no dictionary and no model call, it is recorded in a test rather than hidden, and
+the allocation is what actually prevents the problem.
+
+### Where any of this is seen
+
+**Plan-run warnings reached nobody.** `run.warnings` was stored on every run and
+rendered in one place — the client overview, as a bare count, not clickable. The
+campaign workspace held the run and its own comment said it was kept "for what it
+says ABOUT a generation — warnings, a degraded model answer", but only `status`
+was ever read. Every warning the planner has ever emitted landed in Firestore and
+went nowhere.
+
+They now render as a list beside the existing degraded banner, following the
+research page's pattern. This surfaces all of them, not only collisions.
 
 Also: a comment at each of the five graded temperature constants noting they are
 dropped on gpt-5.5, so the next reader does not tune a knob that is not
@@ -377,6 +419,10 @@ Closing the learning loop. Signals are written by four call sites, read by one
 page, and never reach a prompt; every lesson is hand-typed, and `evidence_count`
 is always 0, so `lessonsFor`'s evidence-weighted sort degenerates to recency.
 Real, and worth its own spec.
+
+Persisting the allocation onto slots. It stays on `GapRequest`, the model input;
+putting it on a slot means `ProposedSlot`, `slotDoc`, `serializeSlot`, `Slot`,
+`AgentSlot` and the PATCH route — a storage change in service of display.
 
 Also out: automatic regeneration of any kind, reviving the orphaned drop/replace
 routes, multiple caption variants per piece, per-campaign or per-piece language

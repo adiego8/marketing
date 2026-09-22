@@ -117,6 +117,80 @@ export function primaryCtaOf(strategy: unknown): PrimaryCta | null {
   return cta.destination || cta.intent ? cta : null;
 }
 
+/* -------------------------------------------------------------- angles --- */
+
+/** One way to argue for something. The `type` is what gets stored. */
+export interface Angle {
+  type: string;
+  /** What the angle means, verbatim from the intake schema. */
+  guidance: string;
+}
+
+/**
+ * The eight positioning angles, and the first time they have existed in code.
+ *
+ * They were defined in `app/prompts/strategy-intake.json` and nowhere else —
+ * prompt data, read by a human filling in a strategy and by the research model
+ * drafting one, but never by the product. `research/parse.ts` slugifies
+ * whatever comes back without checking it against anything, and the strategy
+ * editor's angle `type` is a bare text input that can legitimately be empty. So
+ * every stored angle is untrusted input, which is what angleFor is for.
+ *
+ * The JSON stays the source for the intake prompt. This is the source for
+ * generation, and brand.test.ts asserts the two agree so they cannot drift.
+ *
+ * Order is the order they are offered in when a brand has not chosen its own.
+ */
+export const POSITIONING_ANGLES: readonly Angle[] = [
+  { type: "contrarian", guidance: "Challenge what everyone in the category believes." },
+  { type: "unique_mechanism", guidance: "Lead with HOW it works, not what it is." },
+  { type: "transformation", guidance: "The before and the after — the gap closed." },
+  { type: "enemy", guidance: "Position against a common villain the customer already resents." },
+  { type: "speed_ease", guidance: "Compress the time or reduce the effort it takes." },
+  { type: "specificity", guidance: "Hyper-specific about who it is for and what it does." },
+  { type: "social_proof", guidance: "Lead with the evidence, not the claim." },
+  { type: "risk_reversal", guidance: "Make the guarantee the headline." },
+] as const;
+
+/**
+ * A stored angle type to a real angle, or null.
+ *
+ * Null rather than a default, unlike languageFor: an unrecognised language
+ * still has to be written in something, but an angle nobody named is simply an
+ * angle we do not have, and the allocator has seven others to reach for.
+ */
+export function angleFor(value: unknown): Angle | null {
+  const needle = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!needle) return null;
+  return POSITIONING_ANGLES.find((a) => a.type === needle) ?? null;
+}
+
+/**
+ * The angles this brand chose, in the order it chose them.
+ *
+ * Primary first, because it is the one the strategy argues is strongest and so
+ * belongs to the first piece. Deduped, because nothing stops an operator
+ * repeating the primary angle in the secondary list, and an allocation that
+ * handed the same angle to two pieces would be the exact failure this exists
+ * to prevent.
+ *
+ * An empty result is normal and fine — a strategy that has named no angle gets
+ * the canonical eight instead.
+ */
+export function anglesOf(strategy: unknown): Angle[] {
+  const positioning = asObject(asObject(strategy).positioning);
+  const secondary = Array.isArray(positioning.secondary_angles)
+    ? positioning.secondary_angles
+    : [];
+
+  const out: Angle[] = [];
+  for (const raw of [positioning.primary_angle, ...secondary]) {
+    const angle = angleFor(asObject(raw).type);
+    if (angle && !out.some((a) => a.type === angle.type)) out.push(angle);
+  }
+  return out;
+}
+
 /* ----------------------------------------------------------- cta check --- */
 
 /**

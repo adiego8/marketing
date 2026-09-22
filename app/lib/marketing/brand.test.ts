@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
+import intake from "../../prompts/strategy-intake.json";
 import {
   LANGUAGES,
+  POSITIONING_ANGLES,
+  angleFor,
+  anglesOf,
   DEFAULT_LANGUAGE,
   languageFor,
   languageOf,
@@ -97,6 +101,87 @@ describe("primaryCtaOf", () => {
       destination: "",
       intent: "book a call",
     });
+  });
+});
+
+describe("POSITIONING_ANGLES", () => {
+  it("matches the intake schema exactly, so the two cannot drift", () => {
+    // The JSON is what a human fills in and what the research model drafts
+    // against; this constant is what generation reads. If they disagree, a
+    // strategy can name an angle the allocator will silently refuse to use.
+    const fromJson = intake.reference.positioning_angle_types as Record<string, string>;
+    const expected = Object.entries(fromJson)
+      .filter(([key]) => !key.startsWith("_"))
+      .map(([type, guidance]) => ({ type, guidance }));
+    expect(POSITIONING_ANGLES).toEqual(expected);
+  });
+
+  it("has unique types", () => {
+    const types = POSITIONING_ANGLES.map((a) => a.type);
+    expect(new Set(types).size).toBe(types.length);
+  });
+});
+
+describe("angleFor", () => {
+  it("resolves a stored type", () => {
+    expect(angleFor("contrarian")?.guidance).toContain("Challenge");
+  });
+
+  it("is case and whitespace insensitive", () => {
+    expect(angleFor("  Contrarian ")?.type).toBe("contrarian");
+  });
+
+  it("returns null for anything it does not recognise", () => {
+    // Unlike a language, an angle nobody named is simply one we do not have —
+    // the allocator has seven others to reach for, so there is no default.
+    expect(angleFor("")).toBeNull();
+    expect(angleFor("vibes")).toBeNull();
+    expect(angleFor(null)).toBeNull();
+    expect(angleFor(7)).toBeNull();
+  });
+});
+
+describe("anglesOf", () => {
+  it("puts the brand's primary angle first", () => {
+    const strategy = {
+      positioning: {
+        primary_angle: { type: "unique_mechanism" },
+        secondary_angles: [{ type: "contrarian" }, { type: "speed_ease" }],
+      },
+    };
+    expect(anglesOf(strategy).map((a) => a.type)).toEqual([
+      "unique_mechanism",
+      "contrarian",
+      "speed_ease",
+    ]);
+  });
+
+  it("drops the empty type the editor can produce, and any invented one", () => {
+    // secondary_angles survives the research parser on a non-empty statement
+    // alone, so an entry with no type at all is a normal stored shape.
+    const strategy = {
+      positioning: {
+        primary_angle: { type: "", statement: "We do it differently" },
+        secondary_angles: [{ type: "vibes" }, { type: "enemy" }],
+      },
+    };
+    expect(anglesOf(strategy).map((a) => a.type)).toEqual(["enemy"]);
+  });
+
+  it("dedupes, because nothing stops an operator repeating the primary", () => {
+    const strategy = {
+      positioning: {
+        primary_angle: { type: "enemy" },
+        secondary_angles: [{ type: "enemy" }, { type: "contrarian" }],
+      },
+    };
+    expect(anglesOf(strategy).map((a) => a.type)).toEqual(["enemy", "contrarian"]);
+  });
+
+  it("returns nothing when the brand has chosen no angle", () => {
+    expect(anglesOf({ positioning: {} })).toEqual([]);
+    expect(anglesOf({})).toEqual([]);
+    expect(anglesOf(null)).toEqual([]);
   });
 });
 

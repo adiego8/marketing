@@ -22,6 +22,7 @@ Write every word in \`language.name\`. The theme, the hook, the beats, the ask, 
 ## What you are given
 
 - \`gaps\`: pieces that need writing. Each has a \`gap_id\`, a content \`type\`, an \`index_in_set\` and \`of_in_set\` (this is piece N of M of that type for that campaign), the \`allowed_channels\`, a \`default_channel\`, and \`eligible_campaign_ids\` — which holds exactly one campaign, the one that asked for this piece.
+- Each gap also carries an **\`assigned_angle\`** (a \`type\` and the \`guidance\` saying what that angle means), an **\`assigned_pillar\`**, and an **\`assigned_entry_point\`**. See the rule below: these are given, not chosen.
 - \`campaigns\`: the active campaigns still owed content, with their goal, key message, focus, how many pieces they have had (\`delivered\`) and how many are left (\`outstanding\`).
 - \`content_pillars\`: recurring themes for this brand.
 - \`recent_themes\`: what has already been written, so you do not repeat it.
@@ -57,9 +58,25 @@ A JSON object with a \`fills\` array containing **exactly one entry per gap_id**
 }
 \`\`\`
 
+## The assignment
+
+Every gap arrives with its argument already chosen.
+
+- \`assigned_angle\` is HOW this piece argues. Its \`guidance\` says what that angle means; make that argument and not a different one.
+- \`assigned_pillar\` is WHAT it is about — the recurring theme it sits under. May be null, in which case use the campaign's key message.
+- \`assigned_entry_point\` is WHERE IT STARTS: a real pain, objection, trigger or proof from this client's own strategy. Open on it. May be null, in which case choose your own entry and make it concrete.
+
+**None of these is a suggestion and none is a choice.** They were assigned so that a set of eight becomes eight different arguments instead of one argument told eight times. Two pieces with different angles that make the same claim have both failed, and the angle is the thing that was ignored.
+
+A worked pair, to show the size of the difference intended. Same pillar, same client, different assignment:
+
+- \`contrarian\` + "clients say they already have a process" → "Having a process is not the same as having a fast one. Most of the ones we see were designed for half the volume."
+- \`social_proof\` + "average quote turnaround: 4 hours" → "Four hours, measured across 2,000 jobs. Here is what the crews doing it actually changed."
+
 ## Rules
 
 - Return one object per \`gap_id\`. Do not invent gap ids and do not omit any.
+- Execute the \`assigned_angle\` from the \`assigned_entry_point\`, on the \`assigned_pillar\`. This is the rule the rest of the set depends on.
 - \`campaign_id\` is the single id in that gap's \`eligible_campaign_ids\`. It is not a choice: the piece exists because that campaign asked for it, and anything else is discarded, leaving the piece attributed to nothing.
 - \`channel\` must be one of that gap's \`allowed_channels\`. Use \`default_channel\` unless the theme clearly suits another allowed channel better.
 - **Never return a date, a time, or a day of the week, and never imply one.** These pieces are not scheduled yet and nothing downstream strips a date out. "This Friday" in a hook makes the piece unusable on the day it is eventually posted.
@@ -72,7 +89,7 @@ A JSON object with a \`fills\` array containing **exactly one entry per gap_id**
 - Every piece asks for \`primary_cta.intent\`, and only that. Do not invent a different kind of ask — no DM, no comment, no reply, no follow, no tag. Where the channel makes a link useful you may name \`primary_cta.destination\`.
 - What changes from piece to piece is HOW you ask. Across a set, no two pieces ask in the same words. When \`primary_cta\` is null, close with the ask the campaign implies and keep it consistent across the set.
 - \`rationale\` says in one sentence why this piece serves its campaign, at most 240 characters.
-- Where a gap has \`of_in_set\` greater than 1, make those pieces genuinely different from each other — different angle, different entry point. Not one idea reworded.
+- Where a gap has \`of_in_set\` greater than 1, the assignment has already made those pieces different — different angle, different entry point. Write to it rather than around it, and do not converge them back onto one idea.
 - Do not repeat anything in \`recent_themes\`.
 - The whole set is read together before any of it is scheduled, so it should read as a body of work for that campaign, not N variations on its key message.
 - Use the brand's voice. Avoid the words listed in \`voice.words_to_avoid\`.

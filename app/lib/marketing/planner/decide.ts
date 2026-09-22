@@ -1,6 +1,14 @@
 import { isChannel, type Channel } from "../posting-windows";
 import { llmJson } from "../llm";
-import { DEFAULT_LANGUAGE, type Language, type PrimaryCta } from "../brand";
+import {
+  DEFAULT_LANGUAGE,
+  POSITIONING_ANGLES,
+  type Angle,
+  type Language,
+  type PrimaryCta,
+} from "../brand";
+import { allocate, type Allocation, type AllocationSource } from "./angles";
+import { themeCollisions } from "./collisions";
 import { PLANNER_DECIDE_PROMPT } from "./prompt";
 import {
   MAX_BODY_ITEMS,
@@ -27,7 +35,15 @@ const MAX_GAPS_PER_CALL = 40;
 /** Constrained selection, not ideation — much lower than campaign generation's 0.8. */
 const TEMPERATURE = 0.4;
 
-export interface GapRequest {
+/**
+ * One piece that needs writing, before anything decided what it should argue.
+ *
+ * Split from GapRequest because regenerate and replace build gaps by hand and
+ * deliberately keep free choice: both are a human asking for something
+ * different about ONE piece, which is the opposite of the situation an
+ * allocation exists to fix. They speak Gap; only the planner speaks GapRequest.
+ */
+export interface Gap {
   gap_id: string;
   type: string;
   /** Position within this campaign+type set, so the model varies the pieces. */
@@ -42,6 +58,18 @@ export interface GapRequest {
    * and a one-element list is what makes an unattributed piece impossible.
    */
   eligible_campaign_ids: string[];
+}
+
+/**
+ * A gap plus what it was told to argue.
+ *
+ * The reason a set of eight stops converging. `index_in_set` was the only thing
+ * distinguishing one gap from the next, and an integer is not an argument.
+ */
+export interface GapRequest extends Gap {
+  assigned_angle: Angle;
+  assigned_pillar: string | null;
+  assigned_entry_point: string | null;
 }
 
 export interface DecideRequest {
@@ -91,8 +119,8 @@ export type DecideFn = (request: DecideRequest) => Promise<DecideResult>;
  * index_in_set / of_in_set to make the three genuinely different. One gap
  * yielding one theme produces three identical posts.
  */
-export function expandGapIds(demand: Demand[]): GapRequest[] {
-  const out: GapRequest[] = [];
+export function expandGapIds(demand: Demand[]): Gap[] {
+  const out: Gap[] = [];
   for (const row of demand) {
     for (let i = 0; i < row.outstanding; i++) {
       out.push({
@@ -121,11 +149,22 @@ export function buildDecideRequest(
     /** Defaulted rather than optional: every request carries a language. */
     language?: Language;
     primaryCta?: PrimaryCta | null;
+    /** What each piece is given to argue. Empty lists still allocate angles. */
+    allocation?: AllocationSource;
   }
-): DecideRequest {
+): { request: DecideRequest; warnings: string[] } {
   const byId = new Map(campaigns.map((c) => [c.id, c]));
 
-  return {
+  // Returns warnings as well as a request because building one is where a thin
+  // strategy becomes visible — eight pieces sharing two things to argue from is
+  // a finding about the strategy, and the operator is the one who can fix it.
+  const gaps = expandGapIds(observation.demand);
+  const { allocations, warnings } = allocate(
+    gaps.map((g) => g.gap_id),
+    context.allocation ?? { angles: [], pillars: [], entryPoints: [] }
+  );
+
+  const request: DecideRequest = {
     business: context.business,
     content_pillars: context.pillars,
     lessons: context.lessons,
@@ -144,6 +183,7 @@ export function buildDecideRequest(
           description: c?.description ?? "",
           goal: c?.goal ?? "",
           key_message: c?.keyMessage ?? "",
+          target_audience: c?.targetAudience ?? "",
           types_needed: c?.plannedByType ?? {},
           delivered: s.delivered,
           outstanding: s.outstanding,
@@ -151,7 +191,19 @@ export function buildDecideRequest(
         };
       }),
     recent_themes: context.recentThemes,
-    gaps: expandGapIds(observation.demand),
+    gaps: gaps.map((gap) => withAllocation(gap, allocations.get(gap.gap_id))),
+  };
+
+  return { request, warnings };
+}
+
+/** A gap plus what it was told to argue. Separate so expandGapIds stays pure and untouched. */
+function withAllocation(gap: Gap, allocation: Allocation | undefined): GapRequest {
+  return {
+    ...gap,
+    assigned_angle: allocation?.angle ?? POSITIONING_ANGLES[0],
+    assigned_pillar: allocation?.pillar ?? null,
+    assigned_entry_point: allocation?.entryPoint ?? null,
   };
 }
 
@@ -178,7 +230,7 @@ export function chunkRequest(request: DecideRequest, maxGaps = MAX_GAPS_PER_CALL
 }
 
 /** A fully-formed fill with no theme, used whenever the model gives us nothing usable. */
-export function skeletonFills(gaps: GapRequest[]): Fill[] {
+export function skeletonFills(gaps: Gap[]): Fill[] {
   return gaps.map((gap) => ({
     gapId: gap.gap_id,
     campaignId: null,
@@ -221,7 +273,7 @@ export function clampList(value: unknown, maxItems: number, maxChars: number): s
  */
 export function parseFills(
   raw: unknown,
-  gaps: GapRequest[]
+  gaps: Gap[]
 ): { fills: Fill[]; warnings: string[] } {
   const warnings: string[] = [];
   const byId = new Map(gaps.map((g) => [g.gap_id, g]));
@@ -325,6 +377,11 @@ export const decide: DecideFn = async (request) => {
       degraded = true;
     }
   }
+
+  // After the loop, not inside it: this is the only point where the whole
+  // run's fills are in one array, and chunkRequest splits by campaign, so a
+  // check inside the loop would miss every cross-chunk collision.
+  warnings.push(...themeCollisions(fills, request.recent_themes));
 
   return { fills, warnings, degraded };
 };

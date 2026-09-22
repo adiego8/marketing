@@ -3,6 +3,7 @@ import { getCampaign } from "../campaigns";
 import { getStrategy } from "../strategy";
 import { lessonsForPrompt } from "../lessons-store";
 import { languageOf, primaryCtaOf, type Language, type PrimaryCta } from "../brand";
+import { allocationSourceOf, type AllocationSource } from "./angles";
 import type { QuotaEntry } from "../strategy";
 import { buildDecideRequest, decide, type DecideFn } from "./decide";
 import { observe } from "./observe";
@@ -74,6 +75,14 @@ export interface PlannerInputs {
   language: Language;
   /** The client's one ask, or null when they have not set one. */
   primaryCta: PrimaryCta | null;
+  /**
+   * What each piece is given to argue.
+   *
+   * Built in previewPlan from the whole strategy rather than read out of
+   * `business`, which carries no `messaging` — so proof points and value props,
+   * two of the better things a piece can argue from, are invisible from there.
+   */
+  allocation: AllocationSource;
   strategyChannels: Channel[];
   recentThemes: { date: string | null; type: string; theme: string }[];
   /** What the Learned page has taught for this client. */
@@ -126,7 +135,7 @@ export async function planFromInputs(
     };
   }
 
-  const request = buildDecideRequest(observation, inputs.campaigns, {
+  const { request, warnings: allocationWarnings } = buildDecideRequest(observation, inputs.campaigns, {
     business: inputs.business,
     pillars: inputs.pillars,
     recentThemes: inputs.recentThemes
@@ -135,7 +144,12 @@ export async function planFromInputs(
     lessons: inputs.lessons,
     language: inputs.language,
     primaryCta: inputs.primaryCta,
+    allocation: inputs.allocation,
   });
+  // What a thin strategy could not supply. Said here rather than swallowed,
+  // because "eight pieces sharing two things to argue from" is a fact about
+  // this client's strategy and only a person can fix it.
+  warnings.push(...allocationWarnings);
 
   const started = Date.now();
   const decision = await decideFn(request);
@@ -287,6 +301,9 @@ export async function previewPlan(
     },
     language: languageOf(strategy),
     primaryCta: primaryCtaOf(strategy),
+    // The campaign's own angle leads the rotation where it names a real one,
+    // so the allocation serves the campaign instead of competing with it.
+    allocation: allocationSourceOf(strategy, campaign.strategy?.positioning_angle),
     strategyChannels: Array.isArray(contentStrategy.platforms)
       ? (contentStrategy.platforms.filter(isChannel) as Channel[])
       : [],
