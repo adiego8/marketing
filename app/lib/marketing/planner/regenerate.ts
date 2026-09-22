@@ -8,6 +8,7 @@
 
 import { llmJson } from "../llm";
 import { getStrategy } from "../strategy";
+import { languageOf, primaryCtaOf } from "../brand";
 import { getSlot, updateSlot } from "../slots";
 import { isChannel, type Channel } from "../posting-windows";
 import { parseFills, type GapRequest } from "./decide";
@@ -104,6 +105,8 @@ export async function regenerateSlot(
       ? contentStrategy.content_pillars.filter((p): p is string => typeof p === "string")
       : [],
     recent_themes: recentThemes,
+    language: languageOf(strategy),
+    primary_cta: primaryCtaOf(strategy),
     business: {
       name: strategy?.business_name ?? "",
       icp: strategy?.icp ?? {},

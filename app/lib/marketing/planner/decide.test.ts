@@ -7,6 +7,7 @@ import {
   buildDecideRequest,
   type GapRequest,
 } from "./decide";
+import { DEFAULT_LANGUAGE, languageFor } from "../brand";
 import {
   MAX_BODY_ITEMS,
   MAX_BODY_ITEM_CHARS,
@@ -72,6 +73,8 @@ describe("chunkRequest", () => {
     campaigns: [],
     recent_themes: [],
     lessons: [],
+    language: DEFAULT_LANGUAGE,
+    primary_cta: null,
   };
 
   it("leaves a small request in one call", () => {
@@ -295,5 +298,41 @@ describe("buildDecideRequest — lessons", () => {
     const request = buildDecideRequest(observation, [], { ...context, lessons: [] });
     expect(request).toHaveProperty("lessons");
     expect(request.lessons).toEqual([]);
+  });
+});
+
+describe("buildDecideRequest — language and the ask", () => {
+  const observation = {
+    demand: [],
+    campaigns: [],
+    totalOutstanding: 0,
+    warnings: [],
+  } as unknown as Parameters<typeof buildDecideRequest>[0];
+
+  const context = { business: {}, pillars: [], recentThemes: [], lessons: [] };
+
+  it("carries the client's language", () => {
+    const request = buildDecideRequest(observation, [], {
+      ...context,
+      language: languageFor("es"),
+    });
+    expect(request.language).toEqual({ code: "es", name: "Spanish" });
+  });
+
+  it("carries the client's one ask", () => {
+    const cta = { destination: "https://example.com", intent: "book a call" };
+    const request = buildDecideRequest(observation, [], { ...context, primaryCta: cta });
+    expect(request.primary_cta).toEqual(cta);
+  });
+
+  // Same convention as lessons and steer: the key is always there, so the
+  // prompt never reasons about a missing one. A silently dropped language is
+  // the exact failure this feature exists to prevent.
+  it("always sends both keys, defaulted rather than omitted", () => {
+    const request = buildDecideRequest(observation, [], context);
+    expect(request).toHaveProperty("language");
+    expect(request).toHaveProperty("primary_cta");
+    expect(request.language).toEqual(DEFAULT_LANGUAGE);
+    expect(request.primary_cta).toBeNull();
   });
 });

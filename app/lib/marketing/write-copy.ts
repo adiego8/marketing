@@ -10,6 +10,8 @@ import { recordSignal } from "./signals";
 import { snapshotOf } from "./lessons";
 import { lessonsForPrompt } from "./lessons-store";
 import { getStrategy } from "./strategy";
+import { ctaWarnings, languageOf, primaryCtaOf } from "./brand";
+import { languageWarnings } from "./language";
 import { getSlot, updateSlot } from "./slots";
 import { SlotNotFoundError } from "./planner/regenerate";
 import { WRITE_COPY_PROMPT } from "./planner/prompt";
@@ -118,6 +120,8 @@ export function buildCopyPayload(
       ? { campaign_id: brief.campaignId, title: brief.campaignTitle }
       : null,
     limits,
+    language: languageOf(strategy),
+    primary_cta: primaryCtaOf(strategy),
     business: {
       name: (strategy?.business_name as string) ?? "",
       icp: strategy?.icp ?? {},
@@ -182,7 +186,17 @@ export async function generateCopy(
     editedAt: null,
   };
 
-  return { copy, warnings: copyWarnings(copy, brief) };
+  return {
+    copy,
+    // Reported, never repaired. A wrong-language draft with a loud warning is
+    // a decision the operator gets to make; a silent second model call is one
+    // taken for them, and billed to them.
+    warnings: [
+      ...copyWarnings(copy, brief),
+      ...languageWarnings(copy, languageOf(strategy)),
+      ...ctaWarnings(brief.cta, languageOf(strategy)),
+    ],
+  };
 }
 
 export async function writeCopy(
@@ -213,10 +227,14 @@ export async function writeCopy(
     });
   }
 
+  // Hoisted rather than inlined into the call: the warnings computed after the
+  // write need the same language expectation the generation was given.
+  const strategy = (await getStrategy(clientId)) as Record<string, unknown> | null;
+
   // The no-theme refusal lives in generateCopy, so both callers make it.
   const { copy } = await generateCopy(
     brief,
-    (await getStrategy(clientId)) as Record<string, unknown> | null,
+    strategy,
     opts,
     await lessonsForPrompt(clientId, "copy"),
     copyFn
@@ -239,5 +257,12 @@ export async function writeCopy(
   );
   if (!updated) throw new SlotNotFoundError();
 
-  return { slot: updated, warnings: copyWarnings(copy, updated) };
+  return {
+    slot: updated,
+    warnings: [
+      ...copyWarnings(copy, updated),
+      ...languageWarnings(copy, languageOf(strategy)),
+      ...ctaWarnings(updated.cta, languageOf(strategy)),
+    ],
+  };
 }

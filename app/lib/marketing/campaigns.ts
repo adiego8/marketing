@@ -4,6 +4,7 @@ import { db, COLLECTIONS, FieldValue, Timestamp, serializeCampaign } from "../fi
 import { llmJson } from "./llm";
 import { CAMPAIGN_GENERATOR_PROMPT, CAMPAIGN_IMPROVER_PROMPT } from "./prompts";
 import { getStrategy } from "./strategy";
+import { languageOf, primaryCtaOf } from "./brand";
 import { lessonsForPrompt } from "./lessons-store";
 
 // idea      - created by hand
@@ -213,6 +214,11 @@ export async function generateCampaignIdeas(
         goals: strategy.goals,
       },
       content_quota: strategy.content_quota ?? {},
+      // Campaign titles and key messages are read by the operator AND flow into
+      // the planner, so an English key_message drags every piece under it back
+      // toward English however well the piece prompts are worded.
+      language: languageOf(strategy),
+      primary_cta: primaryCtaOf(strategy),
       lessons: await lessonsForPrompt(clientId, "campaign_ideas"),
       existing_campaigns: open.map((c) => c.title),
       count: opts.count ?? 3,
@@ -258,6 +264,11 @@ export async function improveCampaign(
   const campaign = await getCampaign(clientId, campaignId);
   if (!campaign) return null;
 
+  // Read for the language and the ask alone. Without it an improve pass is the
+  // one campaign path with no language instruction, and rewriting a Spanish
+  // campaign is exactly where it would quietly come back in English.
+  const strategy = await getStrategy(clientId);
+
   const history = campaign.feedback_history ?? [];
 
   const result = await llmJson<Record<string, unknown>>({
@@ -276,6 +287,8 @@ export async function improveCampaign(
       // Standing rules, as against this campaign's own history: the history is
       // about this campaign, the lessons are about every campaign.
       lessons: await lessonsForPrompt(clientId, "campaign_ideas"),
+      language: languageOf(strategy),
+      primary_cta: primaryCtaOf(strategy),
       new_feedback: feedback,
     },
   });

@@ -18,6 +18,7 @@ import {
   isRetiredType,
 } from "@/lib/marketing/content-types";
 import { CHANNELS, MAX_SLOTS_PER_DAY } from "@/lib/marketing/posting-windows";
+import { LANGUAGES, languageFor, languageOf } from "@/lib/marketing/brand";
 import {
   DEMOGRAPHIC_FIELDS,
   customDemographicKeys,
@@ -241,6 +242,7 @@ export default function StrategyPage() {
   const primaryAngle = (positioning.primary_angle || {}) as Record<string, string>;
   const secondaryAngles = (positioning.secondary_angles || []) as Record<string, string>[];
   const contentStrategy = (strategy.content_strategy || {}) as Record<string, unknown>;
+  const primaryCta = (messaging.primary_cta || {}) as Record<string, string>;
   const customDemographics = customDemographicKeys(demographics);
 
   const setDemographic = (key: string, value: string) =>
@@ -612,6 +614,40 @@ export default function StrategyPage() {
                   onChange={(e) => updateNested("messaging", "tagline", e.target.value)}
                 />
               </Field>
+            <Field label="Primary Call to Action" className="space-y-3">
+                <p className={`${field.micro} normal-case tracking-normal`}>
+                  The one thing every piece asks for. Each piece words the ask
+                  differently; none of them changes what it is asking for.
+                </p>
+                <div>
+                  <label className={field.micro}>Intent</label>
+                  <input
+                    className={field.inputSm}
+                    value={primaryCta.intent || ""}
+                    placeholder="book a consultation"
+                    onChange={(e) =>
+                      updateNested("messaging", "primary_cta", {
+                        ...primaryCta,
+                        intent: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className={field.micro}>Destination</label>
+                  <input
+                    className={field.inputSm}
+                    value={primaryCta.destination || ""}
+                    placeholder="https://example.com/book"
+                    onChange={(e) =>
+                      updateNested("messaging", "primary_cta", {
+                        ...primaryCta,
+                        destination: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </Field>
             <Field label="Value Props">
                 <EditableList
                   items={(messaging.value_props as string[]) || []}
@@ -664,6 +700,30 @@ export default function StrategyPage() {
                   onChange={(items) => updateNested("goals", "metrics", items)}
                   placeholder="Add metric..."
                 />
+              </Field>
+            <Field label="Language">
+                <p className={`${field.micro} normal-case tracking-normal`}>
+                  Every piece, caption and hashtag is written in this language.
+                  Not the same thing as the language your audience speaks, which
+                  lives on the ICP — this is what gets published.
+                </p>
+                <select
+                  value={languageOf(strategy).code}
+                  onChange={(e) =>
+                    update("content_strategy", {
+                      ...contentStrategy,
+                      language: languageFor(e.target.value),
+                    })
+                  }
+                  className={field.select}
+                  aria-label="The language content is written in"
+                >
+                  {LANGUAGES.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
               </Field>
             <Field label="Content Platforms">
                 <EditableList

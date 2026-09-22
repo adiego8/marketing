@@ -71,6 +71,30 @@ describe("buildCopyPayload — lessons", () => {
   });
 });
 
+describe("buildCopyPayload — language and the ask", () => {
+  const strategy = {
+    content_strategy: { language: { code: "es", name: "Spanish" } },
+    messaging: { primary_cta: { destination: "https://example.com", intent: "reservar" } },
+  };
+
+  it("carries both from the strategy", () => {
+    const payload = buildCopyPayload(copyBriefOfSlot(slot()), strategy, {});
+    expect(payload.language).toEqual({ code: "es", name: "Spanish" });
+    expect(payload.primary_cta).toEqual({
+      destination: "https://example.com",
+      intent: "reservar",
+    });
+  });
+
+  // A client with no strategy yet is a reachable state, and it must produce a
+  // usable payload rather than an exception on the path whose job is to write.
+  it("defaults to English and no ask when there is no strategy", () => {
+    const payload = buildCopyPayload(copyBriefOfSlot(slot()), null, {});
+    expect(payload.language).toEqual({ code: "en", name: "English" });
+    expect(payload.primary_cta).toBeNull();
+  });
+});
+
 /** A model that answers with usable copy, so nothing here touches the network. */
 const stubCopy: CopyFn = async () => ({
   blocks: [

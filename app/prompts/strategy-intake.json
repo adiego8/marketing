@@ -109,6 +109,20 @@
       "risk_reversal": "Make the guarantee the headline."
     },
 
+    "languages": {
+      "_note": "Use one of these `{ code, name }` pairs as `content_strategy.language`, copied exactly. `company_input.basics.languages` is the input for this.",
+      "options": [
+        { "code": "en", "name": "English" },
+        { "code": "es", "name": "Spanish" },
+        { "code": "pt", "name": "Portuguese" },
+        { "code": "fr", "name": "French" },
+        { "code": "de", "name": "German" },
+        { "code": "it", "name": "Italian" },
+        { "code": "nl", "name": "Dutch" },
+        { "code": "ca", "name": "Catalan" }
+      ]
+    },
+
     "scheduling_ceiling": {
       "max_slots_per_day": 2,
       "max_per_week": 14,
@@ -192,7 +206,8 @@
         "tagline": { "type": "string", "guidance": "Under ten words. Says what it is, not how it feels.", "example": "Same-day quotes, every job." },
         "value_props": { "type": "string[]", "guidance": "Three to five. Each names an outcome the customer gets, not a feature you shipped.", "example": ["Quote on site before you leave the driveway"] },
         "key_messages": { "type": "string[]", "guidance": "Three to six sentences that can be repeated across a quarter without wearing out. These become content pillars in practice.", "example": ["The job is won or lost in the first 24 hours after the call"] },
-        "proof_points": { "type": "string[]", "guidance": "Only what is verifiable. Numbers, named customers, guarantees, years, volume. If the input has none, return an empty array — do not invent.", "example": ["Used by 40 home service businesses across 12 states", "Average quote turnaround: 4 hours"] }
+        "proof_points": { "type": "string[]", "guidance": "Only what is verifiable. Numbers, named customers, guarantees, years, volume. If the input has none, return an empty array — do not invent.", "example": ["Used by 40 home service businesses across 12 states", "Average quote turnaround: 4 hours"] },
+        "primary_cta": { "type": "{ destination, intent }", "guidance": "The ONE thing every piece asks for. `intent` is the action in plain words; `destination` is where it lands, normally basics.website. Pieces vary how they ask, never what they ask for. Leave both empty rather than inventing a URL.", "example": { "destination": "https://example.com/quote", "intent": "request a same-day quote" } }
       },
 
       "goals": {
@@ -206,7 +221,8 @@
       "content_strategy": {
         "_what": "TOP LEVEL — a sibling of goals, not inside it. The planner reads platforms to know where things can go, and content_pillars to keep a month from becoming seven versions of the same post.",
         "platforms": { "type": "string[]", "guidance": "Where they will actually publish. Should line up with the channels used in content_quota.", "example": ["linkedin", "instagram", "email"] },
-        "content_pillars": { "type": "string[]", "guidance": "Three to five recurring themes. Each should be able to carry a month of content on its own.", "example": ["The first 24 hours after the call", "What the whiteboard costs you", "Owner-operator field notes", "Pricing without guessing"] }
+        "content_pillars": { "type": "string[]", "guidance": "Three to five recurring themes. Each should be able to carry a month of content on its own.", "example": ["The first 24 hours after the call", "What the whiteboard costs you", "Owner-operator field notes", "Pricing without guessing"] },
+        "language": { "type": "{ code, name }", "guidance": "One of reference.languages.options, copied exactly. Every piece, caption and hashtag is written in it. Default to English if the input does not say.", "example": { "code": "en", "name": "English" } }
       },
 
       "content_quota": {
@@ -254,7 +270,8 @@
       "tagline": "Same-day quotes, every job.",
       "value_props": ["Quote on site before you leave the driveway"],
       "key_messages": ["The job is won or lost in the first 24 hours after the call"],
-      "proof_points": ["Average quote turnaround: 4 hours"]
+      "proof_points": ["Average quote turnaround: 4 hours"],
+      "primary_cta": { "destination": "https://example.com/quote", "intent": "request a same-day quote" }
     },
     "goals": {
       "primary": "30 qualified demo requests a month",
@@ -264,7 +281,8 @@
     },
     "content_strategy": {
       "platforms": ["linkedin", "instagram", "email"],
-      "content_pillars": ["The first 24 hours after the call", "What the whiteboard costs you", "Owner-operator field notes"]
+      "content_pillars": ["The first 24 hours after the call", "What the whiteboard costs you", "Owner-operator field notes"],
+      "language": { "code": "en", "name": "English" }
     },
     "content_quota": {
       "weekly": {

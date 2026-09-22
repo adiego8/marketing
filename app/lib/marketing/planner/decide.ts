@@ -1,5 +1,6 @@
 import { isChannel, type Channel } from "../posting-windows";
 import { llmJson } from "../llm";
+import { DEFAULT_LANGUAGE, type Language, type PrimaryCta } from "../brand";
 import { PLANNER_DECIDE_PROMPT } from "./prompt";
 import {
   MAX_BODY_ITEMS,
@@ -46,6 +47,23 @@ export interface GapRequest {
 export interface DecideRequest {
   business: Record<string, unknown>;
   content_pillars: string[];
+  /**
+   * The language every word of the answer must be in.
+   *
+   * Top level rather than inside `business`, alongside content_pillars and
+   * lessons, because it is the instruction the prompt leans on hardest — buried
+   * under the brand object it reads as one more piece of trivia about the
+   * client, which is roughly how much attention it would then get.
+   */
+  language: Language;
+  /**
+   * The client's single ask, or null when they have not set one.
+   *
+   * The model writes the wording; it does not choose what it is driving people
+   * toward. One of these per client is what stops eight pieces ending in eight
+   * different goals.
+   */
+  primary_cta: PrimaryCta | null;
   /**
    * Rules this client has taught the agent, from the Learned page.
    *
@@ -100,6 +118,9 @@ export function buildDecideRequest(
     recentThemes: { date: string; type: string; theme: string }[];
     /** Rules this client has taught the agent. Always present, often empty. */
     lessons: string[];
+    /** Defaulted rather than optional: every request carries a language. */
+    language?: Language;
+    primaryCta?: PrimaryCta | null;
   }
 ): DecideRequest {
   const byId = new Map(campaigns.map((c) => [c.id, c]));
@@ -108,6 +129,8 @@ export function buildDecideRequest(
     business: context.business,
     content_pillars: context.pillars,
     lessons: context.lessons,
+    language: context.language ?? DEFAULT_LANGUAGE,
+    primary_cta: context.primaryCta ?? null,
     // Only campaigns that still owe something. A fully delivered campaign in
     // this list is context the model cannot act on, and a piece it might
     // wrongly reach for.

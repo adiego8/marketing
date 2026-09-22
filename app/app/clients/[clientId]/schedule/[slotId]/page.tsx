@@ -21,15 +21,18 @@ import {
   regenerateSlot,
   writeSlotCopy,
   getClient,
+  getStrategy,
   scheduleSlot,
 } from "@/lib/api";
 import { windowFor } from "@/lib/marketing/posting-windows";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
 import { readCopy, isCopyStale, copyWarnings } from "@/lib/marketing/copy";
+import { ctaWarnings, languageOf } from "@/lib/marketing/brand";
+import { languageWarnings } from "@/lib/marketing/language";
 import { backLink, btn, field, pager, surface, text, banner } from "@/lib/ui";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
-import type { Slot, SlotStatus } from "@/lib/types";
+import type { Slot, SlotStatus, Strategy } from "@/lib/types";
 
 const STATUS_CHOICES: SlotStatus[] = [
   "planned",
@@ -75,6 +78,7 @@ export default function SlotDetailPage() {
 
   const [steer, setSteer] = useState("");
   const [copySteer, setCopySteer] = useState("");
+  const [strategy, setStrategy] = useState<Strategy | null>(null);
 
   const load = useCallback(async () => {
     // Next re-renders the SAME component instance when moving between
@@ -106,6 +110,15 @@ export default function SlotDetailPage() {
     getClient(clientId)
       .then((c) => setTimezone(c.timezone || "UTC"))
       .catch(() => {});
+  }, [clientId]);
+
+  // Read for the language and the ask alone. A client with no strategy yet is
+  // a normal state here (the endpoint 404s), and languageOf(null) is English,
+  // so the checks simply say nothing rather than the page failing to load.
+  useEffect(() => {
+    getStrategy(clientId)
+      .then(setStrategy)
+      .catch(() => setStrategy(null));
   }, [clientId]);
 
   /**
@@ -361,7 +374,14 @@ export default function SlotDetailPage() {
 
   const copy = readCopy(slot);
   const stale = isCopyStale(slot);
-  const warnings = copy ? copyWarnings(copy, slot) : [];
+  // Three checks, one banner. Platform limits come from the copy itself; the
+  // other two need the client's language, which is why the strategy is loaded.
+  const language = languageOf(strategy);
+  const warnings = [
+    ...(copy ? copyWarnings(copy, slot) : []),
+    ...languageWarnings(copy, language),
+    ...ctaWarnings(slot.cta, language),
+  ];
   const dropped = slot.status === "cancelled" || slot.status === "skipped";
 
   return (

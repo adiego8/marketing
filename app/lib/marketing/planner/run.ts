@@ -2,6 +2,7 @@ import { isChannel, type Channel } from "../posting-windows";
 import { getCampaign } from "../campaigns";
 import { getStrategy } from "../strategy";
 import { lessonsForPrompt } from "../lessons-store";
+import { languageOf, primaryCtaOf, type Language, type PrimaryCta } from "../brand";
 import type { QuotaEntry } from "../strategy";
 import { buildDecideRequest, decide, type DecideFn } from "./decide";
 import { observe } from "./observe";
@@ -69,6 +70,10 @@ export interface PlannerInputs {
   campaigns: CampaignWindow[];
   pillars: string[];
   business: Record<string, unknown>;
+  /** What language to write in. Always present; English when unset. */
+  language: Language;
+  /** The client's one ask, or null when they have not set one. */
+  primaryCta: PrimaryCta | null;
   strategyChannels: Channel[];
   recentThemes: { date: string | null; type: string; theme: string }[];
   /** What the Learned page has taught for this client. */
@@ -128,6 +133,8 @@ export async function planFromInputs(
       .filter((t): t is { date: string; type: string; theme: string } => t.date !== null)
       .map((t) => ({ date: t.date, type: t.type, theme: t.theme })),
     lessons: inputs.lessons,
+    language: inputs.language,
+    primaryCta: inputs.primaryCta,
   });
 
   const started = Date.now();
@@ -278,6 +285,8 @@ export async function previewPlan(
       positioning: strategy.positioning,
       goals: strategy.goals,
     },
+    language: languageOf(strategy),
+    primaryCta: primaryCtaOf(strategy),
     strategyChannels: Array.isArray(contentStrategy.platforms)
       ? (contentStrategy.platforms.filter(isChannel) as Channel[])
       : [],
