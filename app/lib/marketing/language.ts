@@ -96,6 +96,20 @@ const STOPWORDS: Record<string, readonly string[]> = {
   ],
 };
 
+/**
+ * Is this a function word in any language we support?
+ *
+ * Exported for similarity.ts, which needs to drop exactly these before
+ * comparing two passages: "the" and "de" appear in everything, so leaving them
+ * in makes every pair of texts look alike. One table, two readers, rather than
+ * a second list that drifts from this one.
+ */
+export function isStopword(token: string): boolean {
+  return ALL_STOPWORDS.has(token);
+}
+
+const ALL_STOPWORDS = new Set(Object.values(STOPWORDS).flat());
+
 /** Below this there is not enough text to judge, so nothing is said. */
 const MIN_TOKENS = 8;
 

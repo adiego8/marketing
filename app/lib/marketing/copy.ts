@@ -25,6 +25,7 @@
 import { createHash } from "node:crypto";
 import { clamp, clampList } from "./planner/decide";
 import { limitsFor } from "./posting-windows";
+import { overlap } from "./similarity";
 
 // No import of Slot, deliberately. Every function here takes the fields it
 // reads (see HasBrief and friends below), which is what lets the same decisions
@@ -133,7 +134,15 @@ export const MAX_LABEL_CHARS = 40;
 export const MAX_HEADLINE_CHARS = 200;
 /** Above every platform limit, so this never truncates legal copy. */
 export const MAX_CAPTION_CHARS = 3000;
-export const MAX_HASHTAGS = 30;
+/**
+ * Five, down from thirty.
+ *
+ * Thirty is Instagram's ceiling, which is not the same question as how many
+ * help. A wall of tags reads as reach-chasing and buries the three that are
+ * actually about the piece. Clamped here rather than asked for in the prompt,
+ * so it cannot come back wrong.
+ */
+export const MAX_HASHTAGS = 5;
 export const MAX_HASHTAG_CHARS = 60;
 
 /* ------------------------------------------------------------- formats --- */
@@ -188,17 +197,36 @@ interface FormatShape {
   unit: string;
   /** Does the piece sit inside an accompanying caption box? */
   hasCaption: boolean;
+  /**
+   * Does someone have to MAKE this, beyond writing it?
+   *
+   * A slide has to be designed and a shot has to be filmed, so a block of one
+   * without direction is a block nobody can execute. A tweet is finished when
+   * the words are. Same three formats as hasCaption today and still a separate
+   * flag: they answer different questions, and a format that gains one should
+   * not silently gain the other.
+   */
+  needsDirection: boolean;
 }
 
 const FORMAT_SHAPES: Record<CopyFormat, FormatShape> = {
-  post: { unit: "post", hasCaption: false },
-  post_alt: { unit: "post", hasCaption: false },
-  carousel: { unit: "slide", hasCaption: true },
-  reel: { unit: "shot", hasCaption: true },
-  story: { unit: "frame", hasCaption: true },
-  thread: { unit: "tweet", hasCaption: false },
-  newsletter: { unit: "section", hasCaption: false },
+  post: { unit: "post", hasCaption: false, needsDirection: false },
+  post_alt: { unit: "post", hasCaption: false, needsDirection: false },
+  carousel: { unit: "slide", hasCaption: true, needsDirection: true },
+  reel: { unit: "shot", hasCaption: true, needsDirection: true },
+  story: { unit: "frame", hasCaption: true, needsDirection: true },
+  thread: { unit: "tweet", hasCaption: false, needsDirection: false },
+  newsletter: { unit: "section", hasCaption: false, needsDirection: false },
 };
+
+/**
+ * Channels where hashtags are noise rather than discovery.
+ *
+ * The prompt has asked for this since the beginning — "return [] for LinkedIn
+ * long-form and for email" — and asking was all it did. A rule that only lives
+ * in a prompt is a request; here it is true.
+ */
+const NO_HASHTAG_CHANNELS = new Set(["linkedin", "email"]);
 
 export function formatShape(slot: HasFormat): FormatShape {
   return FORMAT_SHAPES[normalizeFormat(slot.type, slot.channel)];
@@ -333,13 +361,22 @@ export function parseCopy(raw: unknown, slot: HasFormat): AuthoredCopy | null {
 
   if (blocks.length === 0) return null;
 
+  // hasCaption has been sitting in FORMAT_SHAPES unread since it was written.
+  // Reading it is what stops a post arriving with a caption — on a post the
+  // blocks ARE the words, so a caption there is a second post nobody asked for.
+  const caption = FORMAT_SHAPES[format].hasCaption
+    ? clamp(root.caption, MAX_CAPTION_CHARS) || null
+    : null;
+
   return {
     headline: clamp(root.headline, MAX_HEADLINE_CHARS) || null,
     blocks,
-    caption: clamp(root.caption, MAX_CAPTION_CHARS) || null,
-    hashtags: clampList(root.hashtags, MAX_HASHTAGS, MAX_HASHTAG_CHARS).map((h) =>
-      h.startsWith("#") ? h : `#${h}`
-    ),
+    caption,
+    hashtags: NO_HASHTAG_CHANNELS.has(slot.channel)
+      ? []
+      : clampList(root.hashtags, MAX_HASHTAGS, MAX_HASHTAG_CHARS).map((h) =>
+          h.startsWith("#") ? h : `#${h}`
+        ),
   };
 }
 
@@ -424,14 +461,28 @@ export function copyToLines(copy: SlotCopy): string[] {
 /* ------------------------------------------------------------ warnings --- */
 
 /**
+ * How much of the shorter text the two have in common before a caption counts
+ * as restating a slide rather than adding to it.
+ *
+ * Measured on content words only, so the ordinary overlap of two sentences
+ * about the same subject does not trip it — it takes a caption that is
+ * genuinely the slide again.
+ */
+const CAPTION_ECHO_THRESHOLD = 0.65;
+
+/**
  * What would stop this being posted as it stands.
  *
  * Computed at read time, never stored: a stored warning goes stale the moment
  * someone hand-edits the copy through PATCH, and would then be reporting a
  * problem that no longer exists.
+ *
+ * Every check here is advisory. Nothing regenerates on a warning — the
+ * operator reads them and decides.
  */
-export function copyWarnings(copy: SlotCopy, slot: HasChannel): string[] {
+export function copyWarnings(copy: SlotCopy, slot: HasFormat): string[] {
   const limits = limitsFor(slot.channel);
+  const shape = FORMAT_SHAPES[normalizeFormat(slot.type, slot.channel)];
   const warnings: string[] = [];
 
   if (limits.perBlock !== null) {
@@ -453,6 +504,36 @@ export function copyWarnings(copy: SlotCopy, slot: HasChannel): string[] {
       const what = copy.caption ? "The caption" : "The post";
       warnings.push(
         `${what} is ${body.length} characters — ${slot.channel} allows ${limits.body}.`
+      );
+    }
+  }
+
+  // The caption's job is what the blocks could not carry — the context a slide
+  // had no room for, the reason it matters to someone who did not play the
+  // reel. A caption that repeats a slide has spent the one place left to say
+  // something new on saying it twice.
+  if (copy.caption) {
+    const echoed = copy.blocks.find(
+      (b) => overlap(copy.caption as string, b.text) >= CAPTION_ECHO_THRESHOLD
+    );
+    if (echoed) {
+      warnings.push(
+        `The caption mostly repeats ${echoed.label}. It should add what the piece had no room for.`
+      );
+    }
+  } else if (shape.hasCaption) {
+    warnings.push(`A ${shape.unit} piece needs a caption and this one has none.`);
+  }
+
+  // Direction is not decoration on a format somebody has to shoot or design.
+  // The field, the cap, the operator rendering and the guard keeping it out of
+  // client-facing output were all built; only the prompt told the model to skip
+  // it, so this is the check that says when it did.
+  if (shape.needsDirection) {
+    const undirected = copy.blocks.filter((b) => !b.note);
+    if (undirected.length > 0) {
+      warnings.push(
+        `No direction on ${undirected.map((b) => b.label).join(", ")} — nobody can make a ${shape.unit} from words alone.`
       );
     }
   }

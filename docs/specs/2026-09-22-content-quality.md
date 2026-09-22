@@ -260,26 +260,48 @@ post, thread or newsletter it stays `null`; there the blocks are the words.
 The rule: the caption never restates a block. If a reader who has seen the slides
 learns nothing new from the caption, it has failed.
 
-Tier A: `FORMAT_SHAPES.hasCaption` (`copy.ts:193-201`) exists and is never read.
-Wire it into `parseCopy` so a post cannot carry a caption and a carousel cannot
-lose one silently. Tier B: caption-versus-blocks overlap through the similarity
-function.
+Tier A: `FORMAT_SHAPES.hasCaption` exists and is never read. Wired into
+`parseCopy`, a post can no longer carry a caption at all. Tier B: a caption that
+repeats a block, and a caption-shaped format that arrives without one.
+
+The overlap test needs the similarity primitive this spec assigns to the
+repetition work below. It is built here instead, because this is its first
+consumer and a primitive with one caller is easier to get right than one with
+none. `overlap` divides by the SMALLER token set rather than the union, which is
+the whole reason `jaccard` is not enough on its own: a caption that repeats a
+slide verbatim and then pads scores 1 on containment and well under the
+threshold on jaccard, purely for being longer. Restatement is asymmetric, so it
+needs the asymmetric measure. Function words are dropped first, from the same
+table `language.ts` already ships — "the" and "de" appear in everything, and
+leaving them in makes every pair of texts look alike.
 
 ### Production direction becomes non-optional
 
 The field, the cap, the operator rendering and the guard that keeps it out of
 client-facing output are all built. Change "omit it when the block needs none" to
 required for every block of a visual format — carousel, reel, story: what to
-shoot, what to design, what the camera sees. Optional elsewhere. Tier B warning
-beside a visual block that arrives without one.
+shoot, what to design, what the camera sees. Optional elsewhere, on the formats
+that are finished when the words are.
+
+This rides on a new `needsDirection` flag rather than reusing `hasCaption`,
+which is true for the same three formats today. They answer different questions
+— one is "does this sit inside a caption box", the other "does someone have to
+make this" — and a format that gains one should not silently gain the other.
+
+The worked example in `WRITE_COPY_PROMPT` is a carousel whose four slides carry
+no `note` at all, which taught the omission more effectively than the rule
+forbade it. It gains one per slide.
 
 ### Hashtags, 30 to 5
 
-`MAX_HASHTAGS = 30` → `5` (`copy.ts:136`), which `parseCopy` already clamps. The
-prompt rule at `prompt.ts:311` becomes "at most 5, in `language.name`". PATCH
-validation drops to 5. And the "return `[]` for LinkedIn long-form and for email"
-rule moves out of the prompt and into `parseCopy`, so it is true rather than
-requested.
+`MAX_HASHTAGS = 30` → `5`, which `parseCopy` already clamps. The prompt rule
+becomes "at most 5, in `language.name`". PATCH validation needs no edit at all —
+the route already imports the constant, so it tightened with it, which is what
+having one number rather than two is for.
+
+And the "return `[]` for LinkedIn long-form and for email" rule moves out of the
+prompt and into `parseCopy`, keyed on the channel. It had been asked for since
+the beginning, and asking was all it ever did.
 
 The asymmetry where `parseCopy` truncates silently and PATCH rejects loudly is
 deliberate — a model gets clamped, a human gets told — and is preserved.

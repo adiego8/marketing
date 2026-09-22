@@ -413,6 +413,121 @@ describe("copySections and copyToLines", () => {
   });
 });
 
+describe("parseCopy — the caption and hashtag contract", () => {
+  it("drops a caption on a format whose blocks ARE the words", () => {
+    // hasCaption sat unread in FORMAT_SHAPES until this. On a post a caption
+    // is a second post nobody asked for.
+    const out = parseCopy(
+      { blocks: [{ label: "Post", text: "The whole post." }], caption: "A second post." },
+      slot({ type: "post", channel: "linkedin" })
+    );
+    expect(out?.caption).toBeNull();
+  });
+
+  it("keeps the caption where the piece sits inside one", () => {
+    const out = parseCopy(
+      { blocks: [{ label: "Slide 1", text: "One." }], caption: "The story around it." },
+      slot({ type: "carousel", channel: "instagram" })
+    );
+    expect(out?.caption).toBe("The story around it.");
+  });
+
+  it("clamps hashtags to five", () => {
+    const out = parseCopy(
+      {
+        blocks: [{ label: "Slide 1", text: "One." }],
+        hashtags: ["#a", "#b", "#c", "#d", "#e", "#f", "#g"],
+      },
+      slot({ type: "carousel", channel: "instagram" })
+    );
+    expect(out?.hashtags).toHaveLength(MAX_HASHTAGS);
+    expect(MAX_HASHTAGS).toBe(5);
+  });
+
+  it("returns none at all on the channels where they are noise", () => {
+    // The prompt has asked for this from the beginning. Asking was all it did.
+    for (const channel of ["linkedin", "email"] as const) {
+      const out = parseCopy(
+        { blocks: [{ label: "Post", text: "One." }], hashtags: ["#a", "#b"] },
+        slot({ type: "post", channel })
+      );
+      expect(out?.hashtags).toEqual([]);
+    }
+  });
+});
+
+describe("copyWarnings — the caption's own job", () => {
+  it("flags a caption that just repeats a slide", () => {
+    const line = "A refund is not a bonus, it is your own paycheck handed back twelve months late";
+    const out = copyWarnings(
+      copy({
+        blocks: [{ label: "Slide 1", text: line, note: "plain type on teal" }],
+        caption: line,
+      }),
+      slot({ type: "carousel", channel: "instagram" })
+    );
+    expect(out.join(" ")).toContain("mostly repeats Slide 1");
+  });
+
+  it("leaves a caption that adds something the slides had no room for", () => {
+    const out = copyWarnings(
+      copy({
+        blocks: [
+          { label: "Slide 1", text: "Got a $4,000 refund?", note: "big type" },
+          { label: "Slide 2", text: "You lent the IRS money for free.", note: "big type" },
+        ],
+        caption:
+          "One W-4 change puts that money back in your monthly cash flow. We run the check in about fifteen minutes.",
+      }),
+      slot({ type: "carousel", channel: "instagram" })
+    );
+    expect(out.join(" ")).not.toContain("repeats");
+  });
+
+  it("flags a carousel with no caption at all", () => {
+    const out = copyWarnings(
+      copy({ blocks: [{ label: "Slide 1", text: "One.", note: "type" }], caption: null }),
+      slot({ type: "carousel", channel: "instagram" })
+    );
+    expect(out.join(" ")).toContain("needs a caption");
+  });
+
+  it("says nothing about a caption on a format that has none", () => {
+    const out = copyWarnings(
+      copy({ blocks: [{ label: "Post", text: "One." }], caption: null, hashtags: [] }),
+      slot({ type: "post", channel: "linkedin" })
+    );
+    expect(out).toEqual([]);
+  });
+});
+
+describe("copyWarnings — direction on what has to be made", () => {
+  it("flags slides nobody can design", () => {
+    const out = copyWarnings(
+      copy({
+        blocks: [
+          { label: "Slide 1", text: "One.", note: "big type on teal" },
+          { label: "Slide 2", text: "Two." },
+          { label: "Slide 3", text: "Three." },
+        ],
+        caption: "Something else entirely, adding context.",
+      }),
+      slot({ type: "carousel", channel: "instagram" })
+    );
+    const joined = out.join(" ");
+    expect(joined).toContain("No direction on Slide 2, Slide 3");
+    expect(joined).not.toContain("Slide 1");
+  });
+
+  it("asks for nothing on a format that is finished when the words are", () => {
+    const out = copyWarnings(
+      copy({ blocks: [{ label: "Tweet 1", text: "One." }], caption: null, hashtags: [] }),
+      slot({ type: "thread", channel: "twitter" })
+    );
+    expect(out).toEqual([]);
+  });
+});
+
 describe("copyWarnings", () => {
   it("flags a tweet over 280", () => {
     // Truncating instead would produce something silently wrong that then gets

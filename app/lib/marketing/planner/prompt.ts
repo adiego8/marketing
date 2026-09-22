@@ -317,19 +317,23 @@ A JSON object. Every field is the finished text, exactly as it would be publishe
   "blocks": [
     {
       "label": "Slide 1",
-      "text": "Got a $4,000 refund?\\nYou lent the IRS money for free."
+      "text": "Got a $4,000 refund?\\nYou lent the IRS money for free.",
+      "note": "The number huge and alone on the first line; the second line half the size underneath. Flat brand colour, no stock photo."
     },
     {
       "label": "Slide 2",
-      "text": "A refund is not a bonus. It is your own paycheck, handed back twelve months late."
+      "text": "A refund is not a bonus. It is your own paycheck, handed back twelve months late.",
+      "note": "Plain type, centred, generous margins. Nothing else on the slide."
     },
     {
       "label": "Slide 3",
-      "text": "On $4,000, that is about $160 you could have earned just by holding it yourself."
+      "text": "On $4,000, that is about $160 you could have earned just by holding it yourself.",
+      "note": "Set $160 in the accent colour so the eye lands there first."
     },
     {
       "label": "Slide 4",
-      "text": "Fixing it takes one form. Your W-4, updated once."
+      "text": "Fixing it takes one form. Your W-4, updated once.",
+      "note": "Closing slide: the line, then the logo small at the bottom."
     }
   ],
   "caption": "Everyone celebrates the refund. Almost nobody prices it.\\n\\nIf you got $4,000 back this year, you spent twelve months as an interest-free lender — and the borrower was the IRS.\\n\\nOne W-4 change puts that money back in your monthly cash flow. We do this check in about fifteen minutes.",
@@ -343,10 +347,12 @@ A JSON object. Every field is the finished text, exactly as it would be publishe
 - One \`blocks\` entry per unit of the piece — one slide, one shot, one tweet, one section. Follow the beats in \`slot.body\`, in order, one beat per block unless the format's row below says otherwise. Do not add beats and do not merge two into one.
 - \`text\` is the published words for that unit. Use \`\\n\` for a line break where the platform honours one. At most 1200 characters.
 - \`onScreen\` is only for words burned onto the video or image where they differ from what is said. Reel and story only. Omit it everywhere else.
-- \`note\` is production direction — what the camera sees, what to shoot, what to design. It is NEVER published. At most 300 characters. Omit it when the block needs none.
+- \`note\` is production direction — what the camera sees, what to shoot, what to design. It is NEVER published. At most 300 characters.
+- **\`note\` is REQUIRED on every block of a carousel, a reel or a story.** Somebody has to make those: a slide has to be designed, a shot has to be filmed. A block of one with no direction is words nobody can execute. Optional on a post, a thread and a newsletter, which are finished when the words are.
 - \`caption\` is the accompanying text where the piece is not itself text: a carousel, reel or story sits inside one. For a post, a thread or a newsletter, return \`null\` — there the blocks ARE the words.
+- **The caption never restates a block.** It carries what the piece had no room for — the context a slide could not hold, the reason it matters to someone who did not play the reel — and then the ask. If a reader who has already seen the slides learns nothing new from the caption, it has failed, and the caption was the last place left to say something new.
 - \`headline\` is the email subject line for a newsletter, at most 200 characters. \`null\` for every other format.
-- \`hashtags\` only where the channel uses them, at most 30, each with its \`#\`. Return \`[]\` for LinkedIn long-form and for email.
+- \`hashtags\`: **at most 5**, each with its \`#\`, and each in \`language.name\`. Five that are about this piece beat thirty that are about the category — a wall of tags reads as reach-chasing and buries the ones that meant something. Return \`[]\` for LinkedIn and for email.
 - Keep the hook's promise. The first block has to deliver what \`slot.hook\` sets up, and the last has to land \`slot.cta\` as an ask a person would actually say out loud.
 - Every piece asks for \`primary_cta.intent\`, and only that. Do not invent a different kind of ask — no DM, no comment, no reply, no follow, no tag. Where the channel makes a link useful you may name \`primary_cta.destination\`.
 - What changes from piece to piece is HOW you ask. Across a set, no two pieces ask in the same words. When \`primary_cta\` is null, close with the ask the campaign implies and keep it consistent across the set.
@@ -360,12 +366,12 @@ A JSON object. Every field is the finished text, exactly as it would be publishe
 
 | \`type\` | \`headline\` | \`blocks\` | \`caption\` |
 |---|---|---|---|
-| \`post\` / \`post_alt\` | null | ONE block: the whole post, line breaks and all | null |
-| \`carousel\` | null | one per slide — short, readable at a glance, one thought each | the caption under the post |
-| \`reel\` | null | one per shot — \`text\` is what is said, \`onScreen\` the words shown, \`note\` what the camera does | the caption under the reel |
-| \`story\` | null | one per frame — very short, \`onScreen\` for sticker or overlay text | the caption, if any |
-| \`thread\` | null | one per tweet, each standing alone and earning the next | null |
-| \`newsletter\` | the subject line | first block is the preheader, then one per section | null |
+| \`post\` / \`post_alt\` | null | ONE block: the whole post, line breaks and all | null — the block is the words |
+| \`carousel\` | null | what is ON THE SLIDES — short, readable at arm's length, one thought each, each with a \`note\` saying how to design it | the story around them: context the slides had no room for, then the ask |
+| \`reel\` | null | one per shot — \`text\` is what is said, \`onScreen\` the words shown, \`note\` what the camera does | why it matters, for the reader who never pressed play, then the ask |
+| \`story\` | null | one per frame — very short, \`onScreen\` for sticker or overlay text, \`note\` for what is on screen behind it | the ask, short |
+| \`thread\` | null | one per tweet, each standing alone and earning the next | null — the blocks are the words |
+| \`newsletter\` | the subject line | first block is the preheader, then one per section | null — the blocks are the words |
 
 If a type is not listed, treat it as \`post\`.
 
