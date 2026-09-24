@@ -1,0 +1,54 @@
+# Every check this repo has, on every push.
+#
+# All four of these have existed since the beginning and all four ran only when
+# someone remembered to type them. 791 tests are worth nothing on a branch that
+# was never tested.
+#
+# NO SECRETS, deliberately. firebase-admin.ts never throws at import time when
+# its env vars are absent, lib/firebase.ts is guarded on apiKey, and
+# OPENAI_API_KEY is read inside openai() rather than at module scope. So the app
+# builds on a bare runner, and this workflow never needs a credential — which
+# means a fork's pull request can run it and nothing here can leak.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# A second push to the same branch makes the first run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: app/.nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - run: npm ci
+
+      # Ordered cheapest-first, so the common failure is also the fastest.
+      # typecheck covers the tests too — tsconfig includes **/*.ts and there is
+      # no separate test config — so a factory missing a field fails here.
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      - run: npm test
+
+      # Last because it is the slow one, and it catches what tsc cannot: the
+      # server/client boundary, and anything that only breaks when Next
+      # actually compiles the routes.
+      - run: npm run build
