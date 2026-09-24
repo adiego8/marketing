@@ -41,6 +41,29 @@ export async function requireSession(): Promise<
 }
 
 /**
+ * Resolve the session AND require that the caller is numerico staff.
+ *
+ * For install-wide settings: one OpenAI key bills every agency on the box, so
+ * changing it is the platform operator's business and not a customer's. Role
+ * is the wrong gate — resolveGrant hands every paying customer `role: "admin"`
+ * of their own agency, so an admin check would let any customer rewrite it.
+ *
+ * 403 rather than 404: the caller is authenticated and the route exists, and
+ * pretending otherwise would mean a staff member debugging a permissions
+ * problem sees the same thing as a typo.
+ */
+export async function requireStaff(): Promise<
+  { session: Session } | { response: NextResponse }
+> {
+  const auth = await requireSession();
+  if ("response" in auth) return auth;
+  if (!auth.session.staff) {
+    return { response: jsonError("Staff only.", 403) };
+  }
+  return auth;
+}
+
+/**
  * Resolve the session AND confirm the client belongs to the caller's agency.
  * A client that is missing, archived, or owned by another agency all read as
  * 404, so callers cannot probe for other agencies' data.

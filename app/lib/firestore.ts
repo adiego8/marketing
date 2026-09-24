@@ -37,6 +37,9 @@ export const COLLECTIONS = {
   signals: "marketing_signals",
   lessons: "marketing_lessons",
   apiKeys: "marketing_api_keys",
+  // Install-wide configuration, not an agency's. One document per concern;
+  // "llm" holds the OpenAI key and the model choice. See llm-settings.ts.
+  settings: "marketing_settings",
 } as const;
 
 // Convert Firestore Timestamps to ISO strings for JSON responses.

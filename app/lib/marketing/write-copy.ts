@@ -5,11 +5,12 @@
 // lives in copy.ts, which is pure and therefore tested. This file is the model
 // call and the two guards around it.
 
-import { llmJson, DEFAULT_MODEL } from "./llm";
+import { llmJson } from "./llm";
 import { recordSignal } from "./signals";
 import { snapshotOf } from "./lessons";
 import { lessonsForPrompt } from "./lessons-store";
 import { getStrategy } from "./strategy";
+import { readLlmConfig } from "./llm-settings-store";
 import { languageOf, primaryCtaOf } from "./brand";
 import { pieceWarnings } from "./warnings";
 import { getSlot, updateSlot } from "./slots";
@@ -46,6 +47,20 @@ const TEMPERATURE = 0.6;
 export interface WriteCopyOptions {
   /** What the operator wants different, in their words. Optional. */
   steer?: string;
+  /**
+   * Which model wrote this, for the provenance stamp on the stored copy.
+   *
+   * Passed in as data rather than read here, and that is load-bearing. The
+   * model name now lives in Firestore, and generateCopy is the function this
+   * repo tests with an injected CopyFn and no mocks — reading settings inside
+   * it would put every one of those tests on the network. writeCopy has
+   * Firestore already, so it resolves this and hands it down, exactly as it
+   * does for `strategy` and `lessons`.
+   *
+   * Absent means the caller did not know, which stamps null: the same value a
+   * hand-written piece carries, and the honest one for a test stub.
+   */
+  model?: string;
 }
 
 /**
@@ -181,7 +196,7 @@ export async function generateCopy(
     // afterwards marks this copy rather than silently invalidating it.
     sourceHash: sourceHash(brief),
     generatedAt: new Date().toISOString(),
-    model: DEFAULT_MODEL,
+    model: opts.model ?? null,
     editedAt: null,
   };
 
@@ -226,11 +241,15 @@ export async function writeCopy(
   // write need the same language expectation the generation was given.
   const strategy = (await getStrategy(clientId)) as Record<string, unknown> | null;
 
+  // Resolved here for the same reason the strategy is: this function has
+  // Firestore, and generateCopy deliberately does not.
+  const { model } = await readLlmConfig();
+
   // The no-theme refusal lives in generateCopy, so both callers make it.
   const { copy } = await generateCopy(
     brief,
     strategy,
-    opts,
+    { ...opts, model },
     await lessonsForPrompt(clientId, "copy"),
     copyFn
   );

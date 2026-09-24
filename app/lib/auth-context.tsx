@@ -22,6 +22,8 @@ interface AuthUser {
   email: string;
   agencyId: string;
   role: string;
+  /** numerico's own team. Shows the install-wide settings; does not grant them. */
+  staff: boolean;
 }
 
 interface AuthState {
@@ -80,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: data.user_email,
             agencyId: data.agency_id,
             role: data.role,
+            staff: data.staff === true,
           });
           setAccessError(null);
         } else {

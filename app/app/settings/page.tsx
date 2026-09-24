@@ -10,6 +10,9 @@ import {
   getGoogleStatus,
   startGoogleConnect,
   disconnectGoogle,
+  getLlmSettings,
+  saveLlmSettings,
+  type LlmSettings,
 } from "@/lib/api";
 import { readGoogleResult } from "@/lib/google-result";
 import { useAuth } from "@/lib/auth-context";
@@ -19,6 +22,7 @@ import {
   ConnectInstructions,
   SaveKeyFirst,
 } from "@/components/shared/connect-instructions";
+import { LLM_MODELS } from "@/lib/marketing/llm-settings";
 import { banner, btn, field, surface, text } from "@/lib/ui";
 import { statusPill } from "@/lib/ui-status";
 import type { ApiKey, ApiKeyScope, ClientListItem } from "@/lib/types";
@@ -88,6 +92,17 @@ export default function SettingsPage() {
   const [googleBusy, setGoogleBusy] = useState(false);
   const [googleNote, setGoogleNote] = useState<string | null>(null);
 
+  // The install's own OpenAI key. Loaded only for staff: for anyone else the
+  // route answers 403, and firing a request that is meant to fail would put a
+  // red banner on a page that is working correctly.
+  const [llm, setLlm] = useState<LlmSettings | null>(null);
+  const [llmKey, setLlmKey] = useState("");
+  const [llmModel, setLlmModel] = useState(LLM_MODELS[0]);
+  const [llmResearch, setLlmResearch] = useState(LLM_MODELS[0]);
+  const [llmBusy, setLlmBusy] = useState(false);
+  const [llmSaved, setLlmSaved] = useState(false);
+  const [llmError, setLlmError] = useState<string | null>(null);
+
   const load = useCallback(() => {
     Promise.all([listAgencyKeys(), listClients({ status: "active" })])
       .then(([k, c]) => {
@@ -113,6 +128,40 @@ export default function SettingsPage() {
     if (result.connected) setGoogleNote("Google connected");
     else setError(result.message);
   }, [loadGoogle]);
+
+  useEffect(() => {
+    if (!user?.staff) return;
+    getLlmSettings()
+      .then((s) => {
+        setLlm(s);
+        setLlmModel(s.model);
+        setLlmResearch(s.research_model);
+      })
+      .catch(() => setLlm(null));
+  }, [user?.staff]);
+
+  const handleLlmSave = async () => {
+    setLlmBusy(true);
+    setLlmSaved(false);
+    setLlmError(null);
+    try {
+      // The key is omitted when the box is empty, which is what lets a model
+      // change be saved without re-typing it.
+      const saved = await saveLlmSettings({
+        ...(llmKey.trim() ? { api_key: llmKey.trim() } : {}),
+        model: llmModel,
+        research_model: llmResearch,
+      });
+      setLlm(saved);
+      setLlmKey("");
+      setLlmSaved(true);
+      setTimeout(() => setLlmSaved(false), 2000);
+    } catch (e) {
+      setLlmError(e instanceof Error ? e.message : "Could not save");
+    } finally {
+      setLlmBusy(false);
+    }
+  };
 
   const handleGoogleConnect = async () => {
     setError(null);
@@ -281,6 +330,109 @@ export default function SettingsPage() {
             <SaveKeyFirst />
             <ConnectInstructions />
           </div>
+        )}
+
+        {/* One OpenAI key for the whole install, so changing it is numerico's
+            business rather than a customer's — hence user.staff, and hence
+            requireStaff on the route, which is the gate that actually holds.
+            These were env vars read once at boot; changing either meant a
+            redeploy. */}
+        {user?.staff && (
+          <section className={`${surface.card} ${surface.pad} mb-6`}>
+            <h2 className={text.cardTitle}>Model</h2>
+            <p className={`${text.muted} mt-1 max-w-2xl`}>
+              The OpenAI key every client&rsquo;s generation runs on, and which
+              model it asks for. Stored encrypted; it is never shown again and
+              cannot be read back, here or anywhere else.
+            </p>
+
+            {llmError && <p className={`${banner.error} mt-4`}>{llmError}</p>}
+
+            <div className="mt-5 max-w-lg space-y-4">
+              <div>
+                <label className={field.micro} htmlFor="llm-key">
+                  OpenAI key
+                </label>
+                <input
+                  id="llm-key"
+                  type="password"
+                  autoComplete="off"
+                  value={llmKey}
+                  onChange={(e) => setLlmKey(e.target.value)}
+                  placeholder={
+                    llm?.configured
+                      ? `Stored \u2022\u2022\u2022\u2022 ${llm.key_hint} \u2014 leave blank to keep it`
+                      : "sk-\u2026"
+                  }
+                  className={field.input}
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-4">
+                <div>
+                  <label className={field.micro} htmlFor="llm-model">
+                    Writing and planning
+                  </label>
+                  <select
+                    id="llm-model"
+                    value={llmModel}
+                    onChange={(e) => setLlmModel(e.target.value)}
+                    className={field.select}
+                  >
+                    {LLM_MODELS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={field.micro} htmlFor="llm-research">
+                    Research
+                  </label>
+                  <select
+                    id="llm-research"
+                    value={llmResearch}
+                    onChange={(e) => setLlmResearch(e.target.value)}
+                    className={field.select}
+                  >
+                    {LLM_MODELS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Research reaches the model through a different API so it can
+                  carry the web_search tool, and not every model accepts it. */}
+              <p className={text.micro}>
+                Research is chosen separately because it needs a model that can
+                search the web. A model that cannot will fail the run rather
+                than quietly answer from memory.
+              </p>
+            </div>
+
+            <div className="mt-5 flex items-center gap-3">
+              <button onClick={handleLlmSave} disabled={llmBusy} className={btn.primary}>
+                {llmBusy ? "Checking\u2026" : "Save"}
+              </button>
+              {llmSaved && <span className={text.muted}>Saved</span>}
+              {llm?.updated_by && !llmSaved && (
+                <span className={text.micro}>Last changed by {llm.updated_by}</span>
+              )}
+            </div>
+
+            {/* Saving asks OpenAI whether the key can reach the chosen model.
+                That call is free, and it is also not a balance check \u2014 saying
+                so beats implying a clean bill of health. */}
+            <p className={`${text.micro} mt-3 max-w-2xl`}>
+              Saving checks the key against OpenAI and refuses one that does not
+              work. It cannot tell whether the account has credit \u2014 a key with an
+              empty balance will save here and fail on the first generation.
+            </p>
+          </section>
         )}
 
         {/* The connection the login page promised lived here, and until now did

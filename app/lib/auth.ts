@@ -31,6 +31,20 @@ export interface Session {
   email: string | null;
   agencyId: string;
   role: string;
+  /**
+   * On the MARKETING_STAFF_UIDS allowlist — numerico's own team.
+   *
+   * Not derivable from agencyId, and that is the trap worth naming.
+   * resolveGrant checks staff LAST, so a staff member who is also a paying
+   * customer lands in a cust_ agency: testing `agencyId.startsWith("staff_")`
+   * would silently lock out exactly the people most likely to be operating the
+   * install. Computed from the token, which is the only honest source.
+   *
+   * Role is not this. Every paying customer is an "admin" of their own agency,
+   * so role says nothing about whether someone may change an install-wide
+   * setting.
+   */
+  staff: boolean;
 }
 
 /**
@@ -94,6 +108,7 @@ export async function getSession(authHeader: string | null): Promise<Session | n
       email: decoded.email ?? null,
       agencyId: String(data.agencyId),
       role: String(data.role ?? "member"),
+      staff: isStaff(decoded),
     };
   } catch {
     return null;
@@ -140,7 +155,7 @@ function hasActiveMarketing(entitlements: unknown): boolean {
 // entitlement rail, for numerico's own team. Comma-separated in
 // MARKETING_STAFF_UIDS; unset (the default) means the entitlement is the only
 // way in. Compared case-insensitively.
-function isStaff(decoded: DecodedIdToken): boolean {
+export function isStaff(decoded: DecodedIdToken): boolean {
   const allow = new Set(
     (process.env.MARKETING_STAFF_UIDS ?? "")
       .split(",")
@@ -314,5 +329,11 @@ export async function ensureMember(decoded: DecodedIdToken): Promise<Session | n
     }
   });
 
-  return { uid: decoded.uid, email, agencyId: grant.agencyId, role: grant.role };
+  return {
+    uid: decoded.uid,
+    email,
+    agencyId: grant.agencyId,
+    role: grant.role,
+    staff: isStaff(decoded),
+  };
 }

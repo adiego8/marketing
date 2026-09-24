@@ -12,7 +12,7 @@
 // the fields, because five hand-rolled extractions is how one of them ends up
 // silently missing the language.
 
-import { clamp } from "./planner/decide";
+import { clamp } from "./clamp";
 
 /** A language the product can write in, check, and offer in the picker. */
 export interface Language {

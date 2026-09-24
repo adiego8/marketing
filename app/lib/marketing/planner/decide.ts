@@ -8,6 +8,7 @@ import {
   type PrimaryCta,
 } from "../brand";
 import { allocate, type Allocation, type AllocationSource } from "./angles";
+import { clamp, clampList } from "../clamp";
 import { themeCollisions } from "./collisions";
 import { fillsSchema } from "./fills-schema";
 import { PLANNER_DECIDE_PROMPT } from "./prompt";
@@ -246,24 +247,9 @@ export function skeletonFills(gaps: Gap[]): Fill[] {
   }));
 }
 
-export function clamp(value: unknown, max: number): string {
-  return typeof value === "string" ? value.trim().slice(0, max) : "";
-}
-
-/**
- * The array sibling of clamp, capped on both axes.
- *
- * A model that returns a single string instead of an array is a common enough
- * slip to be worth absorbing rather than discarding — one beat is better than
- * none. Anything else becomes an empty list.
- */
-export function clampList(value: unknown, maxItems: number, maxChars: number): string[] {
-  const raw = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
-  return raw
-    .map((entry) => clamp(entry, maxChars))
-    .filter((entry) => entry.length > 0)
-    .slice(0, maxItems);
-}
+// clamp and clampList moved to ../clamp. copy.ts and brand.ts import them and
+// are both read by client components — so defining them here meant a slot page
+// importing this module, and with it llm.ts and firebase-admin.
 
 /**
  * Validate the model's response against the exact request that produced it.

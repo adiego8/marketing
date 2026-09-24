@@ -1,26 +1,28 @@
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import type { ZodType } from "zod/v4";
+import { readLlmConfig } from "./llm-settings-store";
 
 // Port of app/services/llm_service.py:llm_completion.
 //
 // Deliberately matches the Python call shape so output stays comparable:
 // the prompt is the SYSTEM message, the payload is the USER message as
 // JSON.stringify(x, null, 2), response_format is the legacy json_object mode
-// (not structured outputs), and the model comes from LLM_MODEL — see
-// DEFAULT_MODEL below.
+// (not structured outputs), and the model is whatever Settings names.
 //
 // What it adds over the Python: a timeout and one retry. There, a truncated
 // response made json.loads throw, which the global handler turned into a 500.
 
-export const DEFAULT_MODEL = process.env.LLM_MODEL || "gpt-5.5";
-
-// Research reaches the model through the Responses API so it can carry the
-// hosted web_search tool, which chat.completions cannot. Not every chat model
-// accepts that tool, so the model is nameable on its own rather than inheriting
-// LLM_MODEL blindly — a research run that quietly lost its web access would
+// The key and the two model names used to be env vars read once at module
+// load, so changing either meant a redeploy and a cold start. They are a
+// Firestore document now — see llm-settings.ts — and a change takes effect on
+// the next call. Nothing in this file reads process.env any more.
+//
+// Research still gets its own model name, for the reason it always did: it
+// reaches the model through the Responses API so it can carry the hosted
+// web_search tool, which chat.completions cannot, and not every chat model
+// accepts that tool. A research run that quietly lost its web access would
 // produce the same JSON, sourced from nothing.
-export const RESEARCH_MODEL = process.env.RESEARCH_MODEL || DEFAULT_MODEL;
 const TIMEOUT_MS = 120_000;
 
 // Newer models reject any temperature other than the default: gpt-5, gpt-5.5
@@ -65,15 +67,29 @@ export function rejectsJsonSchema(error: unknown): boolean {
   return names && refused;
 }
 
-let client: OpenAI | undefined;
+/**
+ * What a caller gets when nothing has been configured.
+ *
+ * There is deliberately no fallback to an env var. A key in two places is a
+ * key you have to look in two places to rotate, and the whole point of the
+ * move was that the stored one is the only one. So this refuses, by name, and
+ * says where to fix it — the message reaches the operator through the plan-run
+ * warnings, which already report what a failed model call said.
+ */
+export const NO_KEY_MESSAGE =
+  "No OpenAI key is configured. Add one under Settings, in the Model card.";
 
-function openai(): OpenAI {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured.");
-  }
-  if (!client) {
-    client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+// Memoised on the key it was built with, not unconditionally. A warm
+// serverless instance outlives a key rotation, and a client cached without
+// regard to the key would keep calling with the old one until the instance
+// happened to be recycled.
+let client: { key: string; instance: OpenAI } | undefined;
+
+function openai(apiKey: string | null): OpenAI {
+  if (!apiKey) throw new Error(NO_KEY_MESSAGE);
+  if (!client || client.key !== apiKey) {
+    const instance = new OpenAI({
+      apiKey,
       timeout: TIMEOUT_MS,
       // The SDK retries twice by default (internal/request-options.d.ts:37),
       // and llmJson already has its own three-attempt loop. Left at the
@@ -87,8 +103,9 @@ function openai(): OpenAI {
       // it is just counted once.
       maxRetries: 0,
     });
+    client = { key: apiKey, instance };
   }
-  return client;
+  return client.instance;
 }
 
 export interface CompletionOptions {
@@ -120,10 +137,16 @@ export async function llmJson<T = Record<string, unknown>>({
   systemPrompt,
   payload,
   temperature = 0.7,
-  model = DEFAULT_MODEL,
+  model,
   schema,
   schemaName = "response",
 }: CompletionOptions): Promise<T> {
+  // Resolved once, OUTSIDE the retry loop. Three attempts should not mean
+  // three Firestore reads, and a key rotated mid-retry would be a stranger
+  // thing to debug than one that took effect on the next call.
+  const config = await readLlmConfig();
+  const chosen = model ?? config.model;
+
   const messages = [
     { role: "system" as const, content: systemPrompt },
     { role: "user" as const, content: JSON.stringify(payload, null, 2) },
@@ -137,15 +160,15 @@ export async function llmJson<T = Record<string, unknown>>({
   for (let attempt = 0; attempt < 3; attempt++) {
     // Decided per attempt rather than once, so a downgrade takes effect on the
     // retry that follows it.
-    const useSchema = schema !== undefined && !noJsonSchema.has(model);
+    const useSchema = schema !== undefined && !noJsonSchema.has(chosen);
     try {
-      const response = await openai().chat.completions.create({
-        model,
+      const response = await openai(config.apiKey).chat.completions.create({
+        model: chosen,
         messages,
         response_format: useSchema
           ? zodResponseFormat(schema, schemaName)
           : { type: "json_object" },
-        ...(noTemperature.has(model) ? {} : { temperature }),
+        ...(noTemperature.has(chosen) ? {} : { temperature }),
       });
       const content = response.choices[0]?.message?.content;
       if (!content) throw new Error("LLM returned an empty response.");
@@ -166,8 +189,8 @@ export async function llmJson<T = Record<string, unknown>>({
     } catch (error) {
       lastError = error;
       // Not a failure worth counting: drop the parameter and go again.
-      if (rejectsTemperature(error) && !noTemperature.has(model)) {
-        noTemperature.add(model);
+      if (rejectsTemperature(error) && !noTemperature.has(chosen)) {
+        noTemperature.add(chosen);
         attempt--;
         continue;
       }
@@ -175,7 +198,7 @@ export async function llmJson<T = Record<string, unknown>>({
       // the json_object one every other caller makes, and the parse the
       // caller was always going to do is the only guard left.
       if (useSchema && rejectsJsonSchema(error)) {
-        noJsonSchema.add(model);
+        noJsonSchema.add(chosen);
         attempt--;
         continue;
       }
@@ -285,11 +308,12 @@ export async function llmSearchJson<T = Record<string, unknown>>({
   systemPrompt,
   payload,
   allowedDomains,
-  model = RESEARCH_MODEL,
+  model,
 }: SearchOptions): Promise<SearchResult<T>> {
-  const response = await openai().responses.create(
+  const config = await readLlmConfig();
+  const response = await openai(config.apiKey).responses.create(
     {
-      model,
+      model: model ?? config.researchModel,
       tools: [
         {
           type: "web_search",

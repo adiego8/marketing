@@ -1,5 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { researchClient, ResearchFailedError } from "@/lib/marketing/research/run";
+import { readLlmConfig } from "@/lib/marketing/llm-settings-store";
 import {
   startResearchRun,
   updateResearchProgress,
@@ -74,6 +75,9 @@ export async function POST(request: Request, { params }: Params) {
         const result = await researchClient(client, {
           steer,
           onProgress: (step) => updateResearchProgress(run.id, step),
+          // Recorded on the run. Resolved here because researchClient is given
+          // only what it needs to research — no client id, no database.
+          model: (await readLlmConfig()).researchModel,
         });
         await finishResearchRun(run.id, result);
       } catch (error) {

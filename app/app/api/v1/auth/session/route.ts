@@ -38,6 +38,7 @@ export async function POST() {
       user_email: session.email ?? "",
       agency_id: session.agencyId,
       role: session.role,
+      staff: session.staff,
     });
   } catch (error) {
     return serverError("Auth session error", error);

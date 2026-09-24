@@ -23,7 +23,7 @@
 // rather than a type.
 
 import { createHash } from "node:crypto";
-import { clamp, clampList } from "./planner/decide";
+import { clamp, clampList } from "./clamp";
 import { limitsFor } from "./posting-windows";
 import { overlap } from "./similarity";
 

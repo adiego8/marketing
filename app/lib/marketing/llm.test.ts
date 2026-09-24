@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rejectsTemperature, rejectsJsonSchema } from "./llm";
+import { rejectsTemperature, rejectsJsonSchema, NO_KEY_MESSAGE } from "./llm";
 
 // The trigger for dropping the temperature parameter. Getting this wrong in
 // either direction is expensive: too narrow and every call to a newer model
@@ -23,7 +23,7 @@ describe("rejectsTemperature", () => {
       "429 Rate limit reached for gpt-5.5",
       "404 This is not a chat model and thus not supported in the v1/chat/completions endpoint.",
       "Unexpected end of JSON input",
-      "OPENAI_API_KEY is not configured.",
+      NO_KEY_MESSAGE,
     ]) {
       expect(rejectsTemperature(new Error(message)), message).toBe(false);
     }
@@ -73,7 +73,7 @@ describe("rejectsJsonSchema", () => {
       "401 Incorrect API key provided",
       "429 Rate limit reached for gpt-5.5",
       "Unexpected end of JSON input",
-      "OPENAI_API_KEY is not configured.",
+      NO_KEY_MESSAGE,
       "LLM returned an empty response.",
       "500 The server had an error while processing your request.",
     ]) {

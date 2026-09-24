@@ -27,6 +27,9 @@ export async function GET() {
       user_email: auth.session.email ?? "",
       agency_id: auth.session.agencyId,
       role: auth.session.role,
+      // Whether to render the install-wide Model card. The card is a
+      // convenience; requireStaff on the route is the actual gate.
+      staff: auth.session.staff,
       google_connected: credSnap.exists,
     });
   } catch (error) {
