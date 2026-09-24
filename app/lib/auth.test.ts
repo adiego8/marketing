@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import type { DecodedIdToken } from "firebase-admin/auth";
-import { isStaff, isAgencyOwner } from "./auth";
+import { isStaff, isAgencyOwner, sessionPayload } from "./auth";
 
 // Two access rules, both quiet when wrong.
 //
@@ -112,5 +112,44 @@ describe("isAgencyOwner", () => {
     expect(isAgencyOwner({ ownerUid: UID }, UID.toLowerCase())).toBe(false);
     expect(isAgencyOwner({ ownerUid: UID }, UID.slice(0, 3))).toBe(false);
     expect(isAgencyOwner({ ownerUid: UID.slice(0, 3) }, UID)).toBe(false);
+  });
+});
+
+describe("sessionPayload", () => {
+  const session = {
+    uid: "DrADef",
+    email: "team.leader@numerico.co",
+    agencyId: "cust_1",
+    role: "admin",
+  };
+
+  it("reports the owner as the owner", () => {
+    expect(sessionPayload(session, { ownerUid: "DrADef" })).toEqual({
+      user_email: "team.leader@numerico.co",
+      agency_id: "cust_1",
+      role: "admin",
+      owner: true,
+    });
+  });
+
+  it("does not make an admin an owner", () => {
+    expect(sessionPayload(session, { ownerUid: "someone-else" }).owner).toBe(false);
+  });
+
+  it("always carries owner, which is the bug this function exists to prevent", () => {
+    // /auth/me and /auth/session both answer "who am I" and both feed the same
+    // AuthProvider. They were two hand-written literals and drifted within a
+    // day: `owner` went into one and not the other, so it arrived undefined on
+    // the route the app actually calls, `data.owner === true` was false for
+    // everyone, and the settings card rendered for nobody — including the
+    // owner. Undefined is the shape of that failure, so assert against it.
+    for (const agency of [{ ownerUid: "DrADef" }, { ownerUid: "x" }, {}, undefined]) {
+      expect(sessionPayload(session, agency)).toHaveProperty("owner");
+      expect(typeof sessionPayload(session, agency).owner).toBe("boolean");
+    }
+  });
+
+  it("gives an empty string rather than null for a missing email", () => {
+    expect(sessionPayload({ ...session, email: null }, {}).user_email).toBe("");
   });
 });

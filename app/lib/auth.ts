@@ -126,6 +126,28 @@ export function isAgencyOwner(
   return typeof owner === "string" && owner.length > 0 && owner === uid;
 }
 
+/**
+ * Who the caller is, as the browser sees it. The ONLY definition of that shape.
+ *
+ * /auth/me and /auth/session both answer this question and both feed the same
+ * AuthProvider, and they had drifted within a day of each other: `owner` was
+ * added to one and not the other, so the flag was undefined on the route the
+ * app actually calls and the settings card never rendered for anybody. Two
+ * hand-written object literals answering one question is the bug; this is the
+ * fix, rather than a test asserting they match.
+ */
+export function sessionPayload(
+  session: Session,
+  agency: FirebaseFirestore.DocumentData | undefined
+) {
+  return {
+    user_email: session.email ?? "",
+    agency_id: session.agencyId,
+    role: session.role,
+    owner: isAgencyOwner(agency, session.uid),
+  };
+}
+
 export async function requireAdmin(authHeader: string | null): Promise<Session | null> {
   const session = await getSession(authHeader);
   return session && session.role === "admin" ? session : null;
