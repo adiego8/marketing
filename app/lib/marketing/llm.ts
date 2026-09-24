@@ -5,7 +5,8 @@ import OpenAI from "openai";
 // Deliberately matches the Python call shape so output stays comparable:
 // the prompt is the SYSTEM message, the payload is the USER message as
 // JSON.stringify(x, null, 2), response_format is the legacy json_object mode
-// (not structured outputs), and the model defaults to gpt-4o.
+// (not structured outputs), and the model comes from LLM_MODEL — see
+// DEFAULT_MODEL below.
 //
 // What it adds over the Python: a timeout and one retry. There, a truncated
 // response made json.loads throw, which the global handler turned into a 500.
@@ -46,6 +47,17 @@ function openai(): OpenAI {
     client = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
       timeout: TIMEOUT_MS,
+      // The SDK retries twice by default (internal/request-options.d.ts:37),
+      // and llmJson already has its own three-attempt loop. Left at the
+      // default the two multiply: one timed-out or rate-limited call becomes
+      // nine HTTP attempts at TIMEOUT_MS each, billed for every one that
+      // reached the model. llmSearchJson learned this the expensive way and
+      // opts out per request; this is the same opt-out, for every caller.
+      //
+      // Nothing is lost. The loop below already retries every error class
+      // itself for its first two attempts, so the resilience is still there —
+      // it is just counted once.
+      maxRetries: 0,
     });
   }
   return client;
@@ -217,12 +229,16 @@ export async function llmSearchJson<T = Record<string, unknown>>({
         { role: "user", content: JSON.stringify(payload, null, 2) },
       ],
     },
-    // maxRetries: 0 is the important half. The SDK retries twice by default
-    // (internal/request-options.d.ts:37), so a search that legitimately runs
-    // past the timeout was being killed and silently re-run twice — it could
-    // never succeed, it cost three searches instead of one, and three attempts
-    // at two minutes each blew the route's whole budget. A steered run sat at
-    // one step for eight minutes this way. One attempt, then degrade.
+    // maxRetries: 0 is the important half. The SDK used to retry twice by
+    // default (internal/request-options.d.ts:37), so a search that legitimately
+    // runs past the timeout was being killed and silently re-run twice — it
+    // could never succeed, it cost three searches instead of one, and three
+    // attempts at two minutes each blew the route's whole budget. A steered run
+    // sat at one step for eight minutes this way. One attempt, then degrade.
+    //
+    // The client now sets maxRetries: 0 for everyone, so this is belt and
+    // braces. Kept anyway: this call is the one that cannot afford a retry even
+    // if that default is ever loosened, and the reason should stay next to it.
     { timeout: SEARCH_TIMEOUT_MS, maxRetries: 0 }
   );
 
