@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { humanizeWarnings } from "./humanize";
+import { humanizeWarnings, humanizeFindings, flattenFindings } from "./humanize";
 import { languageFor } from "./brand";
 import type { SlotCopy } from "./copy";
 
@@ -255,5 +255,41 @@ describe("humanizeWarnings — severity", () => {
     const out = humanizeWarnings(bad, opts());
     expect(out.length).toBe(5);
     expect(out[4]).toContain("more of the same kind");
+  });
+});
+
+describe("humanizeFindings — the uncapped view", () => {
+  // The cap belongs to the banner, not to the copy. Measuring a threshold
+  // change against a corpus needs the real count, and needs it by category:
+  // "the marker list now fires on 18 of 20 pieces" is the finding, and a list
+  // truncated at four cannot say it.
+  const bad = post(
+    "Let's talk about our comprehensive, robust, nuanced insights. The result? " +
+      "Real talk — plot twist — game changer — level up. What do you think? 🎯🔥💡📈 " +
+      "Short. Punchy. Done."
+  );
+
+  it("keeps everything the warning list had to drop", () => {
+    const found = flattenFindings(humanizeFindings(bad, opts()));
+    expect(found.length).toBeGreaterThan(humanizeWarnings(bad, opts()).length);
+  });
+
+  it("separates the categories, which is what a corpus report counts", () => {
+    const found = humanizeFindings(bad, opts(EN, ["nuanced"]));
+    expect(found.avoided).toHaveLength(1);
+    expect(found.density.length).toBeGreaterThan(0);
+    expect(found.phrases.length).toBeGreaterThan(0);
+    expect(found.structure.length).toBeGreaterThan(0);
+    expect(found.leakage).toEqual([]);
+  });
+
+  it("agrees with humanizeWarnings whenever nothing had to be dropped", () => {
+    const one = post("We changed one form. The result? Six hours back.");
+    expect(flattenFindings(humanizeFindings(one, opts()))).toEqual(humanizeWarnings(one, opts()));
+  });
+
+  it("says nothing about absent copy", () => {
+    expect(flattenFindings(humanizeFindings(null, opts()))).toEqual([]);
+    expect(flattenFindings(humanizeFindings(copyOf({}), opts()))).toEqual([]);
   });
 });

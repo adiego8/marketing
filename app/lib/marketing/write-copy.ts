@@ -10,16 +10,14 @@ import { recordSignal } from "./signals";
 import { snapshotOf } from "./lessons";
 import { lessonsForPrompt } from "./lessons-store";
 import { getStrategy } from "./strategy";
-import { ctaWarnings, languageOf, primaryCtaOf, wordsToAvoidOf } from "./brand";
-import { languageWarnings } from "./language";
-import { humanizeWarnings } from "./humanize";
+import { languageOf, primaryCtaOf } from "./brand";
+import { pieceWarnings } from "./warnings";
 import { getSlot, updateSlot } from "./slots";
 import { SlotNotFoundError } from "./planner/regenerate";
 import { WRITE_COPY_PROMPT } from "./planner/prompt";
 import { limitsFor } from "./posting-windows";
 import {
   parseCopy,
-  copyWarnings,
   normalizeFormat,
   sourceHash,
   type SlotCopy,
@@ -192,15 +190,7 @@ export async function generateCopy(
     // Reported, never repaired. A wrong-language draft with a loud warning is
     // a decision the operator gets to make; a silent second model call is one
     // taken for them, and billed to them.
-    warnings: [
-      ...copyWarnings(copy, brief),
-      ...languageWarnings(copy, languageOf(strategy)),
-      ...ctaWarnings(brief.cta, languageOf(strategy)),
-      ...humanizeWarnings(copy, {
-        language: languageOf(strategy),
-        wordsToAvoid: wordsToAvoidOf(strategy),
-      }),
-    ],
+    warnings: pieceWarnings(copy, brief, strategy),
   };
 }
 
@@ -264,14 +254,6 @@ export async function writeCopy(
 
   return {
     slot: updated,
-    warnings: [
-      ...copyWarnings(copy, updated),
-      ...languageWarnings(copy, languageOf(strategy)),
-      ...ctaWarnings(updated.cta, languageOf(strategy)),
-      ...humanizeWarnings(copy, {
-        language: languageOf(strategy),
-        wordsToAvoid: wordsToAvoidOf(strategy),
-      }),
-    ],
+    warnings: pieceWarnings(copy, updated, strategy),
   };
 }

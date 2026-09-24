@@ -282,6 +282,39 @@ function countEmDashes(text: string): number {
 
 /* ------------------------------------------------------------- the check --- */
 
+/**
+ * The findings, in severity order, each bucket a list of finished sentences.
+ *
+ * Named buckets rather than one list with a severity tag: the order they are
+ * declared in IS the severity order, flattenFindings is the only place that
+ * depends on it, and a corpus report wants exactly these five counts.
+ */
+export interface HumanizeFindings {
+  /** A fragment of the machine, about to reach a client's feed. */
+  leakage: string[];
+  /** Words this client asked us by name not to use. */
+  avoided: string[];
+  /** AI vocabulary, three or more in one block. */
+  density: string[];
+  /** Single-hit tells: reveal bridges, performed sincerity, dead closers. */
+  phrases: string[];
+  /** Em dashes, emoji, fragments, triads, a hook past the fold. */
+  structure: string[];
+}
+
+const EMPTY_FINDINGS: HumanizeFindings = {
+  leakage: [],
+  avoided: [],
+  density: [],
+  phrases: [],
+  structure: [],
+};
+
+/** Severity order, which is declaration order. The only place that knows it. */
+export function flattenFindings(f: HumanizeFindings): string[] {
+  return [...f.leakage, ...f.avoided, ...f.density, ...f.phrases, ...f.structure];
+}
+
 export interface HumanizeOptions {
   language: Language;
   /** The client's own list, from voice.words_to_avoid. */
@@ -291,16 +324,19 @@ export interface HumanizeOptions {
 }
 
 /**
- * What would make a reader think a machine wrote this.
+ * Everything this module has to say about one piece, by severity, uncapped.
  *
- * Severity-ordered and capped, so a bad draft produces a short list rather than
- * a wall. When it has more to say than it is allowed, it says how much.
+ * Split out from humanizeWarnings because the cap is a property of the BANNER,
+ * not of the copy. Four warnings is the right thing to show a person deciding
+ * whether to regenerate; it is the wrong thing to measure with, because a
+ * capped count cannot tell you that a marker list has started firing on every
+ * piece in the corpus. Calibration reads this; the operator reads the other.
  */
-export function humanizeWarnings(
+export function humanizeFindings(
   copy: SlotCopy | null,
   opts: HumanizeOptions
-): string[] {
-  if (!copy) return [];
+): HumanizeFindings {
+  if (!copy) return EMPTY_FINDINGS;
 
   const units = [
     ...copy.blocks.map((b) => ({ label: b.label, text: b.text })),
@@ -309,7 +345,7 @@ export function humanizeWarnings(
       .map((b) => ({ label: `${b.label} (on screen)`, text: b.onScreen as string })),
     ...(copy.caption ? [{ label: "The caption", text: copy.caption }] : []),
   ];
-  if (units.length === 0) return [];
+  if (units.length === 0) return EMPTY_FINDINGS;
 
   const whole = units.map((u) => u.text).join("\n\n");
   const wholeNormal = normalize(whole);
@@ -407,7 +443,20 @@ export function humanizeWarnings(
     }
   }
 
-  const all = [...leakage, ...avoided, ...density, ...phrases, ...structure];
+  return { leakage, avoided, density, phrases, structure };
+}
+
+/**
+ * What would make a reader think a machine wrote this.
+ *
+ * Severity-ordered and capped, so a bad draft produces a short list rather than
+ * a wall. When it has more to say than it is allowed, it says how much.
+ */
+export function humanizeWarnings(
+  copy: SlotCopy | null,
+  opts: HumanizeOptions
+): string[] {
+  const all = flattenFindings(humanizeFindings(copy, opts));
   if (all.length <= MAX_WARNINGS) return all;
 
   const kept = all.slice(0, MAX_WARNINGS);

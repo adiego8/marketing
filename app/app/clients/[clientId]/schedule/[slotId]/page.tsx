@@ -26,10 +26,8 @@ import {
 } from "@/lib/api";
 import { windowFor } from "@/lib/marketing/posting-windows";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
-import { readCopy, isCopyStale, copyWarnings } from "@/lib/marketing/copy";
-import { ctaWarnings, languageOf, wordsToAvoidOf } from "@/lib/marketing/brand";
-import { languageWarnings } from "@/lib/marketing/language";
-import { humanizeWarnings } from "@/lib/marketing/humanize";
+import { readCopy, isCopyStale } from "@/lib/marketing/copy";
+import { pieceWarnings } from "@/lib/marketing/warnings";
 import { backLink, btn, field, pager, surface, text, banner } from "@/lib/ui";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
@@ -375,15 +373,10 @@ export default function SlotDetailPage() {
 
   const copy = readCopy(slot);
   const stale = isCopyStale(slot);
-  // Three checks, one banner. Platform limits come from the copy itself; the
-  // other two need the client's language, which is why the strategy is loaded.
-  const language = languageOf(strategy);
-  const warnings = [
-    ...(copy ? copyWarnings(copy, slot) : []),
-    ...languageWarnings(copy, language),
-    ...ctaWarnings(slot.cta, language),
-    ...humanizeWarnings(copy, { language, wordsToAvoid: wordsToAvoidOf(strategy) }),
-  ];
+  // Four checks, one banner. Platform limits come from the copy itself; the
+  // rest need the client's language and voice, which is why the strategy is
+  // loaded. Same call the generation path makes, so the two cannot drift.
+  const warnings = pieceWarnings(copy, slot, strategy);
   const dropped = slot.status === "cancelled" || slot.status === "skipped";
 
   return (
