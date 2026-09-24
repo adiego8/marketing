@@ -1,11 +1,13 @@
 import { describe, it, expect, afterEach } from "vitest";
 import type { DecodedIdToken } from "firebase-admin/auth";
-import { isStaff } from "./auth";
+import { isStaff, isAgencyOwner } from "./auth";
 
-// Who counts as numerico's own team, which is now the gate on the install-wide
-// OpenAI key. Getting this wrong in either direction is quiet: too narrow and
-// the people operating the install cannot configure it, too broad and a
-// customer can change the key that bills everyone.
+// Two access rules, both quiet when wrong.
+//
+// isStaff decides who can sign in at all off the entitlement rail. isAgencyOwner
+// decides who can change the install-wide OpenAI key — too narrow and the person
+// running the install cannot configure it, too broad and a customer changes the
+// key that bills everyone.
 
 const token = (over: Partial<DecodedIdToken> = {}) =>
   ({ uid: "uid-1", email: "person@numerico.com", ...over }) as DecodedIdToken;
@@ -65,5 +67,50 @@ describe("isStaff", () => {
     // this test exists so it stays that way.
     process.env.MARKETING_STAFF_UIDS = "person@numerico.com";
     expect(isStaff(token())).toBe(true);
+  });
+});
+
+describe("isAgencyOwner", () => {
+  const UID = "DrADef";
+
+  it("matches the recorded owner", () => {
+    expect(isAgencyOwner({ ownerUid: UID }, UID)).toBe(true);
+  });
+
+  it("says no to anyone else in the agency", () => {
+    // Including an admin. resolveGrant hands admin to every paying customer,
+    // so role is not this question and must not accidentally become it.
+    expect(isAgencyOwner({ ownerUid: UID, role: "admin" }, "someone-else")).toBe(false);
+  });
+
+  it("says no when the agency has no owner recorded", () => {
+    // Possible on an agency a teammate created before the owner first signed
+    // in. Refusing is right: ensureMember backfills ownerUid on the owner's
+    // next sign-in, and requireOwner's message says so.
+    expect(isAgencyOwner({}, UID)).toBe(false);
+    expect(isAgencyOwner({ ownerUid: null }, UID)).toBe(false);
+    expect(isAgencyOwner({ ownerUid: "" }, UID)).toBe(false);
+    expect(isAgencyOwner(undefined, UID)).toBe(false);
+  });
+
+  it("never matches two missing values against each other", () => {
+    // The lockout case inverted, and the dangerous one: a blank ownerUid and a
+    // blank uid comparing equal would hand the key to whoever asked first.
+    expect(isAgencyOwner({ ownerUid: "" }, "")).toBe(false);
+    expect(isAgencyOwner({}, "")).toBe(false);
+  });
+
+  it("does not coerce a non-string ownerUid into a match", () => {
+    expect(isAgencyOwner({ ownerUid: 0 }, UID)).toBe(false);
+    expect(isAgencyOwner({ ownerUid: true }, UID)).toBe(false);
+    expect(isAgencyOwner({ ownerUid: [UID] }, UID)).toBe(false);
+  });
+
+  it("is exact, not a prefix or case-insensitive match", () => {
+    // Unlike isStaff, which reads hand-typed config. A uid is machine-issued
+    // and compared verbatim; loosening it here would only widen the gate.
+    expect(isAgencyOwner({ ownerUid: UID }, UID.toLowerCase())).toBe(false);
+    expect(isAgencyOwner({ ownerUid: UID }, UID.slice(0, 3))).toBe(false);
+    expect(isAgencyOwner({ ownerUid: UID.slice(0, 3) }, UID)).toBe(false);
   });
 });

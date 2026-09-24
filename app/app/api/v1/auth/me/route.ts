@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, COLLECTIONS } from "@/lib/firestore";
 import { requireSession, jsonError, serverError } from "@/lib/marketing/route-helpers";
+import { isAgencyOwner } from "@/lib/auth";
 
 // GET /api/v1/auth/me
 // Keeps the response shape the frontend already reads, but google_connected now
@@ -17,6 +18,10 @@ export async function GET() {
       .doc(auth.session.agencyId)
       .get();
     if (!agencySnap.exists) return jsonError("Agency not found", 404);
+    // This document was already being fetched and its data thrown away, so the
+    // owner flag costs nothing. It decides whether the install-wide Model card
+    // renders; requireOwner on the route is the gate that actually holds.
+    const owner = isAgencyOwner(agencySnap.data(), auth.session.uid);
 
     const credSnap = await db()
       .collection(COLLECTIONS.googleCredentials)
@@ -27,9 +32,7 @@ export async function GET() {
       user_email: auth.session.email ?? "",
       agency_id: auth.session.agencyId,
       role: auth.session.role,
-      // Whether to render the install-wide Model card. The card is a
-      // convenience; requireStaff on the route is the actual gate.
-      staff: auth.session.staff,
+      owner,
       google_connected: credSnap.exists,
     });
   } catch (error) {

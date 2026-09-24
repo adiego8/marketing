@@ -13,8 +13,10 @@
 // have to be threaded through all of them. An install-wide one is resolved
 // inside llm.ts and nothing else moves.
 //
-// STAFF ONLY, therefore. One key that bills the whole install is the platform
-// operator's setting, not a customer's — see requireStaff in route-helpers.ts.
+// OWNER ONLY, therefore. One key that bills the whole install belongs to
+// whoever runs it — see requireOwner in route-helpers.ts. Not role: resolveGrant
+// hands every paying customer admin of their own agency, so an admin check
+// would read as "any customer".
 //
 // PURE. Firestore lives in llm-settings-store.ts, the same split api-keys.ts
 // and api-keys-store.ts already use — and here it is load-bearing rather than

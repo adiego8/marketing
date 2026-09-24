@@ -130,7 +130,7 @@ export default function SettingsPage() {
   }, [loadGoogle]);
 
   useEffect(() => {
-    if (!user?.staff) return;
+    if (!user?.owner) return;
     getLlmSettings()
       .then((s) => {
         setLlm(s);
@@ -138,7 +138,7 @@ export default function SettingsPage() {
         setLlmResearch(s.research_model);
       })
       .catch(() => setLlm(null));
-  }, [user?.staff]);
+  }, [user?.owner]);
 
   const handleLlmSave = async () => {
     setLlmBusy(true);
@@ -332,12 +332,13 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* One OpenAI key for the whole install, so changing it is numerico's
-            business rather than a customer's — hence user.staff, and hence
-            requireStaff on the route, which is the gate that actually holds.
-            These were env vars read once at boot; changing either meant a
-            redeploy. */}
-        {user?.staff && (
+        {/* One OpenAI key for the whole install, so it belongs to whoever owns
+            the agency rather than to every admin — resolveGrant hands admin to
+            each paying customer, which would make "admin" mean "any customer".
+            requireOwner on the route is the gate that actually holds; this only
+            decides whether the card is drawn. These were env vars read once at
+            boot; changing either meant a redeploy. */}
+        {user?.owner && (
           <section className={`${surface.card} ${surface.pad} mb-6`}>
             <h2 className={text.cardTitle}>Model</h2>
             <p className={`${text.muted} mt-1 max-w-2xl`}>

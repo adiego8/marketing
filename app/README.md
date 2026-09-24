@@ -20,7 +20,7 @@ cp .env.example .env.local   # then fill it in
 | `GOOGLE_TOKEN_ENC_KEY` | `openssl rand -hex 32`. Encrypts every secret stored in Firestore |
 
 The OpenAI key is **not** an environment variable. It lives in the app, under
-Settings → Model, and is visible only to accounts on `MARKETING_STAFF_UIDS`.
+Settings → Model, and is visible only to the account that owns the agency.
 Until one is saved the app runs normally and every model call refuses by name.
 
 The client and Admin values must name the **same** Firebase project. Without the

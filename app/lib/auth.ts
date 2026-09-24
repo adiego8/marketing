@@ -31,20 +31,6 @@ export interface Session {
   email: string | null;
   agencyId: string;
   role: string;
-  /**
-   * On the MARKETING_STAFF_UIDS allowlist — numerico's own team.
-   *
-   * Not derivable from agencyId, and that is the trap worth naming.
-   * resolveGrant checks staff LAST, so a staff member who is also a paying
-   * customer lands in a cust_ agency: testing `agencyId.startsWith("staff_")`
-   * would silently lock out exactly the people most likely to be operating the
-   * install. Computed from the token, which is the only honest source.
-   *
-   * Role is not this. Every paying customer is an "admin" of their own agency,
-   * so role says nothing about whether someone may change an install-wide
-   * setting.
-   */
-  staff: boolean;
 }
 
 /**
@@ -108,11 +94,36 @@ export async function getSession(authHeader: string | null): Promise<Session | n
       email: decoded.email ?? null,
       agencyId: String(data.agencyId),
       role: String(data.role ?? "member"),
-      staff: isStaff(decoded),
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * Does this person own the agency?
+ *
+ * The gate on install-wide settings, and deliberately NOT `role === "admin"`.
+ * resolveGrant hands every paying customer admin of their own agency, so admin
+ * means "a customer", not "whoever runs this install" — with one agency those
+ * are the same person and the difference is invisible; with two they are not.
+ * ownerUid is written once at first sign-in and is the only recorded fact
+ * about who that is.
+ *
+ * Pure, so the rule is tested rather than inferred from behaviour.
+ *
+ * Returns false when ownerUid is absent, which is possible on an agency a
+ * teammate created before the owner ever signed in. Refusing is the right
+ * answer — ensureMember backfills the field on the owner's next sign-in, and
+ * requireOwner's message says so. Comparing two missing values and calling it
+ * a match would hand the setting to whoever asked first.
+ */
+export function isAgencyOwner(
+  agency: FirebaseFirestore.DocumentData | undefined,
+  uid: string
+): boolean {
+  const owner = agency?.ownerUid;
+  return typeof owner === "string" && owner.length > 0 && owner === uid;
 }
 
 export async function requireAdmin(authHeader: string | null): Promise<Session | null> {
@@ -329,11 +340,5 @@ export async function ensureMember(decoded: DecodedIdToken): Promise<Session | n
     }
   });
 
-  return {
-    uid: decoded.uid,
-    email,
-    agencyId: grant.agencyId,
-    role: grant.role,
-    staff: isStaff(decoded),
-  };
+  return { uid: decoded.uid, email, agencyId: grant.agencyId, role: grant.role };
 }

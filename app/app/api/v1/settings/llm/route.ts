@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import {
-  requireStaff,
+  requireOwner,
   readBody,
   jsonError,
   serverError,
@@ -11,9 +11,11 @@ import { readLlmSettings, writeLlmSettings } from "@/lib/marketing/llm-settings-
 
 // The OpenAI key and the model, for the whole install.
 //
-// STAFF ONLY. One key bills every agency on the box, so this is the platform
-// operator's setting. Role would be the wrong gate: resolveGrant gives every
-// paying customer role "admin" of their own agency.
+// OWNER ONLY. One key bills every agency on the box, so this belongs to
+// whoever runs the install. Role would be the wrong gate: resolveGrant gives
+// every paying customer role "admin" of their own agency, so an admin check
+// means "any customer". ownerUid, written at first sign-in, is the only
+// recorded fact about who owns the thing.
 //
 // The key is never returned, under any flag. readLlmSettings cannot even
 // produce it — it reads the same document and returns the last four characters.
@@ -21,7 +23,7 @@ import { readLlmSettings, writeLlmSettings } from "@/lib/marketing/llm-settings-
 // GET /api/v1/settings/llm
 export async function GET() {
   try {
-    const auth = await requireStaff();
+    const auth = await requireOwner();
     if ("response" in auth) return auth.response;
     return NextResponse.json(await readLlmSettings());
   } catch (error) {
@@ -62,7 +64,7 @@ async function verify(apiKey: string, model: string): Promise<string | null> {
 // PUT /api/v1/settings/llm
 export async function PUT(request: Request) {
   try {
-    const auth = await requireStaff();
+    const auth = await requireOwner();
     if ("response" in auth) return auth.response;
 
     const parsed = parseLlmSettings(await readBody(request));
