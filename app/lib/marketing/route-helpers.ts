@@ -3,10 +3,12 @@ import { headers } from "next/headers";
 import {
   getSession,
   getClientForSession,
+  isAgencyOwner,
   isAuthConfigured,
   authNotConfigured,
   type Session,
 } from "../auth";
+import { db, COLLECTIONS } from "../firestore";
 
 // Shared plumbing for the /api/v1 handlers. Response shapes follow the house
 // convention: { resource } for reads, { error } for failures.
@@ -38,6 +40,43 @@ export async function requireSession(): Promise<
   const session = await getSession(headersList.get("authorization"));
   if (!session) return { response: jsonError("Unauthorized", 401) };
   return { session };
+}
+
+/**
+ * Resolve the session AND require that the caller owns their agency.
+ *
+ * The gate on install-wide settings. `role === "admin"` would be the obvious
+ * choice and is the wrong one: resolveGrant hands every paying customer admin
+ * of their own agency, so an admin check means "any customer" rather than
+ * "whoever runs this install".
+ *
+ * Costs one document read, and only on the routes that need it — which is why
+ * this is not a field on Session. /auth/me already fetches the same agency
+ * document for its existence check, so the flag the UI renders from is free.
+ *
+ * 403 rather than 404: the caller is authenticated and the route exists, and
+ * pretending otherwise would mean someone debugging a permissions problem sees
+ * the same thing as a typo.
+ */
+export async function requireOwner(): Promise<
+  { session: Session } | { response: NextResponse }
+> {
+  const auth = await requireSession();
+  if ("response" in auth) return auth;
+
+  const snap = await db().collection(COLLECTIONS.agencies).doc(auth.session.agencyId).get();
+  if (!isAgencyOwner(snap.data(), auth.session.uid)) {
+    // Named rather than generic, because the recoverable case is invisible
+    // otherwise: an agency created by a teammate first has no ownerUid until
+    // the owner signs in again, and ensureMember backfills it when they do.
+    return {
+      response: jsonError(
+        "Only the owner of this agency can change these settings. If you are the owner, sign out and back in once — the account that created the agency is recorded on first sign-in.",
+        403
+      ),
+    };
+  }
+  return auth;
 }
 
 /**

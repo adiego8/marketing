@@ -3,9 +3,11 @@ import { headers } from "next/headers";
 import {
   verifyToken,
   ensureMember,
+  sessionPayload,
   isAuthConfigured,
   authNotConfigured,
 } from "@/lib/auth";
+import { db, COLLECTIONS } from "@/lib/firestore";
 import { jsonError, serverError } from "@/lib/marketing/route-helpers";
 
 // POST /api/v1/auth/session
@@ -34,11 +36,11 @@ export async function POST() {
       );
     }
 
-    return NextResponse.json({
-      user_email: session.email ?? "",
-      agency_id: session.agencyId,
-      role: session.role,
-    });
+    // One read, on a route that runs at sign-in rather than per request.
+    // ensureMember may have just created or backfilled this document, so it is
+    // read after the transaction rather than inside it.
+    const agency = await db().collection(COLLECTIONS.agencies).doc(session.agencyId).get();
+    return NextResponse.json(sessionPayload(session, agency.data()));
   } catch (error) {
     return serverError("Auth session error", error);
   }

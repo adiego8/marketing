@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { planFromInputs, type PlannerInputs } from "./run";
 import { skeletonFills, type DecideFn } from "./decide";
 import type { CampaignWindow, ExistingSlot } from "./types";
+import { DEFAULT_LANGUAGE } from "../brand";
 
 // The date-arithmetic half of this suite is gone with the assign stage: the
 // planner no longer decides when anything goes out, so there are no posting
@@ -44,6 +45,7 @@ const CAMPAIGN: CampaignWindow = {
   endDate: "2026-09-27",
   goal: "leads",
   keyMessage: "",
+  targetAudience: "",
   plannedByType: { post: 6 },
   plannedTotal: 6,
   channels: ["linkedin"],
@@ -73,6 +75,9 @@ function inputs(over: Partial<PlannerInputs> = {}): PlannerInputs {
     campaigns: [CAMPAIGN],
     pillars: ["operator playbooks"],
     business: { name: "Test Co" },
+    language: DEFAULT_LANGUAGE,
+    primaryCta: null,
+    allocation: { angles: [], pillars: [], entryPoints: [] },
     strategyChannels: [],
     recentThemes: [],
     ...over,

@@ -292,6 +292,31 @@ export const createAgencyKey = (data: {
 export const revokeAgencyKey = (keyId: string) =>
   request<ApiKey>(`/agency/api-keys/${keyId}`, { method: "DELETE" });
 
+// --- The install's own OpenAI key and model. Staff only; 403 otherwise. ---
+
+export interface LlmSettings {
+  configured: boolean;
+  /** Last four characters. The key itself is never returned. */
+  key_hint: string;
+  model: string;
+  research_model: string;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
+export const getLlmSettings = () => request<LlmSettings>("/settings/llm");
+
+/** Omit api_key to change the models and leave the stored key alone. */
+export const saveLlmSettings = (data: {
+  api_key?: string;
+  model: string;
+  research_model: string;
+}) =>
+  request<LlmSettings>("/settings/llm", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+
 /**
  * Upload a client's logo.
  *

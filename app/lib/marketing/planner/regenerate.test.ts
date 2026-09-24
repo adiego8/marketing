@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseFills, type GapRequest } from "./decide";
+import { parseFills, type Gap } from "./decide";
 
 // regenerateSlot itself is Firestore + a model call, so what is tested here is
 // the guarantee it depends on: that a one-gap request with a single allowed
@@ -8,7 +8,7 @@ import { parseFills, type GapRequest } from "./decide";
 // That is the whole reason a regenerate can promise "the date, time and
 // channel never move" without re-running assign.
 
-function oneGap(channel: "linkedin" | "instagram" | "twitter" | "email"): GapRequest {
+function oneGap(channel: "linkedin" | "instagram" | "twitter" | "email"): Gap {
   return {
     gap_id: "regen__slot1",
     type: "reel",

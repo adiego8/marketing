@@ -4,16 +4,14 @@ import {
   signState,
   verifyState,
   safeReturnTo,
-  encrypt,
-  decrypt,
   googleConfigured,
   googleMissingEnv,
   decideConnect,
 } from "./google";
 
 // The state is the only thing standing between the callback and anyone who can
-// present a code, and the encryption is the only thing protecting a refresh
-// token at rest. Both are pure, so both get tested.
+// present a code. Pure, so it gets tested. The encryption that used to be
+// tested here moved with it, to secrets.test.ts.
 beforeAll(() => {
   process.env.GOOGLE_OAUTH_STATE_SECRET = randomBytes(32).toString("hex");
   process.env.GOOGLE_TOKEN_ENC_KEY = randomBytes(32).toString("hex");
@@ -85,43 +83,6 @@ describe("safeReturnTo", () => {
     ]) {
       expect(safeReturnTo(bad), String(bad)).toBeUndefined();
     }
-  });
-});
-
-describe("encrypt / decrypt", () => {
-  it("round-trips a token", () => {
-    const token = "1//0abcDEF-refresh_token_example";
-    expect(decrypt(encrypt(token))).toBe(token);
-  });
-
-  it("produces a different ciphertext each time", () => {
-    // A fresh IV per call: identical tokens must not produce identical blobs.
-    const a = encrypt("same");
-    const b = encrypt("same");
-    expect(a).not.toBe(b);
-    expect(decrypt(a)).toBe(decrypt(b));
-  });
-
-  it("stores as iv:tag:ciphertext hex", () => {
-    const parts = encrypt("x").split(":");
-    expect(parts).toHaveLength(3);
-    expect(parts[0]).toMatch(/^[0-9a-f]{24}$/); // 12-byte IV
-    expect(parts[1]).toMatch(/^[0-9a-f]{32}$/); // 16-byte GCM tag
-  });
-
-  it("refuses to decrypt tampered ciphertext", () => {
-    // GCM authenticates: a flipped byte must fail loudly, not decode to junk.
-    const blob = encrypt("secret");
-    const [iv, tag, ct] = blob.split(":");
-    const flipped = ct.startsWith("0") ? "1" + ct.slice(1) : "0" + ct.slice(1);
-    expect(() => decrypt(`${iv}:${tag}:${flipped}`)).toThrow();
-  });
-
-  it("rejects a key of the wrong length", () => {
-    const good = process.env.GOOGLE_TOKEN_ENC_KEY;
-    process.env.GOOGLE_TOKEN_ENC_KEY = "abcd";
-    expect(() => encrypt("x")).toThrow(/32 bytes/);
-    process.env.GOOGLE_TOKEN_ENC_KEY = good;
   });
 });
 

@@ -857,6 +857,25 @@ export default function CampaignWorkspace() {
                 </p>
               )}
 
+              {/* What the last run had to say about itself.
+                  The run has been in state since this page was written, and
+                  this comment's own claim was that it is kept "for what it says
+                  ABOUT a generation — warnings, a degraded model answer" — but
+                  only status was ever read. Every warning the planner emits has
+                  been landing in Firestore and going nowhere: a thin strategy,
+                  two pieces making the same argument, a channel it could not
+                  honour. They are worth more here than the bare count on the
+                  client overview, which is where they went before. */}
+              {run && run.warnings.length > 0 && (
+                <div className={banner.warn}>
+                  <ul className="space-y-1">
+                    {run.warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* A run that wrote nothing is an answer, not a failure — and only
                   worth saying while there are already pieces, since the empty
                   state below says it better when there are none. */}

@@ -5,7 +5,7 @@
 // lives in parse.ts, which is pure and therefore tested. This file is the model
 // calls and the guards around them, following lib/marketing/write-copy.ts.
 
-import { llmJson, llmSearchJson, RESEARCH_MODEL } from "../llm";
+import { llmJson, llmSearchJson } from "../llm";
 import {
   SITE_RESEARCH_PROMPT,
   WEB_RESEARCH_PROMPT,
@@ -43,7 +43,11 @@ export interface ResearchResult {
   open_questions: string[];
   sources: string[];
   warnings: string[];
-  llm: { model: string; searches: number; duration_ms: number };
+  /**
+   * What ran, for the run record. `model` is null when the caller did not name
+   * one — a test with an injected searchFn, or the dry-run script.
+   */
+  llm: { model: string | null; searches: number; duration_ms: number };
 }
 
 /** Both passes failed, so there is nothing to review and nothing to store. */
@@ -119,6 +123,15 @@ export async function researchClient(
     draftFn?: DraftFn;
     onProgress?: ProgressFn;
     steer?: Steer;
+    /**
+     * Which model did the searching, recorded on the run.
+     *
+     * Data in, not read here: the model name lives in Firestore now, and this
+     * function is deliberately given only what it needs — no client id, no
+     * database. The route resolves it. Absent records null, which is the
+     * truthful answer for a test that injected its own searchFn.
+     */
+    model?: string;
   } = {}
 ): Promise<ResearchResult> {
   const searchFn = opts.searchFn ?? defaultSearch;
@@ -163,7 +176,7 @@ export async function researchClient(
           ? `"${website}" is not a website address this can read. Fix it on the client and run again.`
           : "This client has no website, and there is nothing else to research from. Add one and run again.",
       ],
-      llm: { model: RESEARCH_MODEL, searches: 0, duration_ms: Date.now() - started },
+      llm: { model: opts.model ?? null, searches: 0, duration_ms: Date.now() - started },
     };
   }
 
@@ -253,7 +266,7 @@ export async function researchClient(
     open_questions: openQuestionsFor(strategy, dossier),
     sources: cited,
     warnings,
-    llm: { model: RESEARCH_MODEL, searches, duration_ms: Date.now() - started },
+    llm: { model: opts.model ?? null, searches, duration_ms: Date.now() - started },
   };
 }
 

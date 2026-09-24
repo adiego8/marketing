@@ -100,6 +100,54 @@ export async function getSession(authHeader: string | null): Promise<Session | n
   }
 }
 
+/**
+ * Does this person own the agency?
+ *
+ * The gate on install-wide settings, and deliberately NOT `role === "admin"`.
+ * resolveGrant hands every paying customer admin of their own agency, so admin
+ * means "a customer", not "whoever runs this install" — with one agency those
+ * are the same person and the difference is invisible; with two they are not.
+ * ownerUid is written once at first sign-in and is the only recorded fact
+ * about who that is.
+ *
+ * Pure, so the rule is tested rather than inferred from behaviour.
+ *
+ * Returns false when ownerUid is absent, which is possible on an agency a
+ * teammate created before the owner ever signed in. Refusing is the right
+ * answer — ensureMember backfills the field on the owner's next sign-in, and
+ * requireOwner's message says so. Comparing two missing values and calling it
+ * a match would hand the setting to whoever asked first.
+ */
+export function isAgencyOwner(
+  agency: FirebaseFirestore.DocumentData | undefined,
+  uid: string
+): boolean {
+  const owner = agency?.ownerUid;
+  return typeof owner === "string" && owner.length > 0 && owner === uid;
+}
+
+/**
+ * Who the caller is, as the browser sees it. The ONLY definition of that shape.
+ *
+ * /auth/me and /auth/session both answer this question and both feed the same
+ * AuthProvider, and they had drifted within a day of each other: `owner` was
+ * added to one and not the other, so the flag was undefined on the route the
+ * app actually calls and the settings card never rendered for anybody. Two
+ * hand-written object literals answering one question is the bug; this is the
+ * fix, rather than a test asserting they match.
+ */
+export function sessionPayload(
+  session: Session,
+  agency: FirebaseFirestore.DocumentData | undefined
+) {
+  return {
+    user_email: session.email ?? "",
+    agency_id: session.agencyId,
+    role: session.role,
+    owner: isAgencyOwner(agency, session.uid),
+  };
+}
+
 export async function requireAdmin(authHeader: string | null): Promise<Session | null> {
   const session = await getSession(authHeader);
   return session && session.role === "admin" ? session : null;
@@ -140,7 +188,7 @@ function hasActiveMarketing(entitlements: unknown): boolean {
 // entitlement rail, for numerico's own team. Comma-separated in
 // MARKETING_STAFF_UIDS; unset (the default) means the entitlement is the only
 // way in. Compared case-insensitively.
-function isStaff(decoded: DecodedIdToken): boolean {
+export function isStaff(decoded: DecodedIdToken): boolean {
   const allow = new Set(
     (process.env.MARKETING_STAFF_UIDS ?? "")
       .split(",")

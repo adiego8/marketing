@@ -13,8 +13,9 @@
 
 import { llmJson } from "../llm";
 import { getStrategy } from "../strategy";
+import { languageOf, primaryCtaOf } from "../brand";
 import { isChannel, type Channel } from "../posting-windows";
-import { parseFills, type GapRequest } from "./decide";
+import { parseFills, type Gap } from "./decide";
 import {
   applyReplacements,
   openDrops,
@@ -67,7 +68,7 @@ export function gapIdFor(slotId: string): string {
  *
  * Exported and pure so the payload's shape is assertable without a model call.
  */
-export function buildReplaceGaps(dropped: DroppedSlot[]): GapRequest[] {
+export function buildReplaceGaps(dropped: DroppedSlot[]): Gap[] {
   return dropped.map((slot, index) => {
     const channel: Channel = isChannel(slot.channel) ? slot.channel : "linkedin";
     return {
@@ -147,6 +148,8 @@ export async function replaceDropped(
       ? contentStrategy.content_pillars.filter((p): p is string => typeof p === "string")
       : [],
     recent_themes: recentThemes,
+    language: languageOf(strategy),
+    primary_cta: primaryCtaOf(strategy),
     business: {
       name: strategy?.business_name ?? "",
       icp: strategy?.icp ?? {},

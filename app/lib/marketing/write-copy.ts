@@ -5,18 +5,20 @@
 // lives in copy.ts, which is pure and therefore tested. This file is the model
 // call and the two guards around it.
 
-import { llmJson, DEFAULT_MODEL } from "./llm";
+import { llmJson } from "./llm";
 import { recordSignal } from "./signals";
 import { snapshotOf } from "./lessons";
 import { lessonsForPrompt } from "./lessons-store";
 import { getStrategy } from "./strategy";
+import { readLlmConfig } from "./llm-settings-store";
+import { languageOf, primaryCtaOf } from "./brand";
+import { pieceWarnings } from "./warnings";
 import { getSlot, updateSlot } from "./slots";
 import { SlotNotFoundError } from "./planner/regenerate";
 import { WRITE_COPY_PROMPT } from "./planner/prompt";
 import { limitsFor } from "./posting-windows";
 import {
   parseCopy,
-  copyWarnings,
   normalizeFormat,
   sourceHash,
   type SlotCopy,
@@ -45,6 +47,20 @@ const TEMPERATURE = 0.6;
 export interface WriteCopyOptions {
   /** What the operator wants different, in their words. Optional. */
   steer?: string;
+  /**
+   * Which model wrote this, for the provenance stamp on the stored copy.
+   *
+   * Passed in as data rather than read here, and that is load-bearing. The
+   * model name now lives in Firestore, and generateCopy is the function this
+   * repo tests with an injected CopyFn and no mocks — reading settings inside
+   * it would put every one of those tests on the network. writeCopy has
+   * Firestore already, so it resolves this and hands it down, exactly as it
+   * does for `strategy` and `lessons`.
+   *
+   * Absent means the caller did not know, which stamps null: the same value a
+   * hand-written piece carries, and the honest one for a test stub.
+   */
+  model?: string;
 }
 
 /**
@@ -118,6 +134,8 @@ export function buildCopyPayload(
       ? { campaign_id: brief.campaignId, title: brief.campaignTitle }
       : null,
     limits,
+    language: languageOf(strategy),
+    primary_cta: primaryCtaOf(strategy),
     business: {
       name: (strategy?.business_name as string) ?? "",
       icp: strategy?.icp ?? {},
@@ -178,11 +196,17 @@ export async function generateCopy(
     // afterwards marks this copy rather than silently invalidating it.
     sourceHash: sourceHash(brief),
     generatedAt: new Date().toISOString(),
-    model: DEFAULT_MODEL,
+    model: opts.model ?? null,
     editedAt: null,
   };
 
-  return { copy, warnings: copyWarnings(copy, brief) };
+  return {
+    copy,
+    // Reported, never repaired. A wrong-language draft with a loud warning is
+    // a decision the operator gets to make; a silent second model call is one
+    // taken for them, and billed to them.
+    warnings: pieceWarnings(copy, brief, strategy),
+  };
 }
 
 export async function writeCopy(
@@ -213,11 +237,19 @@ export async function writeCopy(
     });
   }
 
+  // Hoisted rather than inlined into the call: the warnings computed after the
+  // write need the same language expectation the generation was given.
+  const strategy = (await getStrategy(clientId)) as Record<string, unknown> | null;
+
+  // Resolved here for the same reason the strategy is: this function has
+  // Firestore, and generateCopy deliberately does not.
+  const { model } = await readLlmConfig();
+
   // The no-theme refusal lives in generateCopy, so both callers make it.
   const { copy } = await generateCopy(
     brief,
-    (await getStrategy(clientId)) as Record<string, unknown> | null,
-    opts,
+    strategy,
+    { ...opts, model },
     await lessonsForPrompt(clientId, "copy"),
     copyFn
   );
@@ -239,5 +271,8 @@ export async function writeCopy(
   );
   if (!updated) throw new SlotNotFoundError();
 
-  return { slot: updated, warnings: copyWarnings(copy, updated) };
+  return {
+    slot: updated,
+    warnings: pieceWarnings(copy, updated, strategy),
+  };
 }

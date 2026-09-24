@@ -149,6 +149,37 @@ describe("parseDraftStrategy", () => {
     expect(strategy.content_quota).toEqual({ weekly: {}, rationale: "" });
   });
 
+  it("keeps the language and the ask the model proposed", () => {
+    // parseDraftStrategy whitelists every key it emits, so a field the intake
+    // schema asks for is still dropped unless it is named here too.
+    const { strategy } = parseDraftStrategy(
+      {
+        content_strategy: { language: { code: "es", name: "Spanish" } },
+        messaging: {
+          primary_cta: { destination: "https://www.mywelltax.com", intent: "reservar una consulta" },
+        },
+      },
+      CITED,
+      "MyWellTax"
+    );
+    expect(strategy.content_strategy.language).toEqual({ code: "es", name: "Spanish" });
+    expect(strategy.messaging.primary_cta).toEqual({
+      destination: "https://www.mywelltax.com",
+      intent: "reservar una consulta",
+    });
+  });
+
+  it("falls back to English when the model invents a language", () => {
+    // A code the picker cannot display and the detector has no stopwords for
+    // is worse than the default, because both would then fail silently.
+    const { strategy } = parseDraftStrategy(
+      { content_strategy: { language: { code: "es-AR", name: "Rioplatense" } } },
+      CITED,
+      "MyWellTax"
+    );
+    expect(strategy.content_strategy.language).toEqual({ code: "en", name: "English" });
+  });
+
   it("keeps only proof points that name a page the search read", () => {
     const { strategy, warnings } = parseDraftStrategy(
       {

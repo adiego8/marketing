@@ -11,6 +11,7 @@
 import { CHANNELS, MAX_SLOTS_PER_DAY, type Channel } from "../posting-windows";
 import { contentType } from "../content-types";
 import { slugify } from "../demographics";
+import { languageFor } from "../brand";
 
 /* ------------------------------------------------------------------ caps -- */
 
@@ -495,6 +496,10 @@ export function parseDraftStrategy(
       value_props: list(messaging.value_props),
       key_messages: list(messaging.key_messages),
       proof_points: proof,
+      primary_cta: {
+        destination: str(obj(messaging.primary_cta).destination, MAX_LONG),
+        intent: str(obj(messaging.primary_cta).intent),
+      },
     },
     goals: {
       primary: str(goals.primary),
@@ -505,6 +510,10 @@ export function parseDraftStrategy(
     content_strategy: {
       platforms,
       content_pillars: list(contentStrategy.content_pillars, 6),
+      // Through languageFor, so a model that invents "Castilian" or "es-AR"
+      // yields English rather than a value the picker cannot display and the
+      // detector has no stopwords for.
+      language: languageFor(contentStrategy.language),
     },
     content_quota: { weekly, rationale: str(quota.rationale, MAX_LONG) },
   };

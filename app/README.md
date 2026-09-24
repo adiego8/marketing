@@ -17,7 +17,11 @@ cp .env.example .env.local   # then fill it in
 |---|---|
 | `NEXT_PUBLIC_FIREBASE_*` | Firebase console → Project settings → General → SDK setup |
 | `FIREBASE_PROJECT_ID` / `_CLIENT_EMAIL` / `_PRIVATE_KEY` | Project settings → Service accounts → Generate new private key |
-| `OPENAI_API_KEY` | Campaign generation and slot themes |
+| `GOOGLE_TOKEN_ENC_KEY` | `openssl rand -hex 32`. Encrypts every secret stored in Firestore |
+
+The OpenAI key is **not** an environment variable. It lives in the app, under
+Settings → Model, and is visible only to the account that owns the agency.
+Until one is saved the app runs normally and every model call refuses by name.
 
 The client and Admin values must name the **same** Firebase project. Without the
 Admin ones every API route answers `503` naming what is missing, rather than a

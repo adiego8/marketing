@@ -1,0 +1,1386 @@
+{
+  "captured_at": "2026-09-24",
+  "clients": {
+    "EmwL5WPSNe8QvLc26OEO": {
+      "content_strategy": {
+        "platforms": [
+          "instagram"
+        ],
+        "content_pillars": [
+          "Taxes online in under 15 minutes",
+          "Servicio en Español for Miami-Dade and Broward",
+          "Security, accuracy, and guarantees",
+          "Deductions, refunds, and tax season questions",
+          "secure process",
+          "reliable",
+          "trustworthy"
+        ]
+      },
+      "voice": {
+        "personality": "Clear, helpful, and reassuring. The brand sounds like a tax professional who explains the next step in plain language and does not make people feel lost.",
+        "traits": [
+          "clear",
+          "supportive",
+          "direct",
+          "simple",
+          "reassuring"
+        ],
+        "tone": "Plain and helpful, with short benefit-led lines. Warm enough for Spanish-speaking local taxpayers, but never casual about tax or security.",
+        "communication_style": "Lead with the practical outcome, then remove the fear. Use short phrases like under 15 minutes, tax professionals, and every deduction you deserve.",
+        "words_to_use": [
+          "taxes online",
+          "under 15 minutes",
+          "tax professionals",
+          "federal and state",
+          "deductions",
+          "refund",
+          "Servicio en Español",
+          "Miami",
+          "Fort Lauderdale"
+        ],
+        "words_to_avoid": [
+          "hidden fees",
+          "chatbots only",
+          "hours of complexity",
+          "solution",
+          "revolutionary",
+          "game-changing",
+          "leverage",
+          "synergy",
+          "unlock",
+          "seamless",
+          "cutting-edge",
+          "best-in-class"
+        ]
+      },
+      "messaging": {
+        "tagline": "Taxes online, in Spanish, upfront.",
+        "value_props": [
+          "Finish federal and state filing online in under 15 minutes",
+          "Get help from tax professionals when questions come up",
+          "File with bank-level encryption and an accuracy guarantee",
+          "Use tax tools to estimate refunds and prepare for filing"
+        ],
+        "key_messages": [
+          "Spanish-speaking taxpayers in Miami-Dade and Broward deserve online filing that explains the steps clearly.",
+          "Human support matters when your return has multiple income sources or old tax information.",
+          "Security has to be part of the promise, not a footnote.",
+          "The right tax filing experience helps you claim every deduction you deserve."
+        ],
+        "proof_points": [
+          "Servicio en Español Miami, Fort Lauderdale",
+          "Complete Your Taxes Online in Under 15 Minutes",
+          "Our tax software serves taxpayers across all 50 US states",
+          "100% accuracy guarantee",
+          "Money-Back Guarantee",
+          "encryption"
+        ]
+      }
+    },
+    "XhYuta4C9I7L3p8hyiSn": {
+      "content_strategy": {
+        "platforms": [
+          "instagram"
+        ],
+        "content_pillars": [
+          "Where time and money is being lost",
+          "Technology for non-technical owners",
+          "Launch, Grow, and Scale",
+          "Manual work that should not stay manual",
+          "Systems that talk to each other",
+          "What happens after launch"
+        ]
+      },
+      "voice": {
+        "personality": "A practical operator who starts by looking at how the business really works. Clear, direct, and calm enough to make technology feel manageable.",
+        "traits": [
+          "practical",
+          "clear",
+          "direct",
+          "grounded",
+          "plainspoken"
+        ],
+        "tone": "Simple and reassuring. Speaks to non-technical owners without talking down to them. Short sentences, concrete examples, little hype.",
+        "communication_style": "Starts with the operational problem, then names where time or money is being lost, then explains the technology fix. Uses stage language like Launch, Grow, and Scale. Prefers plain phrases such as no code yet and just clarity.",
+        "words_to_use": [
+          "operations",
+          "time and money",
+          "bottleneck",
+          "Launch",
+          "Grow",
+          "Scale",
+          "no code yet",
+          "clarity",
+          "after launch",
+          "comments and DMs",
+          "instant replies",
+          "leads"
+        ],
+        "words_to_avoid": [
+          "tech for tech's sake",
+          "digital transformation",
+          "all-in-one platform",
+          "fancy stack",
+          "magic",
+          "hype",
+          "generic software",
+          "complicated implementation"
+        ]
+      },
+      "messaging": {
+        "tagline": "Find the bottleneck. Fix it with technology.",
+        "value_props": [
+          "Find where time and money is being lost",
+          "Replace manual work with systems that fit the operation",
+          "Connect tools so teams stop copying data by hand",
+          "Build a working first version without starting with code",
+          "Stay supported after launch as the business changes"
+        ],
+        "key_messages": [
+          "Every engagement starts with your operations, not a proposal.",
+          "No code yet means the first job is clarity.",
+          "Technology should remove workarounds, not create new ones.",
+          "Launch, Grow, and Scale give the project a shape that matches where the business is today.",
+          "The right system should fit how the business actually runs.",
+          "Numerico does not disappear after launch."
+        ],
+        "proof_points": [
+          "Numerico describes itself as Tech Consulting & Custom Software.",
+          "Numerico says it understands the problem, analyzes where time and money is being lost, and fixes it with technology.",
+          "Numerico says every engagement starts with operations, not a proposal.",
+          "The website organizes services around Launch, Grow, and Scale.",
+          "Launch is described as Get established and typically 2–3 weeks.",
+          "Grow is described as Get found. Get organized. and typically 4–8 weeks.",
+          "Scale is described as Get out of the bottleneck and typically 6–12 weeks.",
+          "Numerico Engage is described as done-for-you Instagram and YouTube automation with instant replies that turn comments and DMs into leads."
+        ]
+      }
+    }
+  },
+  "pieces": [
+    {
+      "slot_id": "EmwL5WPSNe8QvLc26OEO__8wuhwygdmupoirtazco4__carousel__0",
+      "client_id": "EmwL5WPSNe8QvLc26OEO",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "Guarda esta lista y agenda tu consulta en español.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "Antes de tu consulta de taxes, ten esto a mano:\n\n1. Tus ingresos\nW-2, 1099 u otros formularios que recibiste."
+          },
+          {
+            "label": "Slide 2",
+            "text": "2. Información de dependientes\n\nNombre, fecha de nacimiento y datos básicos de cada persona que califica en tu declaración."
+          },
+          {
+            "label": "Slide 3",
+            "text": "3. Gastos relacionados con deductions\n\nTen recibos, cantidades o notas de gastos que podrían aplicar."
+          },
+          {
+            "label": "Slide 4",
+            "text": "4. Tu declaración anterior\n\nSi la tienes disponible, puede ayudar a revisar datos del año pasado."
+          },
+          {
+            "label": "Slide 5",
+            "text": "5. Tus preguntas\n\nRefund, seguridad, costos, taxes online o cómo declarar federal and state.\n\nGuarda esta lista."
+          }
+        ],
+        "caption": "Tu consulta de taxes puede ser mucho más simple si tienes estos documentos listos antes de empezar.\n\nEn MyWellTax te ayudamos con Servicio en Español, costos claros desde el inicio y apoyo de tax professionals para declarar tus taxes online con más confianza.\n\nGuarda esta lista y agenda tu consulta en español.",
+        "hashtags": [
+          "#taxes",
+          "#taxesenespañol",
+          "#taxesonline",
+          "#refund",
+          "#deductions",
+          "#miami",
+          "#fortlauderdale",
+          "#broward",
+          "#mywelltax"
+        ],
+        "sourceHash": "4ded25569288a4cc09feb6a9a642446f",
+        "generatedAt": "2026-09-09T15:15:36.348Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "EmwL5WPSNe8QvLc26OEO__8wuhwygdmupoirtazco4__carousel__1",
+      "client_id": "EmwL5WPSNe8QvLc26OEO",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "Agenda una consulta y aclara tu situación.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Diapositiva 1",
+            "text": "Si esto te pasó, consulta antes de declarar.\n\n¿Cambiaste de trabajo o recibiste ingresos de más de un lugar?"
+          },
+          {
+            "label": "Diapositiva 2",
+            "text": "¿Trabajaste por cuenta propia?\n\nSi recibiste un formulario 1099, tu declaración puede necesitar revisión."
+          },
+          {
+            "label": "Diapositiva 3",
+            "text": "¿Tuviste cambios familiares?\n\nMatrimonio, separación, dependientes o cambio de estado civil pueden afectar tu declaración."
+          },
+          {
+            "label": "Diapositiva 4",
+            "text": "¿No sabes qué deducciones aplican para ti?\n\nAntes de enviar, aclara qué puedes reclamar."
+          },
+          {
+            "label": "Diapositiva 5",
+            "text": "¿Quieres entender tu posible reembolso?\n\nUna consulta puede ayudarte a revisar tu situación antes de declarar."
+          },
+          {
+            "label": "Diapositiva 6",
+            "text": "¿Prefieres Servicio en Español?\n\nHabla con un profesional de impuestos.\n\nAgenda una consulta y aclara tu situación."
+          }
+        ],
+        "caption": "Declarar impuestos no siempre es simple.\n\nSi cambiaste de trabajo, recibiste un 1099, tuviste cambios familiares o no estás seguro de tus deducciones, consulta antes de enviar tu declaración.\n\nEn MyWellTax te ayudamos con Servicio en Español y apoyo de profesionales de impuestos.\n\nAgenda una consulta y aclara tu situación.",
+        "hashtags": [
+          "#impuestos",
+          "#declaraciondeimpuestos",
+          "#servicioenespanol",
+          "#reembolso",
+          "#deducciones",
+          "#Miami",
+          "#FortLauderdale"
+        ],
+        "sourceHash": "88fa7bc59a4c4113c3c187afc924a7bb",
+        "generatedAt": "2026-09-16T18:35:50.048Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "EmwL5WPSNe8QvLc26OEO__8wuhwygdmupoirtazco4__post__1",
+      "client_id": "EmwL5WPSNe8QvLc26OEO",
+      "type": "post",
+      "channel": "instagram",
+      "cta": "Programa una consulta y revisemos tu caso en español.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Post",
+            "text": "¿Tienes W-2, 1099 o más de una fuente de ingreso?\n\nTu declaración puede necesitar más cuidado.\n\nCuando recibes diferentes formularios, trabajas por cuenta propia o combinas varios ingresos, es normal tener preguntas antes de enviar tus taxes.\n\n¿Qué documentos necesitas?\n¿Qué deducciones aplican?\n¿Cómo se reporta cada ingreso?\n¿Qué cambia si tienes W-2 y 1099 al mismo tiempo?\n\nUna consulta en español te ayuda a organizar tu caso antes de presentar tu declaración federal and state.\n\nCon MyWellTax puedes recibir orientación online de tax professionals, sin manejar a una oficina y con claridad en cada paso del proceso.\n\nServicio en Español para contribuyentes en Miami, Fort Lauderdale y online en todos los estados.\n\nPrograma una consulta y revisemos tu caso en español."
+          }
+        ],
+        "caption": null,
+        "hashtags": [
+          "#taxesonline",
+          "#taxesenespañol",
+          "#w2",
+          "#1099",
+          "#taxprofessionals",
+          "#miami",
+          "#fortlauderdale",
+          "#mywelltax"
+        ],
+        "sourceHash": "d73d05336510901a8d6936a26e8034cb",
+        "generatedAt": "2026-09-10T16:30:20.435Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "EmwL5WPSNe8QvLc26OEO__i4rrrrj0lpc7fs7twxip__carousel__0",
+      "client_id": "EmwL5WPSNe8QvLc26OEO",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "Guarda este carrusel y escríbenos “REVISAR” para orientación en español.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "¿Puedes empezar tus taxes online?\n\nMira estas 4 señales."
+          },
+          {
+            "label": "Slide 2",
+            "text": "1. Tienes tus datos básicos listos.\n\nNombre, dirección, Seguro Social o ITIN, y acceso a tus documentos principales."
+          },
+          {
+            "label": "Slide 3",
+            "text": "2. Quieres presentar federal and state desde casa.\n\nSin visitar una oficina en Miami o Fort Lauderdale."
+          },
+          {
+            "label": "Slide 4",
+            "text": "3. Tienes preguntas.\n\nPero prefieres que tax professionals te guíen en español."
+          },
+          {
+            "label": "Slide 5",
+            "text": "4. Tu caso está listo.\n\nPuedes completar el proceso online en under 15 minutes."
+          },
+          {
+            "label": "Slide 6",
+            "text": "No tienes que estar 100% seguro para empezar.\n\nSi tienes dudas, puedes pedir revisión.\n\nGuarda este carrusel y escríbenos “REVISAR”."
+          }
+        ],
+        "caption": "Si quieres hacer tus taxes online, estas señales te pueden ayudar a saber si ya puedes empezar.\n\nCon MyWellTax puedes presentar federal and state desde casa, recibir Servicio en Español y pedir ayuda de tax professionals cuando tengas preguntas.\n\nGuarda este carrusel y escríbenos “REVISAR” para orientación en español.",
+        "hashtags": [
+          "#taxesonline",
+          "#ServicioEnEspañol",
+          "#taxprofessionals",
+          "#MiamiTaxes",
+          "#FortLauderdaleTaxes",
+          "#FederalAndState",
+          "#MyWellTax"
+        ],
+        "sourceHash": "126423429a1edd45a382b8dd38c5ffed",
+        "generatedAt": "2026-09-19T15:19:53.545Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "EmwL5WPSNe8QvLc26OEO__i4rrrrj0lpc7fs7twxip__carousel__1",
+      "client_id": "EmwL5WPSNe8QvLc26OEO",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "Escríbenos “DEDUCTIONS” si quieres revisar tus preguntas en español.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "¿No sabes qué deductions te corresponden?\nNo adivines.\n\nDepende de tu situación, tus documentos y cómo reportas tu ingreso."
+          },
+          {
+            "label": "Slide 2",
+            "text": "Lo que le funcionó a otra persona no siempre aplica a tu declaración."
+          },
+          {
+            "label": "Slide 3",
+            "text": "¿Pagaste ciertos gastos?\n¿Tuviste cambios familiares?\n¿Trabajaste independiente?\n\nVale la pena revisar."
+          },
+          {
+            "label": "Slide 4",
+            "text": "Con MyWellTax puedes empezar online y pedir ayuda de tax professionals cuando una deduction no está clara."
+          },
+          {
+            "label": "Slide 5",
+            "text": "La meta: presentar con confianza y reclamar cada deduction que te corresponda.\n\nEscríbenos “DEDUCTIONS” para revisar tus preguntas en español."
+          }
+        ],
+        "caption": "Las deductions no se adivinan. Se revisan.\n\nCada declaración es diferente: tus ingresos, tus documentos, tus gastos y tus cambios familiares pueden afectar lo que te corresponde reclamar.\n\nCon MyWellTax puedes empezar tus taxes online y contar con ayuda de tax professionals cuando tengas preguntas.\n\nServicio en Español para Miami, Fort Lauderdale y online en todos los estados.\n\nEscríbenos “DEDUCTIONS” si quieres revisar tus preguntas en español.",
+        "hashtags": [
+          "#taxesonline",
+          "#deductions",
+          "#ServicioEnEspañol",
+          "#Miami",
+          "#FortLauderdale",
+          "#MyWellTax"
+        ],
+        "sourceHash": "56d97203917d2ef398d9ec02cc732ce8",
+        "generatedAt": "2026-09-19T15:32:35.234Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "EmwL5WPSNe8QvLc26OEO__i4rrrrj0lpc7fs7twxip__carousel__2",
+      "client_id": "EmwL5WPSNe8QvLc26OEO",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "Escríbenos “REFUND” si quieres revisar tus dudas antes de presentar.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "Tu estimado de refund ayuda.\nPero no es una promesa."
+          },
+          {
+            "label": "Slide 2",
+            "text": "Ingresos, retenciones, dependientes, créditos y deducciones pueden cambiar el resultado."
+          },
+          {
+            "label": "Slide 3",
+            "text": "Si falta un documento o un número está mal, tu estimado puede verse diferente a la declaración final."
+          },
+          {
+            "label": "Slide 4",
+            "text": "Con MyWellTax puedes empezar tus taxes online y recibir guía si algo no cuadra."
+          },
+          {
+            "label": "Slide 5",
+            "text": "Más claridad antes de presentar.\nMenos ansiedad después.\n\nEscríbenos “REFUND” si quieres revisar tus dudas."
+          }
+        ],
+        "caption": "Un estimado de refund es útil, pero depende de la información que ingreses.\n\nIngresos, retenciones, dependientes, créditos, deductions y documentos pendientes pueden cambiar el resultado final.\n\nCon MyWellTax puedes empezar tus taxes online, recibir guía de tax professionals y presentar federal and state con más confianza.\n\nEscríbenos “REFUND” si quieres revisar tus dudas antes de presentar.",
+        "hashtags": [
+          "#MyWellTax",
+          "#TaxesOnline",
+          "#Refund",
+          "#ServicioEnEspañol",
+          "#MiamiTaxes",
+          "#FortLauderdaleTaxes",
+          "#TaxProfessionals",
+          "#FederalAndState"
+        ],
+        "sourceHash": "15f448bee5804ae9b9cd674b484ffa48",
+        "generatedAt": "2026-09-19T15:32:34.642Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "EmwL5WPSNe8QvLc26OEO__i4rrrrj0lpc7fs7twxip__carousel__3",
+      "client_id": "EmwL5WPSNe8QvLc26OEO",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "Escríbenos “FEDERAL” si quieres orientación con federal and state.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "¿Federal and state te confunden?\nPuedes revisarlos en un mismo proceso."
+          },
+          {
+            "label": "Slide 2",
+            "text": "La declaración federal va al IRS.\n\nLa estatal depende del estado que aplique a tu situación."
+          },
+          {
+            "label": "Slide 3",
+            "text": "¿Vives en Miami, Fort Lauderdale o presentas desde otro estado?\n\nConviene confirmar qué te corresponde."
+          },
+          {
+            "label": "Slide 4",
+            "text": "No todos tienen la misma combinación de ingresos, residencia o requisitos."
+          },
+          {
+            "label": "Slide 5",
+            "text": "Con MyWellTax puedes presentar taxes online en los 50 estados.\n\nY recibir apoyo cuando tengas preguntas."
+          },
+          {
+            "label": "Slide 6",
+            "text": "La idea es simple:\n\nque entiendas qué estás enviando antes de presentar."
+          },
+          {
+            "label": "Slide 7",
+            "text": "¿Quieres orientación con federal and state?\n\nEscríbenos “FEDERAL”."
+          }
+        ],
+        "caption": "Federal and state no tienen que sentirse como dos procesos separados.\n\nTu declaración federal va al IRS, pero la estatal depende de tu residencia, tus ingresos y los requisitos del estado que aplique a tu situación.\n\nEn MyWellTax puedes presentar taxes online en los 50 estados, con Servicio en Español y apoyo de tax professionals cuando tengas preguntas.\n\nEscríbenos “FEDERAL” si quieres orientación con federal and state.",
+        "hashtags": [
+          "#MyWellTax",
+          "#TaxesOnline",
+          "#FederalAndState",
+          "#TaxesenEspañol",
+          "#MiamiTaxes",
+          "#FortLauderdaleTaxes"
+        ],
+        "sourceHash": "a3f2169631e2b740af79b9b7e4c60b24",
+        "generatedAt": "2026-09-19T15:32:42.060Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "EmwL5WPSNe8QvLc26OEO__i4rrrrj0lpc7fs7twxip__post__0",
+      "client_id": "EmwL5WPSNe8QvLc26OEO",
+      "type": "post",
+      "channel": "instagram",
+      "cta": "Escríbenos “ONLINE” y revisamos si puedes empezar con Servicio en Español.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Post",
+            "text": "¿No sabes si puedes declarar online? Esa duda es normal.\n\nMuchas personas esperan porque creen que primero tienen que entender toda su declaración.\n\nPero no necesitas tener todas las respuestas antes de empezar.\n\nEn MyWellTax puedes iniciar tus taxes online, compartir tu información de forma segura y pedir apoyo de tax professionals si aparece una pregunta.\n\nSi tu caso no es tan simple, no significa que estés solo.\n\nSignifica que conviene revisarlo con alguien que pueda explicarte el próximo paso en español.\n\nEscríbenos “ONLINE” y revisamos si puedes empezar con Servicio en Español."
+          }
+        ],
+        "caption": null,
+        "hashtags": [
+          "#taxesonline",
+          "#servicioenespañol",
+          "#taxprofessionals",
+          "#taxesmiami",
+          "#fortlauderdaletaxes"
+        ],
+        "sourceHash": "486d166bc06fa619780c287313c36699",
+        "generatedAt": "2026-09-19T15:32:33.516Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "EmwL5WPSNe8QvLc26OEO__i4rrrrj0lpc7fs7twxip__post__1",
+      "client_id": "EmwL5WPSNe8QvLc26OEO",
+      "type": "post",
+      "channel": "instagram",
+      "cta": "Mándanos “AÑOS” si quieres orientación en español antes de presentar.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Post",
+            "text": "¿Tienes información de taxes de años anteriores?\nPuede servir más de lo que crees.\n\nTu declaración anterior puede ayudarte a confirmar datos básicos como:\n\n• Información personal\n• Dependientes\n• Ingresos reportados\n• Deductions que reclamaste\n• Cambios que no debes pasar por alto\n\nPero ojo: no se trata de copiar todo igual.\n\nCada año puede cambiar tu situación, tus ingresos, tus dependientes, tus deductions o la forma correcta de reportar ciertos datos.\n\nPor eso, una declaración anterior puede ser una buena guía, pero tu nueva declaración debe revisarse con la información actual.\n\nCon MyWellTax puedes empezar tus taxes online y pedir que tax professionals revisen qué información anterior ayuda y qué necesita actualizarse antes de presentar tus taxes federal and state.\n\nServicio en Español para Miami, Fort Lauderdale y online en los 50 estados.\n\nMándanos “AÑOS” si quieres orientación en español antes de presentar."
+          }
+        ],
+        "caption": null,
+        "hashtags": [
+          "#MyWellTax",
+          "#TaxesOnline",
+          "#ServicioEnEspañol",
+          "#TaxesEnEspañol",
+          "#MiamiTaxes",
+          "#FortLauderdaleTaxes",
+          "#TaxProfessionals",
+          "#Deductions",
+          "#TaxReturn"
+        ],
+        "sourceHash": "f28662010f3c92590bba6305b4c211c2",
+        "generatedAt": "2026-09-19T15:32:40.278Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "EmwL5WPSNe8QvLc26OEO__i4rrrrj0lpc7fs7twxip__post__2",
+      "client_id": "EmwL5WPSNe8QvLc26OEO",
+      "type": "post",
+      "channel": "instagram",
+      "cta": "Escríbenos “SEGURO” si quieres saber cómo funciona el proceso online.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Post",
+            "text": "Tus taxes tienen información sensible.\nEs correcto preguntar cómo se protege.\n\nCuando presentas federal and state, compartes datos personales, ingresos, dependientes y detalles financieros.\n\nNo es algo para tomar a la ligera.\n\nPor eso, MyWellTax usa bank-level encryption para proteger tu información mientras completas tus taxes online.\n\nY si tienes una pregunta durante el proceso, no tienes que quedarte adivinando frente a la pantalla.\n\nPuedes pedir ayuda de tax professionals para avanzar con más confianza.\n\nServicio en Español para taxpayers en Miami, Fort Lauderdale y online en los 50 estados.\n\nEscríbenos “SEGURO” si quieres saber cómo funciona el proceso online."
+          }
+        ],
+        "caption": null,
+        "hashtags": [
+          "#taxesonline",
+          "#taxesenespañol",
+          "#federalandstate",
+          "#taxprofessionals",
+          "#miamitaxes",
+          "#fortlauderdaletaxes",
+          "#mywelltax"
+        ],
+        "sourceHash": "20dd2c2fac355ebea60a1300fd01d9ad",
+        "generatedAt": "2026-09-19T15:32:41.841Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "EmwL5WPSNe8QvLc26OEO__i4rrrrj0lpc7fs7twxip__story__0",
+      "client_id": "EmwL5WPSNe8QvLc26OEO",
+      "type": "story",
+      "channel": "instagram",
+      "cta": "Sticker encuesta: “Mi caso es diferente” / “Quiero ayuda en español”",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Frame 1",
+            "text": "¿Qué te detiene de empezar tus taxes online?\n\nA veces no es falta de tiempo.\nEs no saber si tu caso se puede manejar online."
+          },
+          {
+            "label": "Frame 2",
+            "text": "En MyWellTax puedes empezar online y pedir Servicio en Español si necesitas ayuda.",
+            "onScreen": "¿Qué necesitas hoy?\n\nMi caso es diferente\nQuiero ayuda en español",
+            "note": "Agregar sticker de encuesta con las dos opciones."
+          }
+        ],
+        "caption": null,
+        "hashtags": [],
+        "sourceHash": "a3ca2bb3fc611b74922b9874165f9699",
+        "generatedAt": "2026-09-19T15:32:33.600Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "EmwL5WPSNe8QvLc26OEO__i4rrrrj0lpc7fs7twxip__story__1",
+      "client_id": "EmwL5WPSNe8QvLc26OEO",
+      "type": "story",
+      "channel": "instagram",
+      "cta": "Sticker pregunta: “Escribe tu duda de taxes aquí”",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Frame 1",
+            "text": "¿Tienes una pregunta antes de declarar online?\n\nPuede ser sobre refund, deductions, federal and state o la seguridad de tu información.",
+            "onScreen": "¿Pregunta antes de declarar online?\n\nRefund\nDeductions\nFederal and state\nSeguridad"
+          },
+          {
+            "label": "Frame 2",
+            "text": "Un tax professional puede orientarte en español para que sepas el próximo paso.\n\nEscribe tu duda de taxes aquí.",
+            "onScreen": "Servicio en Español\n\nUn tax professional te orienta antes de empezar.\n\nSticker: Escribe tu duda de taxes aquí"
+          }
+        ],
+        "caption": null,
+        "hashtags": [],
+        "sourceHash": "5f04e97e79e4d14bdebafacc50acad5e",
+        "generatedAt": "2026-09-19T15:32:36.023Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__epzich3o52iccpyudd2b__carousel__1",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "DM us the word FOLLOW-UP if this is where your leads get stuck.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "A lead asks a question.\nYour team replies.\nThen follow-up lives in someone’s memory."
+          },
+          {
+            "label": "Slide 2",
+            "text": "That is where leads go quiet:\nno reminder,\nno next message,\nno clear owner."
+          },
+          {
+            "label": "Slide 3",
+            "text": "The first automation can be simple:\nsend the message,\ntag the lead,\nupdate the list,\nor remind the right person."
+          },
+          {
+            "label": "Slide 4",
+            "text": "No code yet.\nFirst, map what should happen after someone reaches out."
+          },
+          {
+            "label": "Slide 5",
+            "text": "Then build the smallest system that makes follow-up happen every time.\n\nIf this is where leads get stuck, DM FOLLOW-UP."
+          }
+        ],
+        "caption": "Before you add AI, fix the handoff.\n\nWhen comments, DMs, forms, and calls do not have a clear next step, good leads get missed.\n\nStart with the process. Then automate the repeatable part.\n\nDM FOLLOW-UP and we’ll help you find the first place to start.",
+        "hashtags": [
+          "#automation",
+          "#smallbusiness",
+          "#miamibusiness",
+          "#businessoperations",
+          "#ai"
+        ],
+        "sourceHash": "079a99b22ed42d96c9c3175f861a3f2c",
+        "generatedAt": "2026-09-19T19:59:06.515Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__epzich3o52iccpyudd2b__carousel__2",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "Save this and write down the 10 questions your business answers the most.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "Start AI here:\nthe questions your team answers over and over.\n\nThat repetition is an operations bottleneck."
+          },
+          {
+            "label": "Slide 2",
+            "text": "Think about the simple replies:\n\nPrices\nAvailability\nLocation\nNext steps\nDocuments\nBooking links"
+          },
+          {
+            "label": "Slide 3",
+            "text": "AI can answer faster when it is trained on your real business information."
+          },
+          {
+            "label": "Slide 4",
+            "text": "This is not about replacing your team.\n\nIt is about removing the copy-paste work from their day."
+          },
+          {
+            "label": "Slide 5",
+            "text": "Before you build anything, look at your comments and DMs.\n\nWhat keeps coming up?"
+          },
+          {
+            "label": "Slide 6",
+            "text": "That list shows where AI can save time and money first.\n\nSave this and write down your top 10 questions."
+          }
+        ],
+        "caption": "AI does not have to start with a big project.\n\nFor many small businesses, the best first step is the repeat inbox work your team handles every day.\n\nWrite the questions down first. The pattern will show you where automation makes sense.",
+        "hashtags": [
+          "#AIforBusiness",
+          "#SmallBusinessOperations",
+          "#MiamiBusiness",
+          "#Automation",
+          "#BusinessSystems"
+        ],
+        "sourceHash": "86cda2954559d14b95b490a3e0a94097",
+        "generatedAt": "2026-09-19T19:59:08.114Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__epzich3o52iccpyudd2b__carousel__3",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "DM “MAP” if you want help finding the stuck point in your lead process.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "Don’t automate the whole lead process yet.\n\nFind the traffic jam first."
+          },
+          {
+            "label": "Slide 2",
+            "text": "Start by sorting every lead into a stage:\n\nNew inquiry\nAnswered\nQualified\nQuoted\nBooked\nPaid"
+          },
+          {
+            "label": "Slide 3",
+            "text": "Then ask:\n\nWhere are the most names sitting still?"
+          },
+          {
+            "label": "Slide 4",
+            "text": "If they stop before qualification, your intake may be unclear."
+          },
+          {
+            "label": "Slide 5",
+            "text": "If they stop after the quote, the next step may not be simple enough."
+          },
+          {
+            "label": "Slide 6",
+            "text": "If they stop before booking, scheduling may be the bottleneck."
+          },
+          {
+            "label": "Slide 7",
+            "text": "Automation works best when it fixes one stuck point.\n\nNot when it covers everything at once."
+          },
+          {
+            "label": "Slide 8",
+            "text": "No code yet.\n\nJust clarity on where time and money is being lost.\n\nDM “MAP” if you want help finding it."
+          }
+        ],
+        "caption": "Before you connect another tool, watch where the lead slows down.\n\nOne small bottleneck can make the whole sales process feel broken. Map the path first, then decide what should be automated.\n\nDM “MAP” if you want help finding the stuck point in your lead process.",
+        "hashtags": [
+          "#operations",
+          "#smallbusiness",
+          "#miamibusiness",
+          "#automation",
+          "#leadmanagement"
+        ],
+        "sourceHash": "bbe41fac33b3ea5316273e8c34fa515e",
+        "generatedAt": "2026-09-18T22:29:15.362Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__epzich3o52iccpyudd2b__post__1",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "post",
+      "channel": "instagram",
+      "cta": "Send us a DM if you want to find one safe place to use AI in your business.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Post",
+            "text": "Good AI does not trap your customer in a loop.\n\nFor a small business, the goal is not to make every conversation automatic.\n\nThe goal is simpler:\nanswer the easy questions fast, and move serious leads to the right person before they cool off.\n\nThat only works when the system has rules.\n\nWhat can AI answer on its own?\nWhat needs a team member?\nWhat details should be collected before someone steps in?\n\nName those rules first. No code yet. Just clarity.\n\nThen AI can help in the right places:\n\n• answer common questions\n• collect names, phone numbers, emails, and needs\n• route the conversation to the right person\n• give your team the context so nobody starts from zero\n\nThat is operations-first AI.\n\nLess repeat work.\nFaster replies.\nFewer leads falling through the cracks.\n\nSend us a DM if you want to find one safe place to use AI in your business."
+          }
+        ],
+        "caption": null,
+        "hashtags": [
+          "#smallbusinessai",
+          "#businessautomation",
+          "#operations",
+          "#miamibusiness",
+          "#smallbusinessowner"
+        ],
+        "sourceHash": "be87f6c477c8b8ce8de49e024885e2c4",
+        "generatedAt": "2026-09-17T14:27:44.930Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__epzich3o52iccpyudd2b__post__2",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "post",
+      "channel": "instagram",
+      "cta": "Send us one task your team repeats every day, and we’ll tell you if it is a good place to start.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Post",
+            "text": "Do not ask, “Should we use AI?”\n\nAsk, “What are we repeating by hand?”\n\nThat is the better starting point for a small business owner.\n\nNot the tool.\nNot the trend.\nThe repeated work.\n\nLook at what your team does every day:\n\nCopying customer details.\nAnswering the same messages.\nChecking forms.\nSending reminders.\nSorting requests.\nUpdating spreadsheets.\n\nIf the task is clear, repeated, and rule-based, AI or automation may help.\n\nIf the process is messy, we fix the process first.\n\nAt Numerico, we start with operations.\n\nWe find where time and money is leaking.\nThen we decide what should be automated and what should stay human.\n\nSend us one task your team repeats every day, and we’ll tell you if it is a good place to start."
+          }
+        ],
+        "caption": "AI works best when it removes busywork from your team’s day.\n\nStart with the bottleneck. Then decide if automation makes sense.\n\nDM us one repeated task and we’ll point you in the right direction.",
+        "hashtags": [
+          "#numerico",
+          "#miamibusiness",
+          "#smallbusinessoperations",
+          "#businessautomation",
+          "#aiforsmallbusiness",
+          "#operations"
+        ],
+        "sourceHash": "adedb6c2814a79e9f9b589ca65da7eec",
+        "generatedAt": "2026-09-18T19:18:53.184Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__epzich3o52iccpyudd2b__story__1",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "story",
+      "channel": "instagram",
+      "cta": "Question sticker: What task keeps repeating?",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Frame 1",
+            "text": "You do not need a big AI plan.\n\nStart with one task your team repeats by hand.",
+            "note": "Simple background. Show a messy desk, open inbox, or spreadsheet with repeated entries."
+          },
+          {
+            "label": "Frame 2",
+            "text": "Copying leads.\nSending reminders.\nAnswering the same question.\nUpdating a list.",
+            "note": "Use four quick checklist lines. Keep it clean and easy to read."
+          },
+          {
+            "label": "Frame 3",
+            "text": "What task keeps repeating?",
+            "onScreen": "What task keeps repeating?",
+            "note": "Add Instagram question sticker. Plain background with one small operations-related visual."
+          }
+        ],
+        "caption": null,
+        "hashtags": [],
+        "sourceHash": "34d2a6264a4302ce5800d829df58e53a",
+        "generatedAt": "2026-09-17T14:16:37.685Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__h2ppbw64nrblfb4h7row__carousel__0",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "Save this if your website looks fine but still creates extra work.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "Your website should do more than say what you do.\n\nPeople arrive with a question, a need, or a problem."
+          },
+          {
+            "label": "Slide 2",
+            "text": "If every path ends with “Call us,” your team becomes the filter."
+          },
+          {
+            "label": "Slide 3",
+            "text": "A working website asks for the right details, sends the lead to the right place, shows options, or starts the booking."
+          },
+          {
+            "label": "Slide 4",
+            "text": "Now there are fewer loose messages.\n\nFewer repeated questions.\n\nLess chasing."
+          },
+          {
+            "label": "Slide 5",
+            "text": "Good design helps.\n\nBut the system behind the site is what saves the team time.\n\nSave this if your site looks fine but still creates extra work."
+          }
+        ],
+        "caption": "A clean homepage is not enough if every inquiry still turns into a manual handoff.\n\nFor many small businesses, the real issue is what happens after someone clicks: routing, questions, scheduling, and follow-up.\n\nThat is where operations and your website need to work together.",
+        "hashtags": [
+          "#smallbusiness",
+          "#miamibusiness",
+          "#businessoperations",
+          "#websitedesign",
+          "#automation",
+          "#leadgeneration"
+        ],
+        "sourceHash": "61b7c57422cfa4c706151f36060cfc94",
+        "generatedAt": "2026-09-19T19:59:15.071Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__h2ppbw64nrblfb4h7row__carousel__1",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "DM us the website task your team still handles manually.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "When people DM to ask “Are you available?”\n\nYour website may not need more design.\n\nIt may need booking."
+          },
+          {
+            "label": "Slide 2",
+            "text": "When paying you takes extra messages, screenshots, or instructions...\n\nOnline payment can remove a real bottleneck."
+          },
+          {
+            "label": "Slide 3",
+            "text": "When every new lead needs the same follow-up questions...\n\nThe form should ask first."
+          },
+          {
+            "label": "Slide 4",
+            "text": "When the next step depends on someone remembering...\n\nYour website can send the reminder, email, or alert automatically."
+          },
+          {
+            "label": "Slide 5",
+            "text": "The right website feature is the one that removes manual work after the visitor arrives.\n\nDM us the website task your team still handles manually."
+          }
+        ],
+        "caption": "A website should not just look good. It should take work off your team.\n\nIf scheduling, payments, intake, or follow-up still happen by hand, that is where we start looking.\n\nSmall fixes can save real time.",
+        "hashtags": [
+          "#smallbusinessoperations",
+          "#miamibusiness",
+          "#businessautomation",
+          "#websitedesign",
+          "#smallbusinessowners"
+        ],
+        "sourceHash": "cee29f4e813553ddf00cc271cf099c3d",
+        "generatedAt": "2026-09-18T18:12:44.486Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__h2ppbw64nrblfb4h7row__post__1",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "post",
+      "channel": "instagram",
+      "cta": "Send us your form if you want to know what it is missing.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Post",
+            "text": "If every inquiry needs five follow-up questions, your form is too weak.\n\nA contact form should do more than send a name, email, and “How can we help?”\n\nIt should help your team know what happens next.\n\nIf you still have to ask:\n\n• What service do you need?\n• Where are you located?\n• What is your budget?\n• When do you need this?\n• What problem are you trying to solve?\n\n…the website is passing the work back to your team.\n\nA better form is not just a longer form.\n\nIt is a clearer one.\n\nIt collects the details your team needs to respond faster, send the lead to the right place, and avoid wasting time on messages that should have been sorted from the start.\n\nThat is the difference between a website that only receives messages and a website that supports operations.\n\nSend us your form if you want to know what it is missing."
+          }
+        ],
+        "caption": null,
+        "hashtags": [
+          "#businessoperations",
+          "#websitedesign",
+          "#smallbusinessmiami",
+          "#automation",
+          "#leads"
+        ],
+        "sourceHash": "0f441a98c5bb44ec6cfcec1f0fc27c94",
+        "generatedAt": "2026-09-19T20:00:12.451Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__okzrzgk0wzmgdxqifqnd__carousel__0",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "DM “EMAIL” if you want Numerico to review your business setup.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "Your email address is part of your first impression.\n\nBefore a customer knows your process, they notice if your setup looks unfinished."
+          },
+          {
+            "label": "Slide 2",
+            "text": "name@yourbusiness.com sends a simple message:\n\nYou are organized.\nYou are reachable.\nYou are ready to serve."
+          },
+          {
+            "label": "Slide 3",
+            "text": "Your domain, website, and email should match.\n\nCustomers should not have to wonder if they are in the right place."
+          },
+          {
+            "label": "Slide 4",
+            "text": "This is a Launch step.\n\nNo code yet.\nNo big system yet.\n\nJust clarity and the right foundation."
+          },
+          {
+            "label": "Slide 5",
+            "text": "Small setup details can protect trust before the first call ever happens.\n\nDM “EMAIL” if you want Numerico to review your business setup."
+          }
+        ],
+        "caption": "A serious business should not look pieced together online.\n\nIf your email, domain, and website do not line up, customers may hesitate before they ever contact you.\n\nWe help owners clean up these Launch details so the business feels ready from day one.",
+        "hashtags": [
+          "#MiamiBusiness",
+          "#SmallBusinessOwner",
+          "#BusinessSetup",
+          "#BusinessOperations",
+          "#Launch"
+        ],
+        "sourceHash": "61c60c8bfe3e036698dc253917298148",
+        "generatedAt": "2026-09-18T18:01:19.919Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__okzrzgk0wzmgdxqifqnd__carousel__1",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "DM “SETUP” for a quick review of how customers reach your business.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "If people have to guess how to contact you, many will not try.\n\nThey find your Instagram.\nThen they hunt for a website, email, phone number, or contact button."
+          },
+          {
+            "label": "Slide 2",
+            "text": "If every place says something different, the business feels harder to trust.\n\nDifferent phone.\nOld website.\nNo email.\nBroken button."
+          },
+          {
+            "label": "Slide 3",
+            "text": "A clean setup gives leads one clear path:\n\nUnderstand what you do.\nBelieve you are real.\nContact you without guessing."
+          },
+          {
+            "label": "Slide 4",
+            "text": "This is operations before technology.\n\nNo code yet.\nJust clarity.\n\nHow does a lead move from interest to conversation?"
+          },
+          {
+            "label": "Slide 5",
+            "text": "Once that path is clear, your website and contact setup can support it instead of creating more questions.\n\nDM “SETUP” for a quick review."
+          }
+        ],
+        "caption": "Your first customer should not need detective work to reach you.\n\nBefore you build more pages, add more tools, or connect more apps, check the path first:\n\nCan someone find you?\nCan they understand what you do?\nCan they contact you without guessing?\n\nThat is where Launch work starts. Operations first. Technology second.\n\nDM “SETUP” for a quick review of how customers reach your business.",
+        "hashtags": [
+          "#miamibusiness",
+          "#smallbusinessowners",
+          "#businessoperations",
+          "#launchyourbusiness",
+          "#smallbusinesstips",
+          "#leads",
+          "#websitesetup",
+          "#businesssetup"
+        ],
+        "sourceHash": "39314f7f47c7b73c44da2a06add8f220",
+        "generatedAt": "2026-09-14T19:13:46.451Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__okzrzgk0wzmgdxqifqnd__post__0",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "post",
+      "channel": "instagram",
+      "cta": "DM “LAUNCH” if you want help getting your first business setup in order.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Post",
+            "text": "Your business does not need to look huge.\nIt needs to look ready.\n\nA clean logo, a domain, a business email, and a simple website are not there to make you look bigger than you are.\n\nThey are there to remove doubt.\n\nWhen someone finds you for the first time, they are asking simple questions:\n\nIs this a real business?\nCan I understand what they do?\nDo they look organized?\nCan I contact them easily?\n\nMost people decide fast.\n\nIf your name is unclear, your contact info is missing, or your offer takes too much work to understand, they may leave before they ever ask a question.\n\nThat is why Launch work should stay simple.\n\nNo code yet.\nNo big system yet.\nJust clarity.\n\nWhat do you do?\nWho is it for?\nHow does someone reach you?\nWhat needs to be set up so the business looks organized from day one?\n\nThis foundation saves time and money later.\n\nBecause after launch, you do not want to fix confusion.\nYou want to serve customers.\n\nDM “LAUNCH” if you want help getting your first business setup in order."
+          }
+        ],
+        "caption": null,
+        "hashtags": [
+          "#miamibusiness",
+          "#smallbusinessowner",
+          "#businesslaunch",
+          "#startupsetup",
+          "#smallbusinesssupport"
+        ],
+        "sourceHash": "1753ef710f33a6117dfc69297a999c3c",
+        "generatedAt": "2026-09-19T19:59:05.668Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__rv8bohqwljtqdd1qbjau__reel__0",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "reel",
+      "channel": "instagram",
+      "cta": "Comment “LEAK” if this happens in your business.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Shot 1",
+            "text": "If your team types the same customer info three times, that is not normal.",
+            "onScreen": "Same customer.\nFirst entry.",
+            "note": "Owner at desk copies a customer's name from a message into a spreadsheet. Close-up on hands, laptop, and the spreadsheet cell."
+          },
+          {
+            "label": "Shot 2",
+            "text": "Here it goes again, into the invoice or booking tool.",
+            "onScreen": "Second entry.",
+            "note": "Cut to the same customer name being typed into an invoice, booking, or scheduling tool."
+          },
+          {
+            "label": "Shot 3",
+            "text": "Then someone still has to ask, “Can you confirm the details?”",
+            "onScreen": "Third check.",
+            "note": "Show a sticky note or chat message asking someone to confirm the customer's name, phone, appointment, or order details."
+          },
+          {
+            "label": "Shot 4",
+            "text": "This is the workflow leak.",
+            "onScreen": "The problem is not the team.\nThe systems are not talking.",
+            "note": "Pause on the sticky note or chat. Add a simple red circle or arrow to show the repeated work."
+          },
+          {
+            "label": "Shot 5",
+            "text": "One customer entry should feed the next step. Comment “LEAK” if this happens in your business.",
+            "onScreen": "One entry.\nNext step.\nNo retyping.",
+            "note": "Show a simple process map: customer message → spreadsheet/CRM → invoice/booking. Animate one entry moving through the steps."
+          }
+        ],
+        "caption": "Small repeats add up fast.\n\nWhen customer details bounce between messages, spreadsheets, and tools, your team loses time before the real work even starts.\n\nComment “LEAK” and we’ll help you spot the bottleneck.",
+        "hashtags": [
+          "#operations",
+          "#smallbusiness",
+          "#miamibusiness",
+          "#automation",
+          "#workflow"
+        ],
+        "sourceHash": "998677b54dd95386344fc11967d1bf81",
+        "generatedAt": "2026-09-18T22:36:10.408Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__rv8bohqwljtqdd1qbjau__reel__1",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "reel",
+      "channel": "instagram",
+      "cta": "DM us “MAP” if you want to find the slowest handoff.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Shot 1",
+            "text": "Your team may not be slow. The handoff may be broken.",
+            "onScreen": "New request comes in",
+            "note": "Show a phone call, Instagram DM, website form, or email notification arriving. Quick close-up of the alert."
+          },
+          {
+            "label": "Shot 2",
+            "text": "The request lands, but nothing moves because nobody is clear on who owns the next step.",
+            "onScreen": "Waiting… but why?",
+            "note": "Show the request sitting unread or unassigned. Cursor hovering, inbox open, sticky note on desk."
+          },
+          {
+            "label": "Shot 3",
+            "text": "Then the team starts asking, “Did you already handle this?” And now the customer is waiting.",
+            "onScreen": "“Did you handle this?”",
+            "note": "Show two team members looking at the same message, texting or asking each other across the room."
+          },
+          {
+            "label": "Shot 4",
+            "text": "This is where time and money leak. Not always because you need a new tool, but because the owner is missing.",
+            "onScreen": "A bottleneck is often a missing owner, not a missing tool.",
+            "note": "Show a simple bottleneck visual: request stuck between two people, arrows pointing nowhere."
+          },
+          {
+            "label": "Shot 5",
+            "text": "Map the flow first: request comes in, owner is assigned, next step is tracked. DM us “MAP” if you want to find the slowest handoff.",
+            "onScreen": "Request → Owner → Next step\nDM “MAP”",
+            "note": "Show a clean whiteboard or screen with the simple flow. End with the DM prompt visible."
+          }
+        ],
+        "caption": "If every customer request needs a group chat to figure out who is responsible, the problem is in the flow.\n\nStart with clarity before adding more tools.\n\nDM “MAP” and we’ll help you spot the handoff slowing the team down.",
+        "hashtags": [
+          "#operations",
+          "#smallbusiness",
+          "#miamibusiness",
+          "#businessautomation",
+          "#workflow"
+        ],
+        "sourceHash": "c6b36303404064431ea631de705edc40",
+        "generatedAt": "2026-09-19T20:00:20.923Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__vuntw7ihhit0o1usw8ah__carousel__0",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "Save this if you are setting up a business and want the first steps in order.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "Before you build anything, make sure customers can find you and contact you.\n\nStart with the basics:\nfiling, EIN, domain, email, logo, website, lead form."
+          },
+          {
+            "label": "Slide 2",
+            "text": "These are not random tasks.\n\nThey make your business real, searchable, and reachable."
+          },
+          {
+            "label": "Slide 3",
+            "text": "Your domain gives you a home.\n\nYour business email makes you look established.\n\nYour website explains what you do."
+          },
+          {
+            "label": "Slide 4",
+            "text": "Your lead form turns interest into a real conversation.\n\nNot a missed DM.\nNot a forgotten text."
+          },
+          {
+            "label": "Slide 5",
+            "text": "No code yet.\n\nJust clarity on what needs to exist before you spend time and money building."
+          },
+          {
+            "label": "Slide 6",
+            "text": "Once the basics are set, you can Grow with better systems and Scale with automation.\n\nSave this if you are setting up a business."
+          }
+        ],
+        "caption": "Launch starts with making the business easy to find and easy to contact.\n\nBefore you worry about bigger systems, make sure the simple pieces are in place: filing, EIN, domain, email, logo, website, and a lead form.\n\nThat is what gives customers a place to land and a clear way to reach you.\n\nSave this if you are setting up a business and want the first steps in order.",
+        "hashtags": [
+          "#miamibusiness",
+          "#smallbusinessowner",
+          "#businesssetup",
+          "#operations",
+          "#automation"
+        ],
+        "sourceHash": "ca7813ce4ed1bcf5e237c2131b52009d",
+        "generatedAt": "2026-09-09T00:38:44.858Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__vuntw7ihhit0o1usw8ah__carousel__1",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "DM “SETUP” if you want help understanding what costs belong where.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "Business setup has two kinds of costs.\n\nLet’s separate them."
+          },
+          {
+            "label": "Slide 2",
+            "text": "First: the work.\n\nOrganizing the setup.\nConnecting the pieces.\nMaking sure nothing is missed."
+          },
+          {
+            "label": "Slide 3",
+            "text": "Second: outside costs.\n\nFiling fees.\nDomains.\nEmail tools.\nHosting.\nOther providers."
+          },
+          {
+            "label": "Slide 4",
+            "text": "Numerico helps you know what is actually needed before you spend money in the wrong place."
+          },
+          {
+            "label": "Slide 5",
+            "text": "That means fewer surprises.\n\nAnd fewer decisions made in a rush."
+          },
+          {
+            "label": "Slide 6",
+            "text": "You do not need to know every tool.\n\nYou need to know what each piece is for.\n\nClarity first. Then setup.\n\nDM “SETUP” if you want help."
+          }
+        ],
+        "caption": "Business setup gets confusing when every cost feels like one big number.\n\nBut not every cost is the same.\n\nSome costs are for the work: planning the setup, connecting the pieces, and making sure the business can launch without missing the basics.\n\nOther costs belong to third parties: filing fees, domains, email tools, hosting, or other providers.\n\nNumerico helps you separate what belongs where, so you can make cleaner decisions before money is spent.\n\nDM “SETUP” if you want help understanding what costs belong where.",
+        "hashtags": [
+          "#businesssetup",
+          "#smallbusinessowner",
+          "#miamibusiness",
+          "#operations",
+          "#businesstools",
+          "#startuphelp",
+          "#smallbusinesssupport"
+        ],
+        "sourceHash": "a7dd760a9bfe4c0c15b2f744279b3150",
+        "generatedAt": "2026-09-10T16:43:06.578Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__vuntw7ihhit0o1usw8ah__post__1",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "post",
+      "channel": "instagram",
+      "cta": "Comment “LAUNCH” if you want to know what to set up before choosing tools.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Post",
+            "text": "Do not start your business setup by buying tools.\n\nA tool can help.\n\nBut only after you know what job it needs to do.\n\nOtherwise, you end up with:\n\n• accounts you do not use\n• logins nobody remembers\n• subscriptions that keep charging\n• forms that do not send info anywhere useful\n• apps that create more work instead of less\n\nStart with the basics first.\n\nHow will customers find you?\nWhat do they need to understand?\nHow will they contact you?\nWhere will their information go?\nWho needs to see it?\nWhat happens next?\n\nThat is operations.\n\nNo code yet. No software yet. Just clarity.\n\nThat is why Numerico starts there.\n\nAt Launch, we look at what the business needs to work from day one. Then we help set up the right pieces around that.\n\nThe goal is not more software.\n\nThe goal is a business that looks established, captures leads properly, and is easier to run from the start.\n\nComment “LAUNCH” if you want to know what to set up before choosing tools."
+          }
+        ],
+        "caption": null,
+        "hashtags": [
+          "#smallbusiness",
+          "#businessoperations",
+          "#miamibusiness",
+          "#businesslaunch",
+          "#smallbusinessowner"
+        ],
+        "sourceHash": "e245783d80a839a31808b8f6979a21ec",
+        "generatedAt": "2026-09-10T16:44:47.264Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    },
+    {
+      "slot_id": "XhYuta4C9I7L3p8hyiSn__zu2tlavhc70zhfhyffrz__carousel__0",
+      "client_id": "XhYuta4C9I7L3p8hyiSn",
+      "type": "carousel",
+      "channel": "instagram",
+      "cta": "DM READY if you want the setup path handled clearly.",
+      "content": {
+        "headline": null,
+        "blocks": [
+          {
+            "label": "Slide 1",
+            "text": "Registered is not the same as ready.\n\nYour business can be official on paper and still invisible online."
+          },
+          {
+            "label": "Slide 2",
+            "text": "Someone hears your name and searches for you.\n\nNo site.\nNo clear email.\nNo simple way to contact you."
+          },
+          {
+            "label": "Slide 3",
+            "text": "That is not marketing yet.\n\nIt is setup.\n\nBefore more attention comes in, your base needs to be clear."
+          },
+          {
+            "label": "Slide 4",
+            "text": "Open Ready covers the base:\n\nregistration\nEIN\ndomain\nemail\nlogo\nwebsite"
+          },
+          {
+            "label": "Slide 5",
+            "text": "The goal is simple:\nlook established before people start checking you out.\n\nDM READY if you want the setup path handled clearly."
+          }
+        ],
+        "caption": "Starting a business is not only about filing the paperwork.\n\nIf people cannot find you, contact you, or understand who you are, the launch feels unfinished.\n\nOpen Ready helps you put the basics in place with clarity.\n\nDM READY to get started.",
+        "hashtags": [
+          "#OpenReady",
+          "#MiamiBusiness",
+          "#SmallBusinessMiami",
+          "#BusinessLaunch",
+          "#StartupSupport",
+          "#BusinessSetup"
+        ],
+        "sourceHash": "08bf500f008ab6c001cb8d6e3ebcdd26",
+        "generatedAt": "2026-09-16T01:09:15.895Z",
+        "model": "gpt-5.5",
+        "editedAt": null
+      }
+    }
+  ]
+}

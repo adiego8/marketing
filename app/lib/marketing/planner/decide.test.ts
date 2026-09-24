@@ -5,8 +5,10 @@ import {
   skeletonFills,
   chunkRequest,
   buildDecideRequest,
+  type Gap,
   type GapRequest,
 } from "./decide";
+import { DEFAULT_LANGUAGE, POSITIONING_ANGLES, languageFor } from "../brand";
 import {
   MAX_BODY_ITEMS,
   MAX_BODY_ITEM_CHARS,
@@ -31,7 +33,16 @@ function demand(over: Partial<Demand> = {}): Demand {
   };
 }
 
-const GAPS: GapRequest[] = expandGapIds([demand()]);
+const GAPS: Gap[] = expandGapIds([demand()]);
+
+/** chunkRequest only reads eligible_campaign_ids, but the type wants the whole gap. */
+const assigned = (gaps: Gap[]): GapRequest[] =>
+  gaps.map((g) => ({
+    ...g,
+    assigned_angle: POSITIONING_ANGLES[0],
+    assigned_pillar: null,
+    assigned_entry_point: null,
+  }));
 
 describe("expandGapIds", () => {
   // A gap of "post x 3" must become three ids. One gap yielding one theme
@@ -72,10 +83,12 @@ describe("chunkRequest", () => {
     campaigns: [],
     recent_themes: [],
     lessons: [],
+    language: DEFAULT_LANGUAGE,
+    primary_cta: null,
   };
 
   it("leaves a small request in one call", () => {
-    expect(chunkRequest({ ...base, gaps: GAPS })).toHaveLength(1);
+    expect(chunkRequest({ ...base, gaps: assigned(GAPS) })).toHaveLength(1);
   });
 
   it("splits a large request by campaign so one failure degrades only its own gaps", () => {
@@ -83,7 +96,7 @@ describe("chunkRequest", () => {
       ...expandGapIds([demand({ campaignId: "c1", outstanding: 3 })]),
       ...expandGapIds([demand({ campaignId: "c2", outstanding: 3 })]),
     ];
-    const chunks = chunkRequest({ ...base, gaps: many }, 4);
+    const chunks = chunkRequest({ ...base, gaps: assigned(many) }, 4);
     expect(chunks).toHaveLength(2);
     // Every gap survives the split exactly once — losing one here would
     // silently under-deliver a campaign.
@@ -284,7 +297,7 @@ describe("buildDecideRequest — lessons", () => {
   };
 
   it("carries what the client has taught into the payload", () => {
-    const request = buildDecideRequest(observation, [], context);
+    const { request } = buildDecideRequest(observation, [], context);
     expect(request.lessons).toEqual(["Never open with the product name."]);
   });
 
@@ -292,8 +305,103 @@ describe("buildDecideRequest — lessons", () => {
   // prompt never has to reason about a missing one. A silently dropped key is
   // exactly the failure this whole feature would die of.
   it("sends an empty array rather than omitting the key", () => {
-    const request = buildDecideRequest(observation, [], { ...context, lessons: [] });
+    const { request } = buildDecideRequest(observation, [], { ...context, lessons: [] });
     expect(request).toHaveProperty("lessons");
     expect(request.lessons).toEqual([]);
+  });
+});
+
+describe("buildDecideRequest — the assignment", () => {
+  const observation = {
+    demand: [demand({ outstanding: 8 })],
+    campaigns: [],
+    totalOutstanding: 8,
+    warnings: [],
+  } as unknown as Parameters<typeof buildDecideRequest>[0];
+
+  const context = {
+    business: {},
+    pillars: [],
+    recentThemes: [],
+    lessons: [],
+    allocation: {
+      angles: [],
+      pillars: ["Operations", "Pricing"],
+      entryPoints: ["Three quotes per job", "We already have a process"],
+    },
+  };
+
+  it("gives every gap an angle, a pillar and somewhere to start", () => {
+    const { request } = buildDecideRequest(observation, [], context);
+    expect(request.gaps).toHaveLength(8);
+    for (const gap of request.gaps) {
+      expect(gap.assigned_angle.type).toBeTruthy();
+      expect(gap.assigned_angle.guidance).toBeTruthy();
+      expect(gap.assigned_pillar).toBeTruthy();
+      expect(gap.assigned_entry_point).toBeTruthy();
+    }
+  });
+
+  it("gives eight pieces eight different angles", () => {
+    // The whole point. Before this, index_in_set was the only thing telling
+    // piece 3 from piece 4, and an integer is not an argument.
+    const { request } = buildDecideRequest(observation, [], context);
+    const angles = request.gaps.map((g) => g.assigned_angle.type);
+    expect(new Set(angles).size).toBe(8);
+  });
+
+  it("reports what a thin strategy could not supply", () => {
+    const { warnings } = buildDecideRequest(observation, [], {
+      ...context,
+      allocation: { angles: [], pillars: [], entryPoints: [] },
+    });
+    expect(warnings.join(" ")).toContain("no content pillars");
+  });
+
+  it("still allocates when no allocation source is given at all", () => {
+    const { request } = buildDecideRequest(observation, [], {
+      business: {},
+      pillars: [],
+      recentThemes: [],
+      lessons: [],
+    });
+    expect(new Set(request.gaps.map((g) => g.assigned_angle.type)).size).toBe(8);
+    expect(request.gaps[0].assigned_pillar).toBeNull();
+  });
+});
+
+describe("buildDecideRequest — language and the ask", () => {
+  const observation = {
+    demand: [],
+    campaigns: [],
+    totalOutstanding: 0,
+    warnings: [],
+  } as unknown as Parameters<typeof buildDecideRequest>[0];
+
+  const context = { business: {}, pillars: [], recentThemes: [], lessons: [] };
+
+  it("carries the client's language", () => {
+    const { request } = buildDecideRequest(observation, [], {
+      ...context,
+      language: languageFor("es"),
+    });
+    expect(request.language).toEqual({ code: "es", name: "Spanish" });
+  });
+
+  it("carries the client's one ask", () => {
+    const cta = { destination: "https://example.com", intent: "book a call" };
+    const { request } = buildDecideRequest(observation, [], { ...context, primaryCta: cta });
+    expect(request.primary_cta).toEqual(cta);
+  });
+
+  // Same convention as lessons and steer: the key is always there, so the
+  // prompt never reasons about a missing one. A silently dropped language is
+  // the exact failure this feature exists to prevent.
+  it("always sends both keys, defaulted rather than omitted", () => {
+    const { request } = buildDecideRequest(observation, [], context);
+    expect(request).toHaveProperty("language");
+    expect(request).toHaveProperty("primary_cta");
+    expect(request.language).toEqual(DEFAULT_LANGUAGE);
+    expect(request.primary_cta).toBeNull();
   });
 });

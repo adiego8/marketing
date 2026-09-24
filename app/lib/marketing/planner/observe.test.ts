@@ -16,6 +16,7 @@ function campaign(over: Partial<CampaignWindow> = {}): CampaignWindow {
     endDate: "2026-10-14",
     goal: "",
     keyMessage: "",
+    targetAudience: "",
     plannedByType: { post: 4, carousel: 2 },
     plannedTotal: 6,
     channels: ["instagram"],

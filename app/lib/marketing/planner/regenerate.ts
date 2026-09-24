@@ -8,9 +8,10 @@
 
 import { llmJson } from "../llm";
 import { getStrategy } from "../strategy";
+import { languageOf, primaryCtaOf } from "../brand";
 import { getSlot, updateSlot } from "../slots";
 import { isChannel, type Channel } from "../posting-windows";
-import { parseFills, type GapRequest } from "./decide";
+import { parseFills, type Gap } from "./decide";
 import { loadRecentThemes } from "./plan-runs";
 import { recordSignal } from "../signals";
 import { snapshotOf } from "../lessons";
@@ -74,7 +75,7 @@ export async function regenerateSlot(
   // One gap, with the channel pinned. parseFills starts from default_channel
   // and only accepts an override that is inside allowed_channels, so a
   // single-element list guarantees the channel comes back unchanged.
-  const gap: GapRequest = {
+  const gap: Gap = {
     gap_id: `regen__${slot.id}`,
     type: slot.type,
     index_in_set: 0,
@@ -104,6 +105,8 @@ export async function regenerateSlot(
       ? contentStrategy.content_pillars.filter((p): p is string => typeof p === "string")
       : [],
     recent_themes: recentThemes,
+    language: languageOf(strategy),
+    primary_cta: primaryCtaOf(strategy),
     business: {
       name: strategy?.business_name ?? "",
       icp: strategy?.icp ?? {},

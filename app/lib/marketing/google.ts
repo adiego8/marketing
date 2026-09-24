@@ -19,15 +19,10 @@
 //     callback is a top-level browser redirect with no Authorization header and
 //     therefore cannot resolve membership itself.
 
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHmac,
-  randomBytes,
-  timingSafeEqual,
-} from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { google } from "googleapis";
 import { db, COLLECTIONS, FieldValue } from "../firestore";
+import { encrypt, decrypt } from "./secrets";
 import { clearAgencyGoogleState, type ClearedGoogleState } from "./google-reset";
 
 export const GOOGLE_SCOPES = [
@@ -224,36 +219,11 @@ export function verifyState(state: string | null): StatePayload | null {
 }
 
 /* ---------------------------------------- refresh token encryption (GCM) -- */
-
-function encKey(): Buffer {
-  const key = Buffer.from(process.env.GOOGLE_TOKEN_ENC_KEY || "", "hex");
-  if (key.length !== 32) {
-    throw new Error("GOOGLE_TOKEN_ENC_KEY must be 32 bytes of hex (64 characters).");
-  }
-  return key;
-}
-
-/** Stored as iv:tag:ciphertext, all hex. */
-export function encrypt(plain: string): string {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", encKey(), iv);
-  const ct = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
-  return [
-    iv.toString("hex"),
-    cipher.getAuthTag().toString("hex"),
-    ct.toString("hex"),
-  ].join(":");
-}
-
-export function decrypt(blob: string): string {
-  const [ivHex, tagHex, ctHex] = blob.split(":");
-  const decipher = createDecipheriv("aes-256-gcm", encKey(), Buffer.from(ivHex, "hex"));
-  decipher.setAuthTag(Buffer.from(tagHex, "hex"));
-  return Buffer.concat([
-    decipher.update(Buffer.from(ctHex, "hex")),
-    decipher.final(),
-  ]).toString("utf8");
-}
+//
+// encrypt/decrypt were written here and moved to ./secrets when the OpenAI key
+// became the second secret this app stores. Same AES-256-GCM, same
+// GOOGLE_TOKEN_ENC_KEY, same iv:tag:ciphertext format — nothing about a stored
+// token changed, so nobody has to reconnect.
 
 /* ---------------------------------------------------- credential storage -- */
 
