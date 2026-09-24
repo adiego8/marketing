@@ -9,6 +9,7 @@ import {
 } from "../brand";
 import { allocate, type Allocation, type AllocationSource } from "./angles";
 import { themeCollisions } from "./collisions";
+import { fillsSchema } from "./fills-schema";
 import { PLANNER_DECIDE_PROMPT } from "./prompt";
 import {
   MAX_BODY_ITEMS,
@@ -362,6 +363,16 @@ export const decide: DecideFn = async (request) => {
         systemPrompt: PLANNER_DECIDE_PROMPT,
         payload: chunk,
         temperature: TEMPERATURE,
+        // Built from THIS chunk's gaps, so gap_id is an enum of the ids the
+        // call is actually asking about. parseFills keeps its checks — the
+        // schema cannot express a per-gap allowed channel or an eligible
+        // campaign — but a fill for a gap nobody asked about stops being a
+        // thing that arrives and gets dropped.
+        //
+        // A model that will not take the schema answers in json_object mode
+        // instead and nothing downstream notices; see rejectsJsonSchema.
+        schema: fillsSchema(chunk.gaps),
+        schemaName: "planner_fills",
       });
       const parsed = parseFills(raw, chunk.gaps);
       fills.push(...parsed.fills);

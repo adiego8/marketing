@@ -1,4 +1,6 @@
 import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
+import type { ZodType } from "zod/v4";
 
 // Port of app/services/llm_service.py:llm_completion.
 //
@@ -37,6 +39,32 @@ export function rejectsTemperature(error: unknown): boolean {
   return message.includes("'temperature'") && message.includes("does not support");
 }
 
+// The same bargain again, for structured outputs.
+//
+// A caller that passes a schema gets json_schema mode, where the API enforces
+// the shape instead of the prompt asking for it. Not every model accepts that
+// on chat.completions, and finding out costs a call — so nobody has to find
+// out in advance. The first call discovers it, this drops back to the legacy
+// json_object mode the rest of the app has always used, and every later call
+// in the process skips the attempt. A model that refuses behaves exactly as it
+// did before schemas existed.
+const noJsonSchema = new Set<string>();
+
+/** Exported for tests: does this error mean the model refuses a JSON schema? */
+export function rejectsJsonSchema(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  // Two wordings, one meaning: the parameter is not supported by this model,
+  // or the value passed for it is not. Both are answered with a 400 naming
+  // response_format or json_schema, and neither is worth a retry as it stands.
+  const names = message.includes("response_format") || message.includes("json_schema");
+  const refused =
+    message.includes("does not support") ||
+    message.includes("Unsupported") ||
+    message.includes("unsupported") ||
+    message.includes("Invalid schema");
+  return names && refused;
+}
+
 let client: OpenAI | undefined;
 
 function openai(): OpenAI {
@@ -69,6 +97,22 @@ export interface CompletionOptions {
   payload: unknown;
   temperature?: number;
   model?: string;
+  /**
+   * A shape the API should enforce, rather than the prompt requesting it.
+   *
+   * Optional, and absent for every caller that has not been converted: without
+   * it the call is the legacy json_object one it has always been. With it, a
+   * response that does not match is not a response that comes back — which is
+   * worth more than the defensive parsing it replaces, because the parsing
+   * could only ever report the damage afterwards.
+   *
+   * The caller still parses. A schema guarantees the shape and cannot express
+   * the domain rules — which channel is allowed for which gap, which campaign
+   * is eligible, what a field is clamped to.
+   */
+  schema?: ZodType;
+  /** Names the schema for the API. Ignored without one. */
+  schemaName?: string;
 }
 
 /** Call the LLM in JSON mode and return the parsed object. */
@@ -77,6 +121,8 @@ export async function llmJson<T = Record<string, unknown>>({
   payload,
   temperature = 0.7,
   model = DEFAULT_MODEL,
+  schema,
+  schemaName = "response",
 }: CompletionOptions): Promise<T> {
   const messages = [
     { role: "system" as const, content: systemPrompt },
@@ -85,23 +131,51 @@ export async function llmJson<T = Record<string, unknown>>({
 
   let lastError: unknown;
   // Three attempts: one may be spent discovering that the model refuses a
-  // custom temperature, leaving the original two for a truncated JSON body.
+  // custom temperature, or a JSON schema, leaving the rest for a truncated
+  // body. Both discoveries are free of charge in the sense that matters —
+  // they do not consume an attempt, see the decrements below.
   for (let attempt = 0; attempt < 3; attempt++) {
+    // Decided per attempt rather than once, so a downgrade takes effect on the
+    // retry that follows it.
+    const useSchema = schema !== undefined && !noJsonSchema.has(model);
     try {
       const response = await openai().chat.completions.create({
         model,
         messages,
-        response_format: { type: "json_object" },
+        response_format: useSchema
+          ? zodResponseFormat(schema, schemaName)
+          : { type: "json_object" },
         ...(noTemperature.has(model) ? {} : { temperature }),
       });
       const content = response.choices[0]?.message?.content;
       if (!content) throw new Error("LLM returned an empty response.");
-      return JSON.parse(content) as T;
+      const parsed = JSON.parse(content);
+
+      // Belt and braces. With the schema attached the API has already
+      // guaranteed this, and the check costs nothing; without it — a model
+      // that refused, or a caller that passed none — it is the only guarantee
+      // there is, and a failure here is exactly what the retry is for.
+      if (schema) {
+        const checked = schema.safeParse(parsed);
+        if (!checked.success) {
+          throw new Error(`LLM response did not match ${schemaName}: ${checked.error.message}`);
+        }
+        return checked.data as T;
+      }
+      return parsed as T;
     } catch (error) {
       lastError = error;
       // Not a failure worth counting: drop the parameter and go again.
       if (rejectsTemperature(error) && !noTemperature.has(model)) {
         noTemperature.add(model);
+        attempt--;
+        continue;
+      }
+      // Nor this one. The model will not take a schema, so the call becomes
+      // the json_object one every other caller makes, and the parse the
+      // caller was always going to do is the only guard left.
+      if (useSchema && rejectsJsonSchema(error)) {
+        noJsonSchema.add(model);
         attempt--;
         continue;
       }
