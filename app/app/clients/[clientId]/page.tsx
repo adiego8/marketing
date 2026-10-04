@@ -11,7 +11,8 @@ import {
   listResearchRuns,
   getStrategy,
 } from "@/lib/api";
-import { banner, btn, surface, text } from "@/lib/ui";
+import { PageHeader } from "@/components/layout/page-header";
+import { banner, surface, text } from "@/lib/ui";
 import { statusPill } from "@/lib/ui-status";
 import type {
   PlanRun,
@@ -20,6 +21,10 @@ import type {
   ResearchRun,
   Strategy,
 } from "@/lib/types";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { ListSkeleton } from "@/components/ui/skeleton";
+import { useConfirm } from "@/components/ui/confirm-provider";
 
 /**
  * The client's home.
@@ -43,6 +48,7 @@ interface Blocker {
 }
 
 export default function ClientOverview() {
+  const confirm = useConfirm();
   const { clientId } = useParams() as { clientId: string };
 
   const [runs, setRuns] = useState<PlanRun[]>([]);
@@ -79,14 +85,34 @@ export default function ClientOverview() {
   useEffect(load, [load]);
 
   const handleDelete = async (run: PlanRun) => {
-    const what = run.committed_at
-      ? `Delete this plan and everything it created?\n\n` +
-        `• ${run.created_slot_ids.length} scheduled piece${run.created_slot_ids.length === 1 ? "" : "s"}\n` +
-        `• their Google Calendar events\n\n` +
-        `Whatever they covered goes back to being owed, so the next run writes ` +
-        `it again. Any preview you have not accepted will go stale.`
-      : "Discard this plan? It was never accepted, so nothing else is affected.";
-    if (!confirm(what)) return;
+    // The committed case lists what goes with it, as a real list rather than
+    // bullet characters inside a string.
+    const ok = run.committed_at
+      ? await confirm({
+          title: "Delete this plan and everything it created?",
+          confirmLabel: "Delete plan",
+          message: (
+            <>
+              <ul className="list-disc space-y-0.5 pl-5">
+                <li>
+                  {run.created_slot_ids.length} scheduled piece
+                  {run.created_slot_ids.length === 1 ? "" : "s"}
+                </li>
+                <li>their Google Calendar events</li>
+              </ul>
+              <p className="mt-2">
+                Whatever they covered goes back to being owed, so the next run
+                writes it again. Any preview you have not accepted will go stale.
+              </p>
+            </>
+          ),
+        })
+      : await confirm({
+          title: "Discard this plan?",
+          message: "It was never accepted, so nothing else is affected.",
+          confirmLabel: "Discard",
+        });
+    if (!ok) return;
 
     setDeleting(run.id);
     setError(null);
@@ -214,7 +240,10 @@ export default function ClientOverview() {
 
   return (
     <div className="max-w-5xl">
-      <h1 className={`${text.h1} mb-8`}>Overview</h1>
+      <PageHeader
+        title="Overview"
+        description="Everything that needs your attention for this client, in one place."
+      />
 
       {error && <p className={`${banner.error} mb-6`}>{error}</p>}
       {notice && <p className={`${banner.info} mb-6`}>{notice}</p>}
@@ -223,7 +252,7 @@ export default function ClientOverview() {
       <section className="mb-10">
         <h2 className={`${text.cardTitle} mb-3`}>What needs you</h2>
         {loading ? (
-          <p className={text.muted}>Loading…</p>
+          <ListSkeleton rows={3} />
         ) : blockers.length === 0 ? (
           <div className={`${surface.card} px-5 py-4`}>
             <p className="text-sm text-slate-600">
@@ -240,7 +269,7 @@ export default function ClientOverview() {
                 className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5"
               >
                 <p className="text-sm text-slate-700">{b.text}</p>
-                <Link href={b.href} className={`${btn.outlineSm} shrink-0`}>
+                <Link href={b.href} className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "shrink-0")}>
                   {b.action}
                 </Link>
               </div>
@@ -280,14 +309,16 @@ export default function ClientOverview() {
       <section>
         <h2 className={`${text.cardTitle} mb-3`}>Recent plans</h2>
 
-        {loading ? null : runs.length === 0 ? (
+        {loading ? (
+          <ListSkeleton rows={2} />
+        ) : runs.length === 0 ? (
           <div className={surface.empty}>
             <p className="text-slate-700 text-lg">No plans yet.</p>
             <p className="text-slate-500 text-sm mt-1">
               A campaign&rsquo;s content plan is what the agent writes from. Accept
               one, then write its content.
             </p>
-            <Link href={`${prefix}/campaigns`} className={`${btn.primary} mt-6`}>
+            <Link href={`${prefix}/campaigns`} className={cn(buttonVariants({ variant: "primary", size: "md" }), "mt-6")}>
               Open campaigns
             </Link>
           </div>
@@ -320,7 +351,7 @@ export default function ClientOverview() {
                 <button
                   onClick={() => handleDelete(run)}
                   disabled={deleting === run.id}
-                  className="text-xs text-slate-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                  className="text-xs text-slate-500 hover:text-red-600 transition-colors disabled:opacity-50"
                 >
                   {deleting === run.id ? "Deleting…" : "Delete"}
                 </button>

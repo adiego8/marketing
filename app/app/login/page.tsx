@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { NumericoMark } from "@/components/brand/numerico-mark";
-import { banner, btn, surface } from "@/lib/ui";
+import { banner, surface } from "@/lib/ui";
+import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
   const { user, loading, accessError, signIn } = useAuth();
@@ -52,15 +53,18 @@ export default function LoginPage() {
           </p>
         )}
 
-        <button
+        <Button
+          variant="primary"
+          size="md"
+          fullWidth
+          className="mt-6"
           onClick={handleSignIn}
-          className={`${btn.primary} w-full mt-6`}
           disabled={signingIn}
         >
           {signingIn ? "Signing in…" : "Sign in with Google"}
-        </button>
+        </Button>
 
-        <p className="text-xs text-slate-400 mt-5">
+        <p className="text-xs text-slate-500 mt-5">
           Google Calendar can be connected later, from Settings.
         </p>
       </div>

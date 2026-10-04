@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import {
   listAgencyKeys,
   createAgencyKey,
@@ -16,16 +15,22 @@ import {
 } from "@/lib/api";
 import { readGoogleResult } from "@/lib/google-result";
 import { useAuth } from "@/lib/auth-context";
-import { NumericoLockup } from "@/components/brand/numerico-mark";
+import { AppShell } from "@/components/layout/app-shell";
+import { PageHeader } from "@/components/layout/page-header";
 import { CopyButton } from "@/components/shared/copy-button";
 import {
   ConnectInstructions,
   SaveKeyFirst,
 } from "@/components/shared/connect-instructions";
 import { LLM_MODELS } from "@/lib/marketing/llm-settings";
-import { banner, btn, field, surface, text } from "@/lib/ui";
+import { banner, field, surface, text } from "@/lib/ui";
 import { statusPill } from "@/lib/ui-status";
 import type { ApiKey, ApiKeyScope, ClientListItem } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { ListSkeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { useConfirm } from "@/components/ui/confirm-provider";
 
 /**
  * The agency's own settings — the first screen in this app that is not about
@@ -44,7 +49,7 @@ import type { ApiKey, ApiKeyScope, ClientListItem } from "@/lib/types";
  * key carries an allowlist, and "a key for one client" is a one-entry list.
  */
 
-const SCOPE_LABELS: Record<ApiKeyScope, string> = {
+const SCOPE_LABELS: Record<ApiKeyScope, string > = {
   "schedule:read": "Read the schedule and copy",
   "brand:read": "Read the brand, voice and logo",
   "schedule:publish": "Report what it published",
@@ -66,7 +71,8 @@ const PRESETS: { id: string; label: string; detail: string; scopes: ApiKeyScope[
 ];
 
 export default function SettingsPage() {
-  const { user, signOut } = useAuth();
+  const confirm = useConfirm();
+  const { user } = useAuth();
 
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -195,7 +201,12 @@ export default function SettingsPage() {
           `calendar link. Events already in that account stay there, but this app ` +
           `forgets them and builds a fresh calendar on the next sync.`;
 
-    if (!confirm(`Disconnect ${account}?\n\n${impact}`)) return;
+    const ok = await confirm({
+      title: `Disconnect ${account}?`,
+      message: impact,
+      confirmLabel: "Disconnect",
+    });
+    if (!ok) return;
 
     setError(null);
     setGoogleNote(null);
@@ -242,13 +253,12 @@ export default function SettingsPage() {
   };
 
   const handleRevoke = async (key: ApiKey) => {
-    if (
-      !confirm(
-        `Revoke "${key.name}"? Anything using it stops working on its very next request.`
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Revoke "${key.name}"?`,
+      message: "Anything using it stops working on its very next request.",
+      confirmLabel: "Revoke",
+    });
+    if (!ok) return;
     setBusyId(key.id);
     setError(null);
     try {
@@ -262,42 +272,14 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
-          <Link href="/" className="hover:opacity-80 transition-opacity">
-            <NumericoLockup />
-          </Link>
-          {user && (
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-500 truncate max-w-[16rem]">
-                {user.email}
-              </span>
-              <button
-                onClick={signOut}
-                className="text-xs text-slate-400 hover:text-teal-700 transition-colors"
-              >
-                Sign out
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-6 py-8">
-        <Link href="/" className="text-sm text-slate-500 hover:text-teal-700">
-          ← All clients
-        </Link>
-
-        <header className="mt-4 mb-6">
-          <h1 className={text.h1}>Settings</h1>
-          <p className={`${text.muted} mt-1 max-w-2xl`}>
-            The Google account every client&rsquo;s calendar is built under, and
-            the agency-wide API keys. One key reaches every client you have, which
-            is what makes it practical to connect an assistant once instead of
-            once per client.
-          </p>
-        </header>
+    <AppShell>
+      <div className="max-w-4xl">
+        {/* The lockup, the email, Sign out and the "← All clients" link were
+            all rendered here. The rail carries every one of them now. */}
+        <PageHeader
+          title="Settings"
+          description="The Google account every client’s calendar is built under, and the agency-wide API keys. One key reaches every client you have, which is what makes it practical to connect an assistant once instead of once per client."
+        />
 
         {error && <p className={`${banner.error} mb-4`}>{error}</p>}
 
@@ -313,16 +295,21 @@ export default function SettingsPage() {
                 {minted.secret}
               </code>
               <CopyButton text={minted.secret} label="Copy key" variant="outline" />
-              <button
-                onClick={() => {
-                  if (confirm("Hide the key? It cannot be shown again — copy it first.")) {
-                    setMinted(null);
-                  }
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: "Hide the key?",
+                    message: "It cannot be shown again — copy it first.",
+                    confirmLabel: "Hide it",
+                    variant: "primary",
+                  });
+                  if (ok) setMinted(null);
                 }}
-                className={btn.ghost}
               >
                 Done
-              </button>
+              </Button>
             </div>
 
             {/* The key is shown once, so this is where it has to be saved.
@@ -351,10 +338,9 @@ export default function SettingsPage() {
 
             <div className="mt-5 max-w-lg space-y-4">
               <div>
-                <label className={field.micro} htmlFor="llm-key">
-                  OpenAI key
-                </label>
-                <input
+                <Input
+                  label="OpenAI key"
+                  size="md"
                   id="llm-key"
                   type="password"
                   autoComplete="off"
@@ -365,44 +351,39 @@ export default function SettingsPage() {
                       ? `Stored \u2022\u2022\u2022\u2022 ${llm.key_hint} \u2014 leave blank to keep it`
                       : "sk-\u2026"
                   }
-                  className={field.input}
                 />
               </div>
 
               <div className="flex flex-wrap gap-4">
                 <div>
-                  <label className={field.micro} htmlFor="llm-model">
-                    Writing and planning
-                  </label>
-                  <select
+                  <Select
+                    label="Writing and planning"
+                    size="md"
                     id="llm-model"
                     value={llmModel}
                     onChange={(e) => setLlmModel(e.target.value)}
-                    className={field.select}
                   >
                     {LLM_MODELS.map((m) => (
                       <option key={m} value={m}>
                         {m}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div>
-                  <label className={field.micro} htmlFor="llm-research">
-                    Research
-                  </label>
-                  <select
+                  <Select
+                    label="Research"
+                    size="md"
                     id="llm-research"
                     value={llmResearch}
                     onChange={(e) => setLlmResearch(e.target.value)}
-                    className={field.select}
                   >
                     {LLM_MODELS.map((m) => (
                       <option key={m} value={m}>
                         {m}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
@@ -416,9 +397,9 @@ export default function SettingsPage() {
             </div>
 
             <div className="mt-5 flex items-center gap-3">
-              <button onClick={handleLlmSave} disabled={llmBusy} className={btn.primary}>
+              <Button variant="primary" size="md" onClick={handleLlmSave} disabled={llmBusy}>
                 {llmBusy ? "Checking\u2026" : "Save"}
-              </button>
+              </Button>
               {llmSaved && <span className={text.muted}>Saved</span>}
               {llm?.updated_by && !llmSaved && (
                 <span className={text.micro}>Last changed by {llm.updated_by}</span>
@@ -488,30 +469,35 @@ export default function SettingsPage() {
                 {google.connected && google.needs_reconnect && (
                   // Reconnecting the SAME account is how a grant that predates
                   // the calendar scope gets widened, and the gate allows it.
-                  <button
+                  <Button
+                    variant="primary"
+                    size="md"
                     onClick={handleGoogleConnect}
                     disabled={googleBusy}
-                    className={btn.primarySm}
                   >
                     Reconnect
-                  </button>
+                  </Button>
                 )}
                 {google.connected ? (
-                  <button
+                  <Button
+                    loading={googleBusy}
+                    variant="secondary"
+                    size="md"
                     onClick={handleGoogleDisconnect}
                     disabled={googleBusy}
-                    className={btn.outline}
                   >
                     {googleBusy ? "Working…" : "Disconnect"}
-                  </button>
+                  </Button>
                 ) : (
-                  <button
+                  <Button
+                    loading={googleBusy}
+                    variant="primary"
+                    size="md"
                     onClick={handleGoogleConnect}
                     disabled={googleBusy}
-                    className={btn.primarySm}
                   >
                     {googleBusy ? "Opening…" : "Connect Google"}
-                  </button>
+                  </Button>
                 )}
               </span>
             </div>
@@ -522,24 +508,24 @@ export default function SettingsPage() {
           <h2 className={text.cardTitle}>New agency key</h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
             <div>
-              <label className={field.micro} htmlFor="key-name">
-                What is it for
-              </label>
-              <input
+              <Input
+                label="What is it for"
+                size="md"
                 id="key-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Claude Desktop"
-                className={field.input}
               />
             </div>
-            <button
+            <Button
+              loading={creating}
+              variant="primary"
+              size="md"
               onClick={handleCreate}
               disabled={creating || !name.trim()}
-              className={btn.primary}
             >
               {creating ? "Creating…" : "Create key"}
-            </button>
+            </Button>
           </div>
 
           <fieldset className="mt-4">
@@ -634,7 +620,7 @@ export default function SettingsPage() {
         </section>
 
         {loading ? (
-          <p className={text.muted}>Loading…</p>
+          <ListSkeleton rows={3} />
         ) : keys.length === 0 ? (
           <div className={surface.empty}>
             <p className={text.muted}>
@@ -651,7 +637,7 @@ export default function SettingsPage() {
                   className="flex flex-wrap items-start justify-between gap-3 px-5 py-3.5"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className={dead ? "text-sm text-slate-400" : "text-sm text-slate-800"}>
+                    <p className={dead ? "text-sm text-slate-500" : "text-sm text-slate-800"}>
                       {key.name}
                       {dead && (
                         <span className={`${statusPill(key.status)} ml-2`}>{key.status}</span>
@@ -686,20 +672,21 @@ export default function SettingsPage() {
                     </p>
                   </div>
                   {!dead && (
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => handleRevoke(key)}
                       disabled={busyId === key.id}
-                      className={btn.outlineSm}
                     >
                       {busyId === key.id ? "…" : "Revoke"}
-                    </button>
+                    </Button>
                   )}
                 </div>
               );
             })}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

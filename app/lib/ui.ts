@@ -12,57 +12,26 @@
  * so this reads as a sibling product and amber stays free to mean "degraded".
  */
 
-/* ---------------------------------------------------------------- buttons -- */
-
-export const btn = {
-  /** Solid accent. The one primary action on a screen. */
-  primary:
-    "inline-flex items-center justify-center px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-500 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed",
-  primarySm:
-    "inline-flex items-center justify-center px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-500 transition-all text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed",
-  /** Slate fill. Secondary weight without competing with the accent. */
-  dark: "inline-flex items-center justify-center px-6 py-3 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed",
-  darkSm:
-    "inline-flex items-center justify-center px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed",
-  outline:
-    "inline-flex items-center justify-center px-5 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:border-slate-400 transition-all text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed",
-  outlineSm:
-    "inline-flex items-center justify-center px-3 py-1.5 border border-slate-300 text-slate-700 rounded-lg hover:border-slate-400 transition-all text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed",
-  ghost:
-    "inline-flex items-center justify-center px-3 py-1.5 text-slate-500 rounded-lg hover:bg-stone-50 hover:text-slate-700 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed",
-  danger:
-    "inline-flex items-center justify-center px-4 py-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-all text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed",
-  /** Text-only, for back links and sign out. */
-  link: "text-sm text-slate-500 hover:text-teal-700 transition-colors",
-};
-
-/**
- * Segmented toggle, for choices rendered as a row of buttons (the plan
- * horizon, the quota's channel picker). Selected reads as a filled accent.
- */
-export function toggle(selected: boolean) {
-  return selected
-    ? "px-3 py-1.5 rounded-lg text-sm font-semibold bg-teal-600 text-white transition-all"
-    : "px-3 py-1.5 rounded-lg text-sm font-semibold border border-slate-300 text-slate-700 hover:border-slate-400 transition-all";
-}
-
 /* ----------------------------------------------------------------- fields -- */
 
+/**
+ * What is left of the form tokens after Input / Textarea / Select took over.
+ *
+ * `micro` stays because it still has ten callers that are NOT field labels —
+ * `<p>`, `<span>` and `<legend>` naming a group of controls or a section. Those
+ * want the treatment without wanting a control attached to it.
+ *
+ * `label`, `input`, `inputSm`, `textarea` and `select` are gone: they carried
+ * three mismatched heights and a `focus:outline-none` that suppressed the app's
+ * only focus indicator. `label` had zero callers even before that.
+ */
 export const field = {
-  label: "block text-sm text-slate-700 mb-2",
-  /** Micro-label above a field inside a dense form. */
-  micro: "block text-xs uppercase tracking-wide text-slate-400 mb-1.5",
-  input:
-    "w-full bg-white border border-slate-200 rounded-lg px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-600 transition-colors text-sm",
-  inputSm:
-    "w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-600 transition-colors",
-  textarea:
-    "w-full bg-white border border-slate-200 rounded-lg px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-600 transition-colors text-sm resize-y",
-  select:
-    "bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-teal-600 transition-colors",
+  /** Micro-label naming a group of controls, or a section inside a form. */
+  micro: "block text-xs uppercase tracking-wide text-slate-500 mb-1.5",
   /**
    * A file input. The native button cannot be styled, so ::file-selector-button
-   * is restyled to match btn.outlineSm rather than left looking like 1998.
+   * is restyled rather than left looking like 1998. Not worth a component for
+   * one call site, and a file input's geometry is its own anyway.
    */
   file:
     "block w-full text-sm text-slate-600 file:mr-3 file:inline-flex file:items-center " +
@@ -105,9 +74,9 @@ export const text = {
   /** Accent eyebrow. teal-700 rather than 600: this is small text. */
   eyebrow: "text-xs uppercase tracking-widest text-teal-700",
   /** Neutral section label. */
-  label: "text-xs uppercase tracking-widest text-slate-400",
+  label: "text-xs uppercase tracking-widest text-slate-500",
   muted: "text-sm text-slate-500",
-  micro: "text-xs text-slate-400",
+  micro: "text-xs text-slate-500",
   mono: "font-mono text-xs text-slate-500",
   /** A count in a summary strip. Tabular so columns of figures line up. */
   stat: "text-2xl text-slate-900 tabular-nums",
@@ -125,7 +94,7 @@ export const banner = {
 /* ------------------------------------------------------------------ table -- */
 
 export const table = {
-  head: "text-xs uppercase tracking-wide text-slate-400 text-left font-medium px-4 py-2.5",
+  head: "text-xs uppercase tracking-wide text-slate-500 text-left font-medium px-4 py-2.5",
   row: "border-t border-slate-100 hover:bg-stone-50 transition-colors",
   cell: "px-4 py-3 text-sm text-slate-800",
   cellMuted: "px-4 py-3 text-sm text-slate-500",
@@ -160,23 +129,6 @@ export const pager = {
     "px-3 py-1.5 flex items-center text-xs text-slate-500 tabular-nums select-none",
 };
 
-/* -------------------------------------------------------------------- nav -- */
-
-/**
- * The sidebar. Grouped rather than a flat list of seven siblings: the work you
- * do daily (campaigns, calendar) and the setup you touch once (research,
- * strategy, branding) are different kinds of thing, and presenting them as
- * peers is what made the app feel scattered.
- */
-export const nav = {
-  group: "px-3 pt-5 pb-1.5 text-[10px] uppercase tracking-widest text-slate-400 font-semibold",
-  item: "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-slate-600 hover:bg-stone-100 hover:text-slate-800",
-  itemActive:
-    "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors bg-teal-50 text-teal-700 font-semibold",
-  icon: "text-base leading-none text-slate-400",
-  iconActive: "text-base leading-none text-teal-600",
-};
-
 /* ------------------------------------------------------------------ piece -- */
 
 /**
@@ -196,7 +148,7 @@ export const piece = {
   hook: "text-sm text-slate-700 mt-1.5",
   beats: "text-sm text-slate-600 mt-2 space-y-1 list-decimal ml-4 marker:text-slate-300",
   cta: "text-sm text-teal-700 mt-2 font-medium",
-  rationale: "text-xs text-slate-400 mt-2",
+  rationale: "text-xs text-slate-500 mt-2",
 };
 
 /* ------------------------------------------------------------------ shell -- */

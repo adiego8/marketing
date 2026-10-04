@@ -2,18 +2,22 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { listClients, createClient, deleteClient } from "@/lib/api";
-import { useAuth } from "@/lib/auth-context";
-import { NumericoLockup } from "@/components/brand/numerico-mark";
-import { banner, btn, field, surface, table, text } from "@/lib/ui";
+import { AppShell } from "@/components/layout/app-shell";
+import { PageHeader } from "@/components/layout/page-header";
+import { banner, surface, table } from "@/lib/ui";
 import { statusPill } from "@/lib/ui-status";
 import type { ClientListItem } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { useConfirm } from "@/components/ui/confirm-provider";
 
 export default function ClientListPage() {
+  const confirm = useConfirm();
   const router = useRouter();
-  const { user, signOut } = useAuth();
   const [clients, setClients] = useState<ClientListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -37,7 +41,7 @@ export default function ClientListPage() {
 
   const fetchClients = async () => {
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, string > = {};
       if (statusFilter) params.status = statusFilter;
       if (search) params.search = search;
       const data = await listClients(params);
@@ -89,42 +93,19 @@ export default function ClientListPage() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
-          <NumericoLockup />
-          {user && (
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-500 truncate max-w-[16rem]">
-                {user.email}
-              </span>
-              <Link
-                href="/settings"
-                className="text-xs text-slate-400 hover:text-teal-700 transition-colors"
-              >
-                Settings
-              </Link>
-              <button
-                onClick={signOut}
-                className="text-xs text-slate-400 hover:text-teal-700 transition-colors"
-              >
-                Sign out
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
-
-      <div className="max-w-5xl mx-auto px-6 py-10">
-        <div className="flex items-end justify-between gap-4 mb-8">
-          <div>
-            <p className={text.eyebrow}>Workspace</p>
-            <h1 className={`${text.h1} mt-1`}>Clients</h1>
-          </div>
-          <button onClick={() => setShowCreate(true)} className={btn.primary}>
-            Add client
-          </button>
-        </div>
+    <AppShell>
+      <div className="max-w-5xl">
+        {/* The lockup, the email and the Settings / Sign out links used to sit
+            in a bar of their own here. The rail carries all three now. */}
+        <PageHeader
+          title="Clients"
+          description="Everyone you plan and schedule content for."
+          actions={
+            <Button variant="primary" size="md" onClick={() => setShowCreate(true)}>
+              Add client
+            </Button>
+          }
+        />
 
         <Dialog open={showCreate} onOpenChange={setShowCreate}>
           <DialogContent>
@@ -133,18 +114,18 @@ export default function ClientListPage() {
             </DialogHeader>
             <div className="space-y-4 pt-2">
               <div>
-                <label className={field.micro}>Name *</label>
-                <input
-                  className={field.inputSm}
+                <Input
+                  label="Name *"
+                  size="md"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="Company name"
                 />
               </div>
               <div>
-                <label className={field.micro}>Website</label>
-                <input
-                  className={field.inputSm}
+                <Input
+                  label="Website"
+                  size="md"
                   value={newWebsite}
                   onChange={(e) => setNewWebsite(e.target.value)}
                   placeholder="https://…"
@@ -152,18 +133,18 @@ export default function ClientListPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className={field.micro}>Email</label>
-                  <input
-                    className={field.inputSm}
+                  <Input
+                    label="Email"
+                    size="md"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
                     placeholder="contact@…"
                   />
                 </div>
                 <div>
-                  <label className={field.micro}>Phone</label>
-                  <input
-                    className={field.inputSm}
+                  <Input
+                    label="Phone"
+                    size="md"
                     value={newPhone}
                     onChange={(e) => setNewPhone(e.target.value)}
                     placeholder="+1…"
@@ -171,74 +152,83 @@ export default function ClientListPage() {
                 </div>
               </div>
               <div>
-                <label className={field.micro}>Notes</label>
-                <input
-                  className={field.inputSm}
+                <Input
+                  label="Notes"
+                  size="md"
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   placeholder="Internal notes…"
                 />
               </div>
               <div>
-                <label className={field.micro}>Timezone</label>
-                <input
-                  className={field.inputSm}
+                <Input
+                  label="Timezone"
+                  size="md"
                   value={newTimezone}
                   onChange={(e) => setNewTimezone(e.target.value)}
                   placeholder="America/New_York"
                 />
-                <p className="text-xs text-slate-400 mt-1.5">
+                <p className="text-xs text-slate-500 mt-1.5">
                   IANA zone. Posting times are scheduled in this client&apos;s
                   local time.
                 </p>
               </div>
               {createError && <p className={banner.error}>{createError}</p>}
-              <button
+              <Button
+                loading={creating}
+                variant="primary"
+                size="md"
+                fullWidth
                 onClick={handleCreate}
                 disabled={!newName.trim() || creating}
-                className={`${btn.primary} w-full`}
               >
                 {creating ? "Creating…" : "Create client"}
-              </button>
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
 
         <div className="flex flex-wrap gap-3 mb-4">
-          <input
+          <Input
+            size="sm"
+            aria-label="Search by name…"
+            className="max-w-xs"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name…"
-            className={`${field.inputSm} max-w-xs`}
           />
-          <select
+          <Select
+            size="sm"
+            aria-label="Filter by status"
+            wrapperClassName="w-auto"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className={field.select}
           >
             <option value="">All statuses</option>
             <option value="active">Active</option>
             <option value="paused">Paused</option>
             <option value="archived">Archived</option>
-          </select>
+          </Select>
         </div>
 
         {error && <p className={`${banner.error} mb-4`}>{error}</p>}
 
         {loading ? (
-          <p className={text.muted}>Loading…</p>
+          <TableSkeleton columns={6} />
         ) : clients.length === 0 ? (
           <div className={surface.empty}>
             <p className="text-slate-700 text-lg">No clients yet.</p>
             <p className="text-slate-500 text-sm mt-1">
               Add one to start planning content.
             </p>
-            <button
+            <Button
+              variant="primary"
+              size="md"
+              className="mt-6"
               onClick={() => setShowCreate(true)}
-              className={`${btn.primary} mt-6`}
             >
               Add client
-            </button>
+            </Button>
           </div>
         ) : (
           <div className={`${surface.table} overflow-x-auto`}>
@@ -271,13 +261,19 @@ export default function ClientListPage() {
                     </td>
                     <td className={`${table.cell} text-right`}>
                       <button
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
-                          if (confirm(`Delete "${c.name}" and all its data?`)) {
+                          const ok = await confirm({
+                            title: `Delete "${c.name}"?`,
+                            message:
+                              "Everything belonging to this client goes with it — its strategy, campaigns, content and schedule.",
+                            confirmLabel: "Delete client",
+                          });
+                          if (ok) {
                             deleteClient(c.id).then(() => fetchClients());
                           }
                         }}
-                        className="text-xs text-slate-400 hover:text-red-600 transition-colors"
+                        className="text-xs text-slate-500 hover:text-red-600 transition-colors"
                       >
                         Delete
                       </button>
@@ -289,6 +285,6 @@ export default function ClientListPage() {
           </div>
         )}
       </div>
-    </div>
+    </AppShell>
   );
 }

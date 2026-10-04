@@ -1,58 +1,116 @@
-import { Button as ButtonPrimitive } from "@base-ui/react/button"
-import { cva, type VariantProps } from "class-variance-authority"
+"use client";
 
-import { cn } from "@/lib/utils"
+import * as React from "react";
+import { Button as ButtonPrimitive } from "@base-ui/react/button";
+import { cva, type VariantProps } from "class-variance-authority";
+import { Loader2 } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+
+/**
+ * The button. One of them.
+ *
+ * Same export surface and prop names as car-sales-os/components/ui/Button.tsx —
+ * `variant`, `size`, `loading`, `fullWidth`, plus `buttonVariants` — so code and
+ * people move between the two products. The machinery underneath is Base UI's
+ * button rather than Radix's, which is what this app already depends on.
+ *
+ * This replaces `lib/ui.ts`'s `btn.*` strings, which had grown five different
+ * heights (48 / 40 / 36 / 32 / 28px) and put three of them in a single row on
+ * the calendar header. Four sizes now, and one placement rule: header actions
+ * are `md`, everything inline is `sm`.
+ *
+ * Colours are today's values, lifted from the tokens they replace, with two
+ * fixes: ghost hovered to `stone-50`, which is the page ground and therefore
+ * invisible, and primary hovered to teal-500 — *lighter* than its teal-600
+ * rest, dropping white text to about 2.9:1. Both hovers now go darker.
+ *
+ * `asChild` has no equivalent and needs none: Base UI's `render` is strictly
+ * more capable, and a navigation link should take `buttonVariants()` on its
+ * className rather than be announced to a screen reader as a button.
+ */
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
-        outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+        primary: "bg-teal-600 text-white hover:bg-teal-700",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
-        ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
-        destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        link: "text-primary underline-offset-4 hover:underline",
+          "border border-slate-300 bg-white text-slate-700 hover:border-slate-400",
+        ghost: "text-slate-500 hover:bg-stone-100 hover:text-slate-700",
+        danger:
+          "border border-red-200 text-red-600 hover:bg-red-50",
+        link: "text-slate-500 hover:text-teal-700",
       },
       size: {
-        default:
-          "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        icon: "size-8",
-        "icon-xs":
-          "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm":
-          "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
-        "icon-lg": "size-9",
+        sm: "h-8 px-3 text-sm",
+        md: "h-10 px-4 text-sm",
+        lg: "h-11 px-6 text-base",
+        icon: "size-10",
       },
     },
+    compoundVariants: [
+      // A text link is not a 40px box. cva emits compound classes after the
+      // size classes, so twMerge resolves these over `h-10 px-4`.
+      { variant: "link", class: "h-auto px-0 font-normal" },
+    ],
     defaultVariants: {
-      variant: "default",
-      size: "default",
+      variant: "primary",
+      size: "md",
     },
   }
-)
+);
 
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
-  return (
-    <ButtonPrimitive
-      data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  )
+export interface ButtonProps
+  extends Omit<ButtonPrimitive.Props, "className">,
+    VariantProps<typeof buttonVariants > {
+  /**
+   * Base UI allows `className` to be a function of component state, which
+   * `cn()` cannot merge. Narrowed to a string; no caller here needs the
+   * callback form.
+   */
+  className?: string;
+  /**
+   * Shows a spinner and disables the button. Deliberately does not touch the
+   * label: the existing `{saving ? "Saving…" : "Save"}` call sites say it
+   * better in words than a spinner does.
+   */
+  loading?: boolean;
+  fullWidth?: boolean;
 }
 
-export { Button, buttonVariants }
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  function Button(
+    {
+      className,
+      variant,
+      size,
+      loading = false,
+      fullWidth = false,
+      disabled,
+      children,
+      ...props
+    },
+    ref
+  ) {
+    return (
+      <ButtonPrimitive
+        ref={ref}
+        data-slot="button"
+        disabled={disabled || loading}
+        aria-busy={loading || undefined}
+        className={cn(
+          buttonVariants({ variant, size }),
+          fullWidth && "w-full",
+          className
+        )}
+        {...props}
+      >
+        {loading && <Loader2 className="animate-spin" aria-hidden="true" />}
+        {children}
+      </ButtonPrimitive>
+    );
+  }
+);
+
+export { buttonVariants };

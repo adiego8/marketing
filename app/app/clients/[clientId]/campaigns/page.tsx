@@ -10,11 +10,34 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { listCampaigns, generateCampaigns, createCampaign } from "@/lib/api";
-import { banner, btn, field, surface, text } from "@/lib/ui";
+import { PageHeader } from "@/components/layout/page-header";
+import { banner, surface } from "@/lib/ui";
 import { PILL, PILL_SM, statusColor, statusLabel } from "@/lib/ui-status";
 import type { CampaignListItem } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { CardSkeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
-const STATUS_COLUMNS = ["proposal", "in_review", "active", "completed", "rejected"] as const;
+/**
+ * Every status the backend can store, in pipeline order.
+ *
+ * Must stay in step with CAMPAIGN_STATUSES in lib/marketing/campaigns.ts.
+ * `idea` was missing, and because `grouped` is built by filtering once per
+ * column, a campaign in a status with no column rendered nowhere at all — while
+ * the header above still counted it, so the board showed fewer campaigns than
+ * it claimed to have. Everything made with "Create manual" lands in `idea`
+ * (parseCampaignCreate hardcodes it), so all of those were invisible; only
+ * generated campaigns, which start in `proposal`, ever showed up.
+ */
+const STATUS_COLUMNS = [
+  "idea",
+  "proposal",
+  "in_review",
+  "active",
+  "completed",
+  "rejected",
+] as const;
 
 export default function CampaignsPage() {
   const { clientId } = useParams() as { clientId: string };
@@ -88,46 +111,53 @@ export default function CampaignsPage() {
 
   return (
     <div className="max-w-6xl">
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
-        <div>
-          <h1 className={text.h1}>Campaigns</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {campaigns.length} campaign{campaigns.length === 1 ? "" : "s"}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowCreate(true)} className={btn.outline}>
-            Create manual
-          </button>
-          <button onClick={() => setShowGenerate(true)} className={btn.primarySm}>
-            Generate ideas
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Campaigns"
+        description={`${campaigns.length} campaign${campaigns.length === 1 ? "" : "s"}`}
+        actions={
+          <>
+            <Button variant="secondary" size="md" onClick={() => setShowCreate(true)}>
+              Create manual
+            </Button>
+            <Button variant="primary" size="md" onClick={() => setShowGenerate(true)}>
+              Generate ideas
+            </Button>
+          </>
+        }
+      />
 
       {error && <p className={`${banner.error} mb-4`}>{error}</p>}
 
       {loading ? (
-        <p className={text.muted}>Loading…</p>
+        <div className="space-y-3">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
       ) : campaigns.length === 0 ? (
         <div className={surface.empty}>
           <p className="text-slate-700 text-lg">No campaigns yet.</p>
           <p className="text-slate-500 text-sm mt-1">
             Campaigns supply the themes the planner schedules against.
           </p>
-          <button
+          <Button
+            variant="primary"
+            size="md"
+            className="mt-6"
             onClick={() => setShowGenerate(true)}
-            className={`${btn.primary} mt-6`}
           >
             Generate campaign ideas
-          </button>
+          </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        // Six columns rather than five. Inside max-w-6xl that is ~178px per
+        // column against the old ~217px — tighter, but a board split over two
+        // rows stops reading as a pipeline, which is worse.
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
           {STATUS_COLUMNS.map((status) => (
             <div key={status}>
               <div className="flex items-center gap-2 mb-3">
-                <h2 className="text-xs uppercase tracking-widest text-slate-400">
+                <h2 className="text-xs uppercase tracking-widest text-slate-500">
                   {statusLabel(status)}
                 </h2>
                 <span className={`${PILL_SM} bg-slate-100 text-slate-500`}>
@@ -154,7 +184,7 @@ export default function CampaignsPage() {
                         {campaign.description}
                       </p>
                     )}
-                    <p className="text-xs text-slate-400 mt-2">
+                    <p className="text-xs text-slate-500 mt-2">
                       {new Date(campaign.created_at).toLocaleDateString()}
                     </p>
                   </Link>
@@ -172,23 +202,25 @@ export default function CampaignsPage() {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div>
-              <label className={field.micro}>Prompt (optional)</label>
-              <textarea
+              <Textarea
+                label="Prompt (optional)"
+                className="h-24"
                 value={generatePrompt}
                 onChange={(e) => setGeneratePrompt(e.target.value)}
                 placeholder="e.g. 'Campaigns for Q2 product launch', or leave empty for general ideas"
-                className={`${field.textarea} h-24`}
               />
             </div>
-            <button
+            <Button
+              variant="primary"
+              size="md"
+              fullWidth
               onClick={handleGenerate}
               disabled={generating}
-              className={`${btn.primary} w-full`}
             >
               {generating
                 ? "Generating ideas… (30-60s)"
                 : "Generate 3 campaign proposals"}
-            </button>
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -200,30 +232,32 @@ export default function CampaignsPage() {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div>
-              <label className={field.micro}>Title</label>
-              <input
+              <Input
+                label="Title"
+                size="sm"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 placeholder="Campaign name"
-                className={field.inputSm}
               />
             </div>
             <div>
-              <label className={field.micro}>Description</label>
-              <textarea
+              <Textarea
+                label="Description"
+                className="h-20"
                 value={newDescription}
                 onChange={(e) => setNewDescription(e.target.value)}
                 placeholder="What is this campaign about?"
-                className={`${field.textarea} h-20`}
               />
             </div>
-            <button
+            <Button
+              variant="primary"
+              size="md"
+              fullWidth
               onClick={handleCreate}
               disabled={!newTitle.trim()}
-              className={`${btn.primary} w-full`}
             >
               Create
-            </button>
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

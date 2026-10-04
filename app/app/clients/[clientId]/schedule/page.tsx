@@ -16,7 +16,8 @@ import {
   scheduleSlot,
   getStrategy,
 } from "@/lib/api";
-import { banner, btn, field, surface, toggle, text } from "@/lib/ui";
+import { PageHeader } from "@/components/layout/page-header";
+import { banner, surface, text } from "@/lib/ui";
 import { statusPill, statusLabel, PILL } from "@/lib/ui-status";
 import { PieceCard, fromSlot } from "@/components/shared/piece-card";
 import { StateLabel } from "@/components/shared/state-label";
@@ -28,6 +29,12 @@ import { contentTypeLabel } from "@/lib/marketing/content-types";
 import { weekLabel } from "@/lib/marketing/planner/weeks";
 import { overCap, type WeeklyCaps } from "@/lib/marketing/planner/schedule";
 import type { Slot, SlotStatus } from "@/lib/types";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { ListSkeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { useConfirm } from "@/components/ui/confirm-provider";
 
 // Committed slots. The plan page shows a proposal; this shows what was accepted
 // and is actually scheduled.
@@ -60,6 +67,7 @@ function isoDate(d: Date) {
 }
 
 export default function SchedulePage() {
+  const confirm = useConfirm();
   const { clientId } = useParams() as { clientId: string };
   const [slots, setSlots] = useState<Slot[]>([]);
   const [clientName, setClientName] = useState("Client");
@@ -249,16 +257,13 @@ export default function SchedulePage() {
    * stays in Google, but this app will not find its way back to it.
    */
   const handleResetCalendar = async () => {
-    if (
-      !confirm(
-        "Build a new calendar for this client?\n\n" +
-          "The pieces here stop pointing at the old calendar's events, and the " +
-          "next sync creates a fresh calendar and writes them again. Nothing is " +
-          "deleted from Google — the old calendar stays exactly as it is."
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Build a new calendar for this client?",
+      message:
+        "The pieces here stop pointing at the old calendar's events, and the next sync creates a fresh calendar and writes them again. Nothing is deleted from Google — the old calendar stays exactly as it is.",
+      confirmLabel: "Build a new one",
+    });
+    if (!ok) return;
     setError(null);
     try {
       await resetClientCalendar(clientId);
@@ -304,7 +309,6 @@ export default function SchedulePage() {
       setWritingId(null);
     }
   };
-
 
   const handleStatus = async (slot: Slot, status: SlotStatus) => {
     if (status === slot.status) return;
@@ -380,50 +384,57 @@ export default function SchedulePage() {
 
   return (
     <div className="max-w-5xl">
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
-        <div>
-          <h1 className={text.h1}>Calendar</h1>
-          <p className="text-sm text-slate-500 mt-1">
+      <PageHeader
+        title="Calendar"
+        description={
+          <p className="mt-1 text-sm text-slate-500">
             {live.length} piece{live.length === 1 ? "" : "s"} scheduled ·{" "}
             {start} to {end} · times in {timezone}
           </p>
-        </div>
-        <div className="flex flex-wrap gap-2 items-center">
-          <div className="flex gap-1" role="group" aria-label="Horizon">
-            {HORIZONS.map((w) => (
-              <button
-                key={w}
-                onClick={() => setWeeks(w)}
-                aria-pressed={weeks === w}
-                className={toggle(weeks === w)}
-              >
-                {w}w
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={handleCopy}
-            disabled={slots.length === 0}
-            className={btn.outline}
-          >
-            {copied ? "Copied!" : "Copy plan"}
-          </button>
-          <button
-            onClick={handleDownload}
-            disabled={slots.length === 0}
-            className={btn.outline}
-          >
-            .md
-          </button>
-          <button
-            onClick={handlePdf}
-            disabled={slots.length === 0 || pdfBusy}
-            className={btn.primarySm}
-          >
-            {pdfBusy ? "Building…" : "Download PDF"}
-          </button>
-        </div>
-      </div>
+        }
+        actions={
+          <>
+            <div className="flex gap-1" role="group" aria-label="Horizon">
+              {HORIZONS.map((w) => (
+                <Button
+                  variant={weeks === w ? "primary" : "secondary"}
+                  size="md"
+                  key={w}
+                  onClick={() => setWeeks(w)}
+                  aria-pressed={weeks === w}
+                >
+                  {w}w
+                </Button>
+              ))}
+            </div>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={handleCopy}
+              disabled={slots.length === 0}
+            >
+              {copied ? "Copied!" : "Copy plan"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={handleDownload}
+              disabled={slots.length === 0}
+            >
+              .md
+            </Button>
+            <Button
+              loading={pdfBusy}
+              variant="primary"
+              size="md"
+              onClick={handlePdf}
+              disabled={slots.length === 0 || pdfBusy}
+            >
+              {pdfBusy ? "Building…" : "Download PDF"}
+            </Button>
+          </>
+        }
+      />
 
       {google && slots.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -440,9 +451,9 @@ export default function SchedulePage() {
               <span className="text-sm text-slate-500">
                 Push this schedule to Google Calendar — one calendar per client.
               </span>
-              <button onClick={handleConnect} className={`${btn.outline} shrink-0`}>
+              <Button variant="secondary" size="md" className="shrink-0" onClick={handleConnect}>
                 Connect Google
-              </button>
+              </Button>
             </>
           ) : google.needs_reconnect ? (
             <>
@@ -450,9 +461,9 @@ export default function SchedulePage() {
                 Connected as {google.email}, but without calendar access.
                 Reconnect to grant it.
               </span>
-              <button onClick={handleConnect} className={`${btn.outline} shrink-0`}>
+              <Button variant="secondary" size="md" className="shrink-0" onClick={handleConnect}>
                 Reconnect
-              </button>
+              </Button>
             </>
           ) : (
             <>
@@ -474,18 +485,20 @@ export default function SchedulePage() {
                     href={calendarUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className={btn.outline}
+                    className={buttonVariants({ variant: "secondary", size: "md" })}
                   >
                     Open in Google ↗
                   </a>
                 )}
-                <button
+                <Button
+                  loading={syncing}
+                  variant="primary"
+                  size="md"
                   onClick={handleSync}
                   disabled={syncing}
-                  className={btn.primarySm}
                 >
                   {syncing ? "Syncing…" : "Sync to Google"}
-                </button>
+                </Button>
               </span>
             </>
           )}
@@ -500,12 +513,14 @@ export default function SchedulePage() {
           {/* The cure sits with the problem: a warning that names a fix the
               user then has to go and find is half a warning. */}
           {calendarMissing && (
-            <button
+            <Button
+              variant="secondary"
+              size="md"
+              className="mt-3"
               onClick={handleResetCalendar}
-              className={`${btn.outline} mt-3`}
             >
               Reset calendar
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -557,7 +572,7 @@ export default function SchedulePage() {
                 className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
               >
                 <div className="min-w-0">
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500">
                     {slot.campaign_title ?? "No campaign"} ·{" "}
                     {contentTypeLabel(slot.type)} · {slot.channel}
                   </p>
@@ -569,22 +584,23 @@ export default function SchedulePage() {
                   </Link>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <input
+                  <Input
+                    size="md"
                     type="date"
                     value={dates[slot.id] ?? ""}
                     onChange={(e) =>
                       setDates((d) => ({ ...d, [slot.id]: e.target.value }))
                     }
-                    className={field.select}
                     aria-label={`Date for ${slot.theme || slot.type}`}
                   />
-                  <button
+                  <Button
+                    variant="primary"
+                    size="md"
                     onClick={() => handleSchedule(slot)}
                     disabled={!dates[slot.id] || datingId === slot.id}
-                    className={btn.primarySm}
                   >
                     {datingId === slot.id ? "Setting…" : "Schedule"}
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}
@@ -593,7 +609,7 @@ export default function SchedulePage() {
       )}
 
       {loading ? (
-        <p className={text.muted}>Loading…</p>
+        <ListSkeleton rows={5} />
       ) : slots.length === 0 ? (
         <div className={surface.empty}>
           <p className="text-slate-700 text-lg">Nothing on the calendar yet.</p>
@@ -604,7 +620,7 @@ export default function SchedulePage() {
           </p>
           <Link
             href={`/clients/${clientId}/campaigns`}
-            className={`${btn.primary} mt-6`}
+            className={cn(buttonVariants({ variant: "primary", size: "md" }), "mt-6")}
           >
             Open campaigns
           </Link>
@@ -659,7 +675,7 @@ export default function SchedulePage() {
                         <>
                           {slot.date ? dayLabel(slot.date) : "—"}
                           {slot.time_local && (
-                            <span className="text-slate-400 font-normal">
+                            <span className="text-slate-500 font-normal">
                               {" "}
                               {slot.time_local}
                             </span>
@@ -669,7 +685,7 @@ export default function SchedulePage() {
                       action={
                         <Link
                           href={`/clients/${clientId}/schedule/${slot.id}?weeks=${weeks}`}
-                          className={btn.ghost}
+                          className={buttonVariants({ variant: "ghost", size: "sm" })}
                         >
                           Open
                         </Link>
@@ -683,7 +699,9 @@ export default function SchedulePage() {
                           <span className={statusPill(slot.status)}>
                             {statusLabel(slot.status)}
                           </span>
-                          <select
+                          <Select
+                            size="md"
+                            className="py-1 text-xs"
                             value={slot.status}
                             disabled={savingId === slot.id}
                             onChange={(e) =>
@@ -692,14 +710,13 @@ export default function SchedulePage() {
                             aria-label={`Status for ${contentTypeLabel(slot.type)}${
                               slot.date ? ` on ${slot.date}` : ""
                             }`}
-                            className={`${field.select} py-1 text-xs`}
                           >
                             {STATUS_CHOICES.map((s) => (
                               <option key={s} value={s}>
                                 {statusLabel(s)}
                               </option>
                             ))}
-                          </select>
+                          </Select>
 
                           {/* Released and ready is the state a publisher acts
                               on, so it is the one worth naming outright —
@@ -730,15 +747,16 @@ export default function SchedulePage() {
                             !dropped &&
                             !slot.needs_theme &&
                             slot.theme && (
-                              <button
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => handleWriteCopy(slot)}
                                 disabled={writingId === slot.id}
-                                className={btn.outlineSm}
                               >
                                 {writingId === slot.id
                                   ? "Writing…"
                                   : "Write copy"}
-                              </button>
+                              </Button>
                             )
                           )}
 
