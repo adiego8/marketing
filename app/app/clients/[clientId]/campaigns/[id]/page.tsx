@@ -5,8 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { StageRail, type Stage } from "@/components/shared/stage-rail";
 import { PieceCard, fromSlot } from "@/components/shared/piece-card";
-import { backLink, banner, btn, field, surface, table, text } from "@/lib/ui";
-import { ChevronLeft } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
+import { banner, field, surface, table, text } from "@/lib/ui";
 import { PILL, statusColor, statusLabel, statusPill } from "@/lib/ui-status";
 import {
   getCampaign,
@@ -40,6 +40,11 @@ import type {
   Slot,
 } from "@/lib/types";
 import { CONTENT_TYPES, contentTypeLabel } from "@/lib/marketing/content-types";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { CardSkeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useConfirm } from "@/components/ui/confirm-provider";
 
 /**
  * The campaign workspace.
@@ -64,6 +69,7 @@ import { CONTENT_TYPES, contentTypeLabel } from "@/lib/marketing/content-types";
  */
 
 export default function CampaignWorkspace() {
+  const confirm = useConfirm();
   const params = useParams();
   const router = useRouter();
   const clientId = params.clientId as string;
@@ -244,7 +250,12 @@ export default function CampaignWorkspace() {
   };
 
   const handleDelete = async () => {
-    if (!confirm("Delete this campaign? Its content plan goes with it.")) return;
+    const ok = await confirm({
+      title: "Delete this campaign?",
+      message: "Its content plan goes with it.",
+      confirmLabel: "Delete campaign",
+    });
+    if (!ok) return;
     try {
       await deleteCampaign(clientId, campaignId);
       router.push(`/clients/${clientId}/campaigns`);
@@ -287,15 +298,13 @@ export default function CampaignWorkspace() {
    * still sees this theme and keeps the model off the angle just rejected.
    */
   const handleCancelPiece = async (slot: Slot) => {
-    if (
-      !confirm(
-        `Turn down "${slot.theme || contentTypeLabel(slot.type)}"?\n\n` +
-          "It stops counting towards what this campaign owes, so pressing Write " +
-          "content again writes a replacement on a different angle."
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Turn down "${slot.theme || contentTypeLabel(slot.type)}"?`,
+      message:
+        "It stops counting towards what this campaign owes, so pressing Write content again writes a replacement on a different angle.",
+      confirmLabel: "Turn it down",
+    });
+    if (!ok) return;
     setBusySlot(slot.id);
     setError(null);
     try {
@@ -386,14 +395,13 @@ export default function CampaignWorkspace() {
 
   /** Forget a calendar that is no longer there. See the schedule page. */
   const handleResetCalendar = async () => {
-    if (
-      !confirm(
-        "Build a new calendar for this client?\n\n" +
-          "The pieces here stop pointing at the old calendar's events, and the " +
-          "next push creates a fresh calendar and writes them again. Nothing is " +
-          "deleted from Google — the old calendar stays exactly as it is."
-      )
-    ) {
+    const ok = await confirm({
+      title: "Build a new calendar for this client?",
+      message:
+        "The pieces here stop pointing at the old calendar's events, and the next push creates a fresh calendar and writes them again. Nothing is deleted from Google — the old calendar stays exactly as it is.",
+      confirmLabel: "Build a new one",
+    });
+    if (!ok) {
       return;
     }
     setError(null);
@@ -411,7 +419,19 @@ export default function CampaignWorkspace() {
 
   /* ------------------------------------------------------------ derived -- */
 
-  if (loading) return <p className={text.muted}>Loading…</p>;
+  if (loading)
+    return (
+      <div className="max-w-4xl">
+        <PageHeader
+          back={{ href: `/clients/${clientId}/campaigns`, label: "Campaigns" }}
+          titleSkeleton
+        />
+        <div className="space-y-4">
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      </div>
+    );
   if (!campaign) return <p className={banner.error}>Campaign not found.</p>;
 
   const strategy = campaign.strategy || {};
@@ -498,43 +518,71 @@ export default function CampaignWorkspace() {
 
   return (
     <div className="max-w-4xl">
-      <Link href={`/clients/${clientId}/campaigns`} className={`${backLink} mb-3`}>
-        <ChevronLeft className="w-4 h-4" aria-hidden="true" />
-        Campaigns
-      </Link>
+      <PageHeader
+        back={{ href: `/clients/${clientId}/campaigns`, label: "Campaigns" }}
+        title={campaign.title}
+        badge={
+          <span className={`${PILL} ${statusColor(campaign.status)}`}>
+            {statusLabel(campaign.status)}
+          </span>
+        }
+        description={
+          <>
+            {campaign.description && (
+              <p className="mt-1 text-slate-600">{campaign.description}</p>
+            )}
+            <p className="mt-1 text-xs text-slate-500">
+              Created {new Date(campaign.created_at).toLocaleDateString()}
+              {campaign.start_date && ` · Runs ${campaign.start_date}`}
+              {campaign.end_date && ` to ${campaign.end_date}`}
+            </p>
+          </>
+        }
+        actions={
+          <>
+            {/* A campaign typed in by hand starts as `idea`, and had no way out
+                of it: the review block below is gated on proposal/in_review and
+                holds the only Accept in the app, so Delete was the one thing
+                you could do to one. The accept route carries no status guard,
+                so this is the same call that block makes.
 
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-        <div className="min-w-0">
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className={text.h1}>{campaign.title}</h1>
-            <span className={`${PILL} ${statusColor(campaign.status)}`}>
-              {statusLabel(campaign.status)}
-            </span>
-          </div>
-          {campaign.description && (
-            <p className="text-slate-600">{campaign.description}</p>
-          )}
-          <p className="text-xs text-slate-400 mt-1">
-            Created {new Date(campaign.created_at).toLocaleDateString()}
-            {campaign.start_date && ` · Runs ${campaign.start_date}`}
-            {campaign.end_date && ` to ${campaign.end_date}`}
-          </p>
-        </div>
-        <div className="flex gap-2 shrink-0">
-          {campaign.status === "active" && (
-            <button
-              onClick={() => runCampaignAction(() => completeCampaign(clientId, campaignId))}
-              disabled={actionLoading}
-              className={btn.outline}
-            >
-              Mark complete
-            </button>
-          )}
-          <button onClick={handleDelete} className={btn.danger}>
-            Delete
-          </button>
-        </div>
-      </div>
+                Disabled until the brief owes something — accepting an empty
+                campaign makes it active with nothing to place, which reads as
+                broken rather than as empty. */}
+            {campaign.status === "idea" && (
+              <Button
+                variant="primary"
+                size="md"
+                loading={actionLoading}
+                disabled={actionLoading || breakdown.length === 0}
+                title={
+                  breakdown.length === 0
+                    ? "Add at least one content type to the brief first"
+                    : undefined
+                }
+                onClick={() =>
+                  runCampaignAction(() => acceptCampaign(clientId, campaignId))
+                }
+              >
+                Start campaign
+              </Button>
+            )}
+            {campaign.status === "active" && (
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => runCampaignAction(() => completeCampaign(clientId, campaignId))}
+                disabled={actionLoading}
+              >
+                Mark complete
+              </Button>
+            )}
+            <Button variant="danger" size="md" onClick={handleDelete}>
+              Delete
+            </Button>
+          </>
+        }
+      />
 
       <StageRail stages={STAGES} value={stage} onChange={setStage} />
 
@@ -546,13 +594,15 @@ export default function CampaignWorkspace() {
           <section className={`${surface.card} ${surface.pad}`}>
             <div className="flex items-center justify-between gap-3 mb-4">
               <h2 className={text.cardTitle}>What it owes, each week</h2>
-              <button
+              <Button
+                loading={planSaving}
+                variant="secondary"
+                size="sm"
                 onClick={saveContentPlan}
                 disabled={planSaving || planSaved}
-                className={btn.outlineSm}
               >
                 {planSaving ? "Saving…" : planSaved ? "Saved" : "Save changes"}
-              </button>
+              </Button>
             </div>
 
             {breakdown.length > 0 ? (
@@ -572,7 +622,10 @@ export default function CampaignWorkspace() {
                           {contentTypeLabel(String(item.type))}
                         </td>
                         <td className={table.cell}>
-                          <input
+                          <Input
+                            size="sm"
+                            aria-label={`${contentTypeLabel(String(item.type))} count`}
+                            className="w-20"
                             type="number"
                             min={0}
                             value={Number(item.count) || 0}
@@ -584,18 +637,18 @@ export default function CampaignWorkspace() {
                               };
                               updateBreakdown(updated);
                             }}
-                            className={`${field.inputSm} w-20`}
                           />
                         </td>
                         <td className={`${table.cell} text-right`}>
-                          <button
-                            className={btn.ghost}
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() =>
                               updateBreakdown(breakdown.filter((_, j) => j !== i))
                             }
                           >
                             Remove
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -606,6 +659,13 @@ export default function CampaignWorkspace() {
               <p className={text.muted}>
                 Nothing yet. Add a content type below and this campaign starts
                 asking for work.
+                {/* Says what the disabled Start campaign button is waiting for.
+                    A title attribute alone would not — it never appears on
+                    touch, and a disabled button takes no hover on any device. */}
+                {campaign.status === "idea" && (
+                  <> Then <strong className="font-semibold">Start campaign</strong>{" "}
+                  above becomes available.</>
+                )}
               </p>
             )}
 
@@ -617,16 +677,17 @@ export default function CampaignWorkspace() {
                 <div className="flex flex-wrap gap-2 mt-4">
                   <span className="text-sm text-slate-500 self-center">Add:</span>
                   {available.map((spec) => (
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       key={spec.key}
-                      className={btn.outlineSm}
                       title={spec.description}
                       onClick={() =>
                         updateBreakdown([...breakdown, { type: spec.key, count: 1 }])
                       }
                     >
                       + {spec.label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               );
@@ -656,7 +717,7 @@ export default function CampaignWorkspace() {
                       {entry.count !== 1 ? "s" : ""}/week
                     </span>
                     {entry.channels.length > 0 && (
-                      <span className="text-slate-400 text-xs">
+                      <span className="text-slate-500 text-xs">
                         {" "}
                         · {entry.channels.join(", ")}
                       </span>
@@ -725,7 +786,7 @@ export default function CampaignWorkspace() {
                         Changed: {entry.changes}
                       </p>
                     )}
-                    <p className="text-xs text-slate-400 mt-1">
+                    <p className="text-xs text-slate-500 mt-1">
                       {entry.improved_at
                         ? `Improved ${new Date(entry.improved_at).toLocaleString()}`
                         : entry.submitted_at
@@ -752,14 +813,17 @@ export default function CampaignWorkspace() {
               <section className={`${surface.card} ${surface.pad}`}>
                 <h2 className={`${text.cardTitle} mb-3`}>Send it back for changes</h2>
                 <div className="space-y-3">
-                  <textarea
+                  <Textarea
+                    aria-label="What should be different? Be specific…"
+                    className="h-24"
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
                     placeholder="What should be different? Be specific…"
-                    className={`${field.textarea} h-24`}
                   />
                   <div className="flex flex-wrap gap-2">
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="md"
                       onClick={() =>
                         runCampaignAction(async () => {
                           const c = await reviewCampaign(clientId, campaignId, feedback);
@@ -768,49 +832,55 @@ export default function CampaignWorkspace() {
                         })
                       }
                       disabled={!feedback.trim() || actionLoading}
-                      className={btn.outline}
                     >
                       Save feedback
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      loading={improving}
+                      variant="primary"
+                      size="md"
                       onClick={handleImprove}
                       disabled={!feedback.trim() || improving}
-                      className={btn.primarySm}
                     >
                       {improving ? "Rewriting…" : "Rewrite with the agent"}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </section>
 
               <div className="flex flex-col sm:flex-row gap-3">
-                <button
+                <Button
+                  variant="primary"
+                  size="md"
+                  className="flex-1"
                   onClick={() =>
                     runCampaignAction(() => acceptCampaign(clientId, campaignId))
                   }
                   disabled={actionLoading}
-                  className={`${btn.primary} flex-1`}
                 >
                   Accept campaign
-                </button>
+                </Button>
                 <div className="flex-1 space-y-2">
-                  <textarea
+                  <Textarea
+                    aria-label="Why are you rejecting it?"
+                    className="h-16"
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
                     placeholder="Why are you rejecting it?"
-                    className={`${field.textarea} h-16`}
                   />
-                  <button
+                  <Button
+                    variant="danger"
+                    size="md"
+                    fullWidth
                     onClick={() =>
                       runCampaignAction(() =>
                         rejectCampaign(clientId, campaignId, rejectReason)
                       )
                     }
                     disabled={!rejectReason.trim() || actionLoading}
-                    className={`${btn.danger} w-full`}
                   >
                     Reject
-                  </button>
+                  </Button>
                 </div>
               </div>
             </>
@@ -829,9 +899,9 @@ export default function CampaignWorkspace() {
               <p className="text-slate-500 text-sm mt-1">
                 The agent only writes what an accepted campaign asks for.
               </p>
-              <button onClick={() => setStage("brief")} className={`${btn.primary} mt-6`}>
+              <Button variant="primary" size="md" className="mt-6" onClick={() => setStage("brief")}>
                 Back to the brief
-              </button>
+              </Button>
             </div>
           ) : (
             <>
@@ -841,13 +911,14 @@ export default function CampaignWorkspace() {
                     ? `${live.length} piece${live.length === 1 ? "" : "s"} written for this campaign. Nothing is scheduled — you pick the days afterwards.`
                     : "Write everything this campaign still owes."}
                 </p>
-                <button
+                <Button
+                  variant="primary"
+                  size="md"
                   onClick={handleGenerate}
                   disabled={planning}
-                  className={btn.primarySm}
                 >
                   {planning ? "Writing… (30-90s)" : "Write content"}
-                </button>
+                </Button>
               </div>
 
               {run?.status === "degraded" && (
@@ -894,13 +965,16 @@ export default function CampaignWorkspace() {
                       ? "The last run wrote nothing for this campaign — everything it asks for may already be delivered."
                       : "Write the content this campaign owes, then read each piece and give it its words."}
                   </p>
-                  <button
+                  <Button
+                    loading={planning}
+                    variant="primary"
+                    size="md"
+                    className="mt-6"
                     onClick={handleGenerate}
                     disabled={planning}
-                    className={`${btn.primary} mt-6`}
                   >
                     {planning ? "Writing…" : "Write content"}
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -912,13 +986,14 @@ export default function CampaignWorkspace() {
                         key={slot.id}
                         piece={fromSlot(slot)}
                         action={
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleCancelPiece(slot)}
                             disabled={busySlot === slot.id}
-                            className={btn.ghost}
                           >
                             {busySlot === slot.id ? "…" : "Turn down"}
-                          </button>
+                          </Button>
                         }
                         footer={
                           <>
@@ -938,7 +1013,7 @@ export default function CampaignWorkspace() {
                                 back to this stage rather than the calendar. */}
                             <Link
                               href={`/clients/${clientId}/schedule/${slot.id}?from=${campaignId}&stage=content`}
-                              className={btn.link}
+                              className={buttonVariants({ variant: "link" })}
                             >
                               Open
                             </Link>
@@ -966,9 +1041,9 @@ export default function CampaignWorkspace() {
                 Write this campaign&rsquo;s content and the pieces land here
                 waiting for days.
               </p>
-              <button onClick={() => setStage("content")} className={`${btn.primary} mt-6`}>
+              <Button variant="primary" size="md" className="mt-6" onClick={() => setStage("content")}>
                 Go to content
-              </button>
+              </Button>
             </div>
           ) : undated.length === 0 ? (
             /* This stage is the dating workbench and nothing else. Once every
@@ -982,9 +1057,9 @@ export default function CampaignWorkspace() {
                 All {dated.length} of them are dated. Push them to Google from
                 the next stage.
               </p>
-              <button onClick={() => setStage("calendar")} className={`${btn.primary} mt-6`}>
+              <Button variant="primary" size="md" className="mt-6" onClick={() => setStage("calendar")}>
                 On the calendar
-              </button>
+              </Button>
             </div>
           ) : (
             <section>
@@ -1005,22 +1080,23 @@ export default function CampaignWorkspace() {
                     piece={fromSlot(slot)}
                     action={
                       <div className="flex items-center gap-2">
-                        <input
+                        <Input
+                          size="md"
                           type="date"
                           value={dates[slot.id] ?? ""}
                           onChange={(e) =>
                             setDates((d) => ({ ...d, [slot.id]: e.target.value }))
                           }
-                          className={field.select}
                           aria-label={`Date for ${slot.theme || slot.type}`}
                         />
-                        <button
+                        <Button
+                          variant="primary"
+                          size="md"
                           onClick={() => handleSchedule(slot)}
                           disabled={!dates[slot.id] || datingId === slot.id}
-                          className={btn.primarySm}
                         >
                           {datingId === slot.id ? "Setting…" : "Schedule"}
-                        </button>
+                        </Button>
                       </div>
                     }
                     footer={
@@ -1029,7 +1105,7 @@ export default function CampaignWorkspace() {
                          read since it was written. */
                       <Link
                         href={`/clients/${clientId}/schedule/${slot.id}?from=${campaignId}&stage=schedule`}
-                        className={btn.link}
+                        className={buttonVariants({ variant: "link" })}
                       >
                         Open
                       </Link>
@@ -1052,12 +1128,14 @@ export default function CampaignWorkspace() {
                 A piece reaches Google only once it has a date. Give these pieces
                 days and they can be pushed from here.
               </p>
-              <button
+              <Button
+                variant="primary"
+                size="md"
+                className="mt-6"
                 onClick={() => setStage("schedule")}
-                className={`${btn.primary} mt-6`}
               >
                 Give them days
-              </button>
+              </Button>
             </div>
           ) : (
             <>
@@ -1081,9 +1159,9 @@ export default function CampaignWorkspace() {
                       Connect Google and this campaign&rsquo;s days become events
                       — one calendar per client.
                     </span>
-                    <button onClick={handleConnect} className={`${btn.outline} shrink-0`}>
+                    <Button variant="secondary" size="md" className="shrink-0" onClick={handleConnect}>
                       Connect Google
-                    </button>
+                    </Button>
                   </>
                 ) : google.needs_reconnect ? (
                   <>
@@ -1091,9 +1169,9 @@ export default function CampaignWorkspace() {
                       Connected as {google.email}, but without calendar access.
                       Reconnect to grant it.
                     </span>
-                    <button onClick={handleConnect} className={`${btn.outline} shrink-0`}>
+                    <Button variant="secondary" size="md" className="shrink-0" onClick={handleConnect}>
                       Reconnect
-                    </button>
+                    </Button>
                   </>
                 ) : (
                   <>
@@ -1109,18 +1187,20 @@ export default function CampaignWorkspace() {
                           href={calendarUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className={btn.outline}
+                          className={buttonVariants({ variant: "secondary", size: "md" })}
                         >
                           Open in Google ↗
                         </a>
                       )}
-                      <button
+                      <Button
+                        loading={syncing}
+                        variant="primary"
+                        size="md"
                         onClick={() => span && handleSync(span.start, span.end)}
                         disabled={syncing || !span}
-                        className={btn.primarySm}
                       >
                         {syncing ? "Pushing…" : "Push to Google"}
-                      </button>
+                      </Button>
                     </span>
                   </>
                 )}
@@ -1141,12 +1221,14 @@ export default function CampaignWorkspace() {
                   ))}
                   {/* The cure sits with the problem. */}
                   {calendarMissing && (
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      className="mt-3"
                       onClick={handleResetCalendar}
-                      className={`${btn.outline} mt-3`}
                     >
                       Reset calendar
-                    </button>
+                    </Button>
                   )}
                 </div>
               )}

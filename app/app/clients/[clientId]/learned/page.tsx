@@ -9,11 +9,17 @@ import {
   deleteLesson,
   listSignals,
 } from "@/lib/api";
-import { banner, btn, field, surface, text } from "@/lib/ui";
+import { PageHeader } from "@/components/layout/page-header";
+import { banner, field, surface, text } from "@/lib/ui";
 import { PILL } from "@/lib/ui-status";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
 import { MAX_LESSON_CHARS } from "@/lib/marketing/lessons";
 import { LESSON_SCOPES, type Lesson, type LessonScope, type Signal } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { ListSkeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { useConfirm } from "@/components/ui/confirm-provider";
 
 /**
  * What the agent has been taught about this client.
@@ -28,13 +34,13 @@ import { LESSON_SCOPES, type Lesson, type LessonScope, type Signal } from "@/lib
  * answers "what do I keep saying no to".
  */
 
-const SCOPE_LABELS: Record<LessonScope, string> = {
+const SCOPE_LABELS: Record<LessonScope, string > = {
   campaign_ideas: "campaign ideas",
   plan_themes: "what gets written",
   copy: "the copy",
 };
 
-const KIND_LABELS: Record<string, string> = {
+const KIND_LABELS: Record<string, string > = {
   edited: "rewritten by hand",
   dropped: "dropped",
   steered: "sent back",
@@ -43,6 +49,7 @@ const KIND_LABELS: Record<string, string> = {
 };
 
 export default function LearnedPage() {
+  const confirm = useConfirm();
   const { clientId } = useParams() as { clientId: string };
 
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -104,7 +111,12 @@ export default function LearnedPage() {
   };
 
   const handleDelete = async (lesson: Lesson) => {
-    if (!confirm("Delete this lesson? Retiring keeps it visible instead.")) return;
+    const ok = await confirm({
+      title: "Delete this lesson?",
+      message: "Retiring it instead keeps it visible.",
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
     setBusyId(lesson.id);
     try {
       await deleteLesson(clientId, lesson.id);
@@ -141,13 +153,13 @@ export default function LearnedPage() {
         <p
           className={
             lesson.status === "retired"
-              ? "text-sm text-slate-400 line-through"
+              ? "text-sm text-slate-500 line-through"
               : "text-sm text-slate-800"
           }
         >
           {lesson.text}
         </p>
-        <p className="text-xs text-slate-400 mt-1">
+        <p className="text-xs text-slate-500 mt-1">
           {SCOPE_LABELS[lesson.scope as LessonScope] ?? lesson.scope}
           {" · "}
           {lesson.source === "written" ? "written by you" : "from your rejections"}
@@ -156,25 +168,27 @@ export default function LearnedPage() {
       </div>
       <div className="flex gap-2 shrink-0">
         {lesson.status === "active" ? (
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setStatus(lesson, "retired")}
             disabled={busyId === lesson.id}
-            className={btn.outlineSm}
           >
             {busyId === lesson.id ? "…" : "Retire"}
-          </button>
+          </Button>
         ) : (
           <>
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setStatus(lesson, "active")}
               disabled={busyId === lesson.id}
-              className={btn.outlineSm}
             >
               Bring back
-            </button>
-            <button onClick={() => handleDelete(lesson)} className={btn.ghost}>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => handleDelete(lesson)}>
               Delete
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -183,11 +197,10 @@ export default function LearnedPage() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className={text.h1}>What the agent has learned</h1>
-      <p className="text-sm text-slate-500 mt-1 mb-8">
-        Rules it writes against for this client. Every generation gets them —
-        campaign ideas, what gets written, and the copy.
-      </p>
+      <PageHeader
+        title="What the agent has learned"
+        description="Rules it writes against for this client. Every generation gets them — campaign ideas, what gets written, and the copy."
+      />
 
       {error && <p className={`${banner.error} mb-6`}>{error}</p>}
 
@@ -200,18 +213,20 @@ export default function LearnedPage() {
           and skims a paragraph.
         </p>
         <div className="flex flex-wrap gap-2">
-          <input
+          <Input
+            size="sm"
+            aria-label="The rule"
+            className="flex-1 min-w-[16rem]"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             maxLength={MAX_LESSON_CHARS}
             placeholder="Never open with the product name."
-            className={`${field.inputSm} flex-1 min-w-[16rem]`}
           />
-          <select
+          <Select
+            size="md"
             value={draftScope}
             onChange={(e) => setDraftScope(e.target.value as LessonScope)}
-            className={field.select}
             aria-label="What this rule applies to"
           >
             {LESSON_SCOPES.map((s) => (
@@ -219,14 +234,16 @@ export default function LearnedPage() {
                 {SCOPE_LABELS[s]}
               </option>
             ))}
-          </select>
-          <button
+          </Select>
+          <Button
+            loading={adding}
+            variant="primary"
+            size="md"
             onClick={handleAdd}
             disabled={adding || !draft.trim()}
-            className={btn.primarySm}
           >
             {adding ? "Saving…" : "Teach it"}
-          </button>
+          </Button>
         </div>
       </section>
 
@@ -239,7 +256,7 @@ export default function LearnedPage() {
           )}
         </div>
         {loading ? (
-          <p className={text.muted}>Loading…</p>
+          <ListSkeleton rows={3} />
         ) : active.length === 0 ? (
           <div className={surface.empty}>
             <p className="text-slate-700 text-lg">Nothing taught yet.</p>
@@ -304,7 +321,7 @@ export default function LearnedPage() {
                       className="rounded-lg bg-stone-50 border border-slate-200 px-3 py-1.5 text-sm text-slate-700"
                     >
                       {reason}
-                      {n > 1 && <span className="text-slate-400"> ×{n}</span>}
+                      {n > 1 && <span className="text-slate-500"> ×{n}</span>}
                     </span>
                   ))}
                 </div>
@@ -319,7 +336,7 @@ export default function LearnedPage() {
                     {KIND_LABELS[s.kind] ?? s.kind}
                   </span>
                   {s.type && (
-                    <span className="text-slate-400">
+                    <span className="text-slate-500">
                       {" · "}
                       {contentTypeLabel(s.type)}
                     </span>

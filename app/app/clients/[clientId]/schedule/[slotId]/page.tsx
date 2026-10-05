@@ -28,10 +28,16 @@ import { windowFor } from "@/lib/marketing/posting-windows";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
 import { readCopy, isCopyStale } from "@/lib/marketing/copy";
 import { pieceWarnings } from "@/lib/marketing/warnings";
-import { backLink, btn, field, pager, surface, text, banner } from "@/lib/ui";
+import { backLink, pager, surface, text, banner } from "@/lib/ui";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { channelPill, statusPill, statusLabel, PILL } from "@/lib/ui-status";
 import type { Slot, SlotStatus, Strategy } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { CardSkeleton, Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
+import { useConfirm } from "@/components/ui/confirm-provider";
 
 const STATUS_CHOICES: SlotStatus[] = [
   "planned",
@@ -57,6 +63,7 @@ function dayLabel(date: string): string {
 const MAX_BEATS = 8;
 
 export default function SlotDetailPage() {
+  const confirm = useConfirm();
   const params = useParams() as { clientId: string; slotId: string };
   const { clientId, slotId } = params;
   const router = useRouter();
@@ -173,14 +180,23 @@ export default function SlotDetailPage() {
   /**
    * Leaving with unsaved brief edits.
    *
-   * confirm() rather than a route guard or an autosave — it is what this
-   * codebase already uses for "are you sure" (app/page.tsx, the client page,
-   * the plan page), and inventing a new pattern for one screen is worse than
-   * a plain browser prompt.
+   * A guard rather than a route interceptor or an autosave: it is the same
+   * question the rest of the app asks before anything destructive, and it now
+   * asks it the same way — useConfirm(), not window.confirm().
+   *
+   * Async, which the browser prompt did not need to be. All four callers are
+   * click handlers that ignore the result, so awaiting inside costs nothing;
+   * the navigation simply happens after the answer instead of before it.
    */
-  const leave = (href: string) => {
-    if (dirty && !confirm("You have unsaved changes to the brief. Leave anyway?")) {
-      return;
+  const leave = async (href: string) => {
+    if (dirty) {
+      const ok = await confirm({
+        title: "Leave without saving?",
+        message: "You have unsaved changes to the brief.",
+        confirmLabel: "Leave",
+        variant: "primary",
+      });
+      if (!ok) return;
     }
     router.push(href);
   };
@@ -216,7 +232,7 @@ export default function SlotDetailPage() {
     const hi = iso(new Date(Date.now() + weeks * 7 * 86400_000));
     // An unscheduled piece is in no window; it is reachable by deep link and
     // from the Schedule page's own unscheduled list, not by these arrows.
-    const within = all.filter((s) => s.date !== null && s.date >= lo && s.date <= hi);
+    const within = all.filter((s) => s.date !== null && s.date>= lo && s.date <= hi);
     // Never strand the piece being viewed: an older slot reached by a direct
     // link falls outside the window, and the arrows should still work.
     return within.some((s) => s.id === slotId) ? within : all;
@@ -224,7 +240,7 @@ export default function SlotDetailPage() {
 
   const index = scope.findIndex((s) => s.id === slotId);
   const prev = index > 0 ? scope[index - 1] : null;
-  const next = index >= 0 && index < scope.length - 1 ? scope[index + 1] : null;
+  const next = index>= 0 && index < scope.length - 1 ? scope[index + 1] : null;
   // Carried on every link out of this page, so walking prev/next never loses
   // the window you were looking at or the campaign you came from.
   const suffix = (() => {
@@ -358,7 +374,25 @@ export default function SlotDetailPage() {
     }
   };
 
-  if (loading) return <p className={text.muted}>Loading…</p>;
+  if (loading)
+    return (
+      <div className="max-w-4xl">
+        <button onClick={() => leave(backHref)} className={`${backLink} mb-3`}>
+          <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+          {backLabel}
+        </button>
+        <div className="mb-6 space-y-2 border-b border-slate-200 pb-5">
+          <Skeleton className="h-3 w-56" />
+          <Skeleton className="h-8 w-2/3" />
+          <div className="flex gap-2 pt-1">
+            <Skeleton className="h-6 w-20 rounded-full" />
+            <Skeleton className="h-6 w-24 rounded-full" />
+            <Skeleton className="h-6 w-16 rounded-full" />
+          </div>
+        </div>
+        <CardSkeleton />
+      </div>
+    );
   if (!slot || !draft) {
     return (
       <div className="max-w-4xl">
@@ -413,7 +447,7 @@ export default function SlotDetailPage() {
         </nav>
       </div>
 
-      <div className="mb-8">
+      <div className="mb-6 border-b border-slate-200 pb-5">
         <p className={text.eyebrow}>
           {slot.date
             ? `${dayLabel(slot.date)} · ${slot.time_local} · times in ${timezone}`
@@ -431,19 +465,20 @@ export default function SlotDetailPage() {
           {slot.campaign_title && (
             <span className="text-sm text-slate-500">{slot.campaign_title}</span>
           )}
-          <select
+          <Select
+            size="md"
+            className="py-1 text-xs ml-auto"
             value={slot.status}
             disabled={busy}
             onChange={(e) => handleStatus(e.target.value as SlotStatus)}
             aria-label="Status"
-            className={`${field.select} py-1 text-xs ml-auto`}
           >
             {STATUS_CHOICES.map((s) => (
               <option key={s} value={s}>
                 {statusLabel(s)}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         {dropped && (
           <p className={`${banner.info} mt-3`}>
@@ -464,30 +499,35 @@ export default function SlotDetailPage() {
           <div className="mt-3 flex flex-wrap items-center gap-3">
             {slot.status === "confirmed" ? (
               <>
-                <button
-                  onClick={() => {
-                    if (confirm("Hold this back? A publisher will stop picking it up.")) {
-                      handleStatus("planned");
-                    }
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: "Hold this back?",
+                      message: "A publisher will stop picking it up.",
+                      confirmLabel: "Hold it back",
+                    });
+                    if (ok) handleStatus("planned");
                   }}
                   disabled={busy}
-                  className={btn.outline}
                 >
                   Hold back
-                </button>
+                </Button>
                 <span className={text.muted}>
                   Released — any API key with publish access can post this.
                 </span>
               </>
             ) : (
               <>
-                <button
+                <Button
+                  variant="primary"
+                  size="md"
                   onClick={() => handleStatus("confirmed")}
                   disabled={busy || !copy || stale}
-                  className={btn.primary}
                 >
                   Release to publisher
-                </button>
+                </Button>
                 <span className={text.muted}>
                   {!copy
                     ? "Write the copy first — a brief is not publishable prose."
@@ -529,26 +569,30 @@ export default function SlotDetailPage() {
           </p>
 
           <div className="flex flex-wrap items-center gap-2">
-            <input
+            <Input
+              size="md"
               type="date"
               value={when?.date ?? ""}
               onChange={(e) =>
                 setWhen((w) => ({ date: e.target.value, time: w?.time ?? "09:00" }))
               }
-              className={field.select}
               aria-label="Date"
             />
-            <input
+            <Input
+              size="md"
               type="time"
               value={when?.time ?? ""}
               onChange={(e) =>
                 setWhen((w) => ({ date: w?.date ?? "", time: e.target.value }))
               }
-              className={field.select}
               aria-label="Time"
             />
             <span className={text.micro}>{timezone}</span>
-            <button
+            <Button
+              loading={moving}
+              variant="primary"
+              size="md"
+              className="ml-auto"
               onClick={handleMove}
               disabled={
                 moving ||
@@ -556,10 +600,9 @@ export default function SlotDetailPage() {
                 // Nothing to do when neither field moved.
                 (when.date === slot.date && when.time === slot.time_local)
               }
-              className={`${btn.primarySm} ml-auto`}
             >
               {moving ? "Moving…" : slot.date ? "Move" : "Schedule"}
-            </button>
+            </Button>
           </div>
 
           {/* Advice, not a refusal: going over a weekly cap is the operator's
@@ -573,32 +616,35 @@ export default function SlotDetailPage() {
 
           <div className="space-y-3">
             <div>
-              <label className={field.micro}>Theme</label>
-              <input
-                className={field.inputSm}
+              <Input
+                label="Theme"
+                size="sm"
                 value={draft.theme}
                 onChange={(e) => patchDraft({ theme: e.target.value })}
               />
             </div>
             <div>
-              <label className={field.micro}>Hook</label>
-              <textarea
-                className={`${field.textarea} h-16`}
+              <Textarea
+                label="Hook"
+                className="h-16"
                 value={draft.hook}
                 onChange={(e) => patchDraft({ hook: e.target.value })}
                 placeholder="The first line, the first three seconds, slide 1."
               />
             </div>
             <div>
-              <label className={field.micro}>Body — one entry per beat, in order</label>
+              <p className="mb-1.5 block text-xs uppercase tracking-wide text-slate-500">
+                Body — one entry per beat, in order
+              </p>
               <div className="space-y-2">
                 {draft.body.map((beat, i) => (
                   <div key={i} className="flex gap-2 items-start">
-                    <span className="text-xs text-slate-400 pt-2 w-4 shrink-0">
+                    <span className="text-xs text-slate-500 pt-2 w-4 shrink-0">
                       {i + 1}
                     </span>
-                    <textarea
-                      className={`${field.textarea} h-14`}
+                    <Textarea
+                      className="h-14"
+                      aria-label={`Beat ${i + 1}`}
                       value={beat}
                       onChange={(e) => {
                         const body = [...draft.body];
@@ -611,48 +657,51 @@ export default function SlotDetailPage() {
                         patchDraft({ body: draft.body.filter((_, j) => j !== i) })
                       }
                       aria-label={`Remove beat ${i + 1}`}
-                      className="text-slate-400 hover:text-red-600 transition-colors pt-2"
+                      className="text-slate-500 hover:text-red-600 transition-colors pt-2"
                     >
                       &#215;
                     </button>
                   </div>
                 ))}
                 {draft.body.length < MAX_BEATS && (
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => patchDraft({ body: [...draft.body, ""] })}
-                    className={btn.outlineSm}
                   >
                     + Beat
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
             <div>
-              <label className={field.micro}>CTA</label>
-              <input
-                className={field.inputSm}
+              <Input
+                label="CTA"
+                size="sm"
                 value={draft.cta}
                 onChange={(e) => patchDraft({ cta: e.target.value })}
                 placeholder="The ask, written as it would be said."
               />
             </div>
             <div>
-              <label className={field.micro}>In one line</label>
-              <input
-                className={field.inputSm}
+              <Input
+                label="In one line"
+                size="sm"
                 value={draft.brief}
                 onChange={(e) => patchDraft({ brief: e.target.value })}
               />
             </div>
 
             <div className="flex flex-wrap gap-2 items-center pt-1">
-              <button
+              <Button
+                loading={busy}
+                variant="primary"
+                size="md"
                 onClick={handleSave}
                 disabled={busy || !dirty}
-                className={btn.primarySm}
               >
                 {busy ? "Saving…" : "Save"}
-              </button>
+              </Button>
               {saved && (
                 <span className="text-xs font-semibold text-green-700">Saved</span>
               )}
@@ -688,7 +737,7 @@ export default function SlotDetailPage() {
               )}
               {copy.blocks.map((block, i) => (
                 <div key={i}>
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-500">
                     {block.label}
                   </p>
                   <p className="text-sm text-slate-800 whitespace-pre-wrap">
@@ -698,13 +747,13 @@ export default function SlotDetailPage() {
                     <p className="text-xs text-slate-500">on screen: {block.onScreen}</p>
                   )}
                   {block.note && (
-                    <p className="text-xs text-slate-400 italic">{block.note}</p>
+                    <p className="text-xs text-slate-500 italic">{block.note}</p>
                   )}
                 </div>
               ))}
               {copy.caption && (
                 <div>
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-500">
                     Caption
                   </p>
                   <p className="text-sm text-slate-700 whitespace-pre-wrap">
@@ -738,19 +787,22 @@ export default function SlotDetailPage() {
           )}
 
           <div className="space-y-2">
-            <input
-              className={field.inputSm}
+            <Input
+              size="sm"
+              aria-label="Optional: how to write it — e.g. shorter slides, no questions"
               value={copySteer}
               onChange={(e) => setCopySteer(e.target.value)}
               placeholder="Optional: how to write it — e.g. shorter slides, no questions"
             />
-            <button
+            <Button
+              loading={busy}
+              variant="primary"
+              size="md"
               onClick={handleWriteCopy}
               disabled={busy || dirty}
-              className={btn.primarySm}
             >
               {busy ? "Writing…" : copy ? "Write it again" : "Write the copy"}
-            </button>
+            </Button>
           </div>
         </section>
 
@@ -768,27 +820,31 @@ export default function SlotDetailPage() {
             </p>
           )}
           <div className="space-y-2">
-            <input
-              className={field.inputSm}
+            <Input
+              size="sm"
+              aria-label="Optional: what to change — e.g. make the hook blunter"
               value={steer}
               onChange={(e) => setSteer(e.target.value)}
               placeholder="Optional: what to change — e.g. make the hook blunter"
             />
             <div className="flex flex-wrap gap-2">
-              <button
+              <Button
+                loading={busy}
+                variant="secondary"
+                size="sm"
                 onClick={() => handleRegenerate("rewrite")}
                 disabled={busy || dirty}
-                className={btn.outlineSm}
               >
                 {busy ? "Working…" : "Rewrite"}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => handleRegenerate("angle")}
                 disabled={busy || dirty}
-                className={btn.outlineSm}
               >
                 New angle
-              </button>
+              </Button>
             </div>
           </div>
         </section>
@@ -827,13 +883,16 @@ export default function SlotDetailPage() {
                 This event&rsquo;s title and notes were edited in Google, so syncing
                 no longer rewrites them. Only its date and time still follow the plan.
               </p>
-              <button
+              <Button
+                loading={busy}
+                variant="secondary"
+                size="sm"
+                className="mt-2"
                 onClick={handleUnlock}
                 disabled={busy}
-                className={`${btn.outlineSm} mt-2`}
               >
                 {busy ? "Working…" : "Take it back"}
-              </button>
+              </Button>
             </div>
           )}
         </section>

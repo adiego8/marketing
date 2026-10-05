@@ -9,8 +9,13 @@ import {
   removeClientLogo,
 } from "@/lib/api";
 import { ALLOWED_LOGO_LABEL } from "@/lib/marketing/logo";
-import { banner, btn, field, surface, text } from "@/lib/ui";
+import { PageHeader } from "@/components/layout/page-header";
+import { banner, field, surface, text } from "@/lib/ui";
 import type { Branding } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useConfirm } from "@/components/ui/confirm-provider";
 
 const DEFAULT_BRANDING: Branding = {
   colors: { primary: "#1a1a1a", secondary: "#f5f5f5", accent: "#ff6b35" },
@@ -46,6 +51,7 @@ const GUIDELINES = [
 ];
 
 export default function BrandingPage() {
+  const confirm = useConfirm();
   const { clientId } = useParams() as { clientId: string };
   const [branding, setBranding] = useState<Branding>(DEFAULT_BRANDING);
   const [logoUrl, setLogoUrl] = useState("");
@@ -116,7 +122,12 @@ export default function BrandingPage() {
   };
 
   const handleLogoRemove = async () => {
-    if (!confirm("Remove this logo? The stored image is deleted.")) return;
+    const ok = await confirm({
+      title: "Remove this logo?",
+      message: "The stored image is deleted.",
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
     setError(null);
     try {
       await removeClientLogo(clientId);
@@ -136,22 +147,20 @@ export default function BrandingPage() {
 
   return (
     <div className="max-w-3xl">
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
-        <div>
-          <h1 className={text.h1}>Branding</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            The brand kit used in Canva prompts and calendar event briefs.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {saved && (
-            <span className="text-xs font-semibold text-green-700">Saved</span>
-          )}
-          <button onClick={handleSave} disabled={saving} className={btn.primarySm}>
-            {saving ? "Saving…" : "Save"}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Branding"
+        description="The brand kit used in Canva prompts and calendar event briefs."
+        actions={
+          <>
+            {saved && (
+              <span className="text-xs font-semibold text-green-700">Saved</span>
+            )}
+            <Button loading={saving} variant="primary" size="md" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </>
+        }
+      />
 
       {error && <p className={`${banner.error} mb-4`}>{error}</p>}
 
@@ -193,9 +202,9 @@ export default function BrandingPage() {
                 className="w-16 h-16 object-contain"
               />
               <span className="text-xs text-slate-500 flex-1">Current logo</span>
-              <button onClick={handleLogoRemove} className={btn.outlineSm}>
+              <Button variant="secondary" size="sm" onClick={handleLogoRemove}>
                 Remove
-              </button>
+              </Button>
             </div>
           )}
         </section>
@@ -205,7 +214,9 @@ export default function BrandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {(["primary", "secondary", "accent"] as const).map((key) => (
               <div key={key}>
-                <label className={`${field.micro} capitalize`}>{key}</label>
+                <p className="mb-1.5 block text-xs uppercase tracking-wide text-slate-500">
+                  {key}
+                </p>
                 <div className="flex gap-2 items-center">
                   <input
                     type="color"
@@ -214,11 +225,13 @@ export default function BrandingPage() {
                     className="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer shrink-0"
                     aria-label={`${key} colour`}
                   />
-                  <input
+                  <Input
+                    size="sm"
+                    aria-label={`${key} colour, hex value`}
+                    className="font-mono"
                     value={branding.colors?.[key] || ""}
                     onChange={(e) => updateColor(key, e.target.value)}
                     placeholder="#000000"
-                    className={`${field.inputSm} font-mono`}
                   />
                 </div>
               </div>
@@ -230,21 +243,21 @@ export default function BrandingPage() {
           <h2 className={`${text.cardTitle} mb-4`}>Typography</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className={field.micro}>Headline font</label>
-              <input
+              <Input
+                label="Headline font"
+                size="sm"
                 value={branding.fonts?.headline || ""}
                 onChange={(e) => updateFont("headline", e.target.value)}
                 placeholder="Inter"
-                className={field.inputSm}
               />
             </div>
             <div>
-              <label className={field.micro}>Body font</label>
-              <input
+              <Input
+                label="Body font"
+                size="sm"
                 value={branding.fonts?.body || ""}
                 onChange={(e) => updateFont("body", e.target.value)}
                 placeholder="Inter"
-                className={field.inputSm}
               />
             </div>
           </div>
@@ -255,14 +268,14 @@ export default function BrandingPage() {
           <div className="space-y-4">
             {GUIDELINES.map(({ key, label, placeholder }) => (
               <div key={key}>
-                <label className={field.micro}>{label}</label>
-                <textarea
+                <Textarea
+                  label={label}
+                  className="h-20"
                   value={branding[key] || ""}
                   onChange={(e) =>
                     setBranding({ ...branding, [key]: e.target.value })
                   }
                   placeholder={placeholder}
-                  className={`${field.textarea} h-20`}
                 />
               </div>
             ))}

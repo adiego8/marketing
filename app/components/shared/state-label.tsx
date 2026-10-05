@@ -24,7 +24,7 @@ export function StateLabel({
     good: "text-teal-700",
     warn: "text-amber-700",
     bad: "text-red-700",
-    muted: "text-slate-400",
+    muted: "text-slate-500",
   }[tone];
   return (
     <span className={`text-[11px] uppercase tracking-wide ${color}`} title={title}>

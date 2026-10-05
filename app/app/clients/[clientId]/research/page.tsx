@@ -5,16 +5,22 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { listResearchRuns, runResearch, acceptResearch } from "@/lib/api";
 import type { ResearchRun } from "@/lib/types";
-import { banner, btn, field, surface, text } from "@/lib/ui";
+import { PageHeader } from "@/components/layout/page-header";
+import { banner, surface, text } from "@/lib/ui";
 import { CopyButton } from "@/components/shared/copy-button";
 import { contentTypeLabel } from "@/lib/marketing/content-types";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { CardSkeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 // Reading a research run is the whole job of this page: the draft is a proposal
 // assembled from public pages, and the point of showing the dossier and the
 // sources next to it is that a person can check it before it becomes the
 // strategy every campaign and every post is written from.
 
-const STATUS_NOTE: Record<string, string> = {
+const STATUS_NOTE: Record<string, string > = {
   running: "Still working.",
   complete: "Both passes ran.",
   degraded: "One pass failed — read the warnings before trusting the gaps.",
@@ -64,6 +70,9 @@ function host(url: string) {
     return url;
   }
 }
+
+const DESCRIPTION =
+  "Reads the client’s website and the open web, then drafts a strategy from what it found. Nothing reaches the Strategy page until you accept it.";
 
 export default function ResearchPage() {
   const { clientId } = useParams() as { clientId: string };
@@ -152,9 +161,18 @@ export default function ResearchPage() {
     }
   };
 
-  if (loading) return <p className="text-slate-500">Loading…</p>;
+  // The header is known before the fetch is, so it paints immediately and
+  // only the body waits. The early `return <p>Loading…</p>` blanked the page.
+  if (loading)
+    return (
+      <div className="max-w-4xl space-y-6">
+        <PageHeader className="mb-0" title="Research" description={DESCRIPTION} />
+        <CardSkeleton />
+        <CardSkeleton />
+      </div>
+    );
 
-  const dossier = (run?.dossier ?? {}) as Record<string, Record<string, unknown> | unknown[]>;
+  const dossier = (run?.dossier ?? {}) as Record<string, Record<string, unknown > | unknown[]>;
   const company = (dossier.company ?? {}) as Record<string, string | string[]>;
   const audience = (dossier.audience ?? {}) as Record<string, string | string[]>;
   const evidence = (dossier.evidence ?? []) as { claim: string; source: string }[];
@@ -173,25 +191,25 @@ export default function ResearchPage() {
 
   return (
     <div className="max-w-4xl space-y-6">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className={text.h1}>Research</h1>
-          <p className={`${text.muted} mt-1 max-w-xl`}>
-            Reads the client&apos;s website and the open web, then drafts a strategy from
-            what it found. Nothing reaches the Strategy page until you accept it.
-          </p>
-        </div>
-      </header>
+      {/* mb-0 because the wrapper's `space-y-6` already supplies the gap;
+          the header's own margin would double it. */}
+      <PageHeader
+        className="mb-0"
+        title="Research"
+        description={DESCRIPTION}
+      />
 
       <section className={`${surface.card} ${surface.pad} space-y-3`}>
-        <input
-          className={field.inputSm}
+        <Input
+          size="sm"
+          aria-label="Optional: what to focus on — e.g. bilingual filers, and the Second Look Review as the differentiator"
           value={steer}
           onChange={(e) => setSteer(e.target.value)}
           placeholder="Optional: what to focus on — e.g. bilingual filers, and the Second Look Review as the differentiator"
         />
-        <textarea
-          className={`${field.textarea} h-16`}
+        <Textarea
+          aria-label="Optional: competitors to look at, one per line"
+          className="h-16"
           value={namedRivals}
           onChange={(e) => setNamedRivals(e.target.value)}
           placeholder="Optional: competitors to look at, one per line"
@@ -200,8 +218,10 @@ export default function ResearchPage() {
           This points the search; it never decides what it finds. A competitor
           named here is a place to look, not a claim to repeat.
         </p>
-        <button
-          className={btn.primary}
+        <Button
+          loading={starting}
+          variant="primary"
+          size="md"
           onClick={handleRun}
           disabled={starting || inFlight}
         >
@@ -212,7 +232,7 @@ export default function ResearchPage() {
               : run
                 ? "Run again"
                 : "Run research"}
-        </button>
+        </Button>
       </section>
 
       {inFlight && (
@@ -319,7 +339,7 @@ export default function ResearchPage() {
                           href={e.source}
                           target="_blank"
                           rel="noreferrer noopener"
-                          className={btn.link}
+                          className={buttonVariants({ variant: "link" })}
                         >
                           {host(e.source)}
                         </a>
@@ -339,7 +359,7 @@ export default function ResearchPage() {
                           {comp.url && (
                             <>
                               {" "}
-                              <a href={comp.url} target="_blank" rel="noreferrer noopener" className={btn.link}>
+                              <a href={comp.url} target="_blank" rel="noreferrer noopener" className={buttonVariants({ variant: "link" })}>
                                 {host(comp.url)}
                               </a>
                             </>
@@ -404,8 +424,9 @@ export default function ResearchPage() {
                 </div>
 
                 <div className="mt-5 flex items-center gap-3 border-t border-slate-200 pt-4">
-                  <button
-                    className={btn.primary}
+                  <Button
+                    variant="primary"
+                    size="md"
                     onClick={handleAccept}
                     disabled={accepting || Boolean(run.accepted_at)}
                   >
@@ -414,8 +435,8 @@ export default function ResearchPage() {
                       : accepting
                         ? "Writing…"
                         : "Accept into the strategy"}
-                  </button>
-                  <Link href={`/clients/${clientId}/strategy`} className={btn.outline}>
+                  </Button>
+                  <Link href={`/clients/${clientId}/strategy`} className={buttonVariants({ variant: "secondary", size: "md" })}>
                     Open Strategy
                   </Link>
                   {accepted && <span className="text-sm text-teal-700">Written.</span>}
@@ -455,7 +476,7 @@ export default function ResearchPage() {
               <ul className="space-y-1">
                 {run.sources.map((s) => (
                   <li key={s}>
-                    <a href={s} target="_blank" rel="noreferrer noopener" className={`${btn.link} text-sm`}>
+                    <a href={s} target="_blank" rel="noreferrer noopener" className={cn(buttonVariants({ variant: "link" }), "text-sm")}>
                       {s}
                     </a>
                   </li>

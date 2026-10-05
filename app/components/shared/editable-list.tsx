@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { btn, field } from "@/lib/ui";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface EditableListProps {
   items: string[];
@@ -43,7 +45,7 @@ export function EditableList({ items, onChange, placeholder = "Add item…" }: E
                 type="button"
                 onClick={() => handleRemove(i)}
                 aria-label={`Remove ${item}`}
-                className="text-slate-400 hover:text-red-600 transition-colors leading-none"
+                className="text-slate-500 hover:text-red-600 transition-colors leading-none"
               >
                 &#215;
               </button>
@@ -52,16 +54,17 @@ export function EditableList({ items, onChange, placeholder = "Add item…" }: E
         </div>
       )}
       <div className="flex gap-2">
-        <input
+        <Input
+          size="sm"
+          aria-label={placeholder ?? "Add an item"}
           value={newItem}
           onChange={(e) => setNewItem(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={field.inputSm}
         />
-        <button type="button" onClick={handleAdd} className={`${btn.outlineSm} shrink-0`}>
+        <Button variant="secondary" size="sm" className="shrink-0" type="button" onClick={handleAdd}>
           Add
-        </button>
+        </Button>
       </div>
     </div>
   );

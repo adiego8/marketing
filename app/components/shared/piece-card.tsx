@@ -112,7 +112,7 @@ export function PieceCard({
             {contentTypeLabel(piece.type)}
           </span>
           {showCampaign && piece.campaignTitle && (
-            <span className="text-xs text-slate-400 truncate">
+            <span className="text-xs text-slate-500 truncate">
               {piece.campaignTitle}
             </span>
           )}

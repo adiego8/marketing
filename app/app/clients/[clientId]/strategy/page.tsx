@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useRef } from "react";
 import { EditableList } from "@/components/shared/editable-list";
-import { banner, btn, field, surface, toggle, text } from "@/lib/ui";
+import { PageHeader } from "@/components/layout/page-header";
+import { banner, field, surface, text } from "@/lib/ui";
 import { getClient, getStrategy, updateStrategy } from "@/lib/api";
 import type { Strategy } from "@/lib/types";
 import {
@@ -25,6 +26,11 @@ import {
   demographicLabel,
   slugify,
 } from "@/lib/marketing/demographics";
+import { Button } from "@/components/ui/button";
+import { CardSkeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
 
 // The Strategy fields that hold a nested object. Naming them lets updateNested
 // index Strategy directly instead of casting it to a record it isn't.
@@ -219,7 +225,17 @@ export default function StrategyPage() {
     }
   };
 
-  if (loading) return <p className="text-slate-500">Loading...</p>;
+  if (loading)
+    return (
+      <div className="max-w-5xl">
+        <PageHeader title="Strategy" />
+        <div className="space-y-4">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      </div>
+    );
   if (!strategy)
     return (
       <p className={banner.error}>{error ?? "Could not load the strategy."}</p>
@@ -285,25 +301,27 @@ export default function StrategyPage() {
 
   return (
     <div className="max-w-5xl">
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
-        <div>
-          <h1 className={text.h1}>Strategy</h1>
-          <p className="text-sm text-slate-500 mt-1">{strategy.business_name}</p>
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={saving || saved}
-          className={btn.primarySm}
-        >
-          {saving
-            ? "Saving…"
-            : saved
-              ? "Saved"
-              : isNew
-                ? "Create strategy"
-                : "Save changes"}
-        </button>
-      </div>
+      <PageHeader
+        title="Strategy"
+        description={strategy.business_name}
+        actions={
+          <Button
+            loading={saving}
+            variant="primary"
+            size="md"
+            onClick={handleSave}
+            disabled={saving || saved}
+          >
+            {saving
+              ? "Saving…"
+              : saved
+                ? "Saved"
+                : isNew
+                  ? "Create strategy"
+                  : "Save changes"}
+          </Button>
+        }
+      />
 
       {isNew && (
         <div className={`${banner.warn} mb-6`}>
@@ -357,28 +375,30 @@ export default function StrategyPage() {
         <Section id="icp" title="Who it's for">
           <div className="grid gap-4">
             <Field label="Business Name">
-                <input className={field.inputSm}
+                <Input aria-label="Business Name"
+                  size="sm"
                   value={strategy.business_name}
                   onChange={(e) => update("business_name", e.target.value)}
                 />
               </Field>
             <Field label="Description">
-                <textarea
+                <Textarea aria-label="Description"
+                  className="h-20"
                   value={(icp.description as string) || ""}
                   onChange={(e) => updateNested("icp", "description", e.target.value)}
-                  className={`${field.textarea} h-20`}
                 />
               </Field>
             <Field label="Demographics" className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   {DEMOGRAPHIC_FIELDS.map((f) => (
                     <div key={f.key}>
-                      <label className={field.micro}>{f.label}</label>
-                      <input className={field.inputSm}
+                      <Input
+                        label={f.label}
+                        size="sm"
                         value={demographics[f.key] || ""}
                         onChange={(e) => setDemographic(f.key, e.target.value)}
                       />
-                      {f.hint && <p className="mt-1 text-xs text-slate-400">{f.hint}</p>}
+                      {f.hint && <p className="mt-1 text-xs text-slate-500">{f.hint}</p>}
                     </div>
                   ))}
                 </div>
@@ -387,12 +407,19 @@ export default function StrategyPage() {
                     {customDemographics.map((key) => (
                       <div key={key}>
                         <div className="flex items-baseline justify-between gap-2">
-                          <label className={field.micro}>{demographicLabel(key)}</label>
-                          <button className={btn.ghost} onClick={() => removeDemographic(key)}>
+                          <label
+                            htmlFor={`demographic-${key}`}
+                            className="mb-1.5 block text-xs uppercase tracking-wide text-slate-500"
+                          >
+                            {demographicLabel(key)}
+                          </label>
+                          <Button variant="ghost" size="sm"  onClick={() => removeDemographic(key)}>
                             Remove
-                          </button>
+                          </Button>
                         </div>
-                        <input className={field.inputSm}
+                        <Input
+                          id={`demographic-${key}`}
+                          size="sm"
                           value={demographics[key] || ""}
                           onChange={(e) => setDemographic(key, e.target.value)}
                         />
@@ -401,8 +428,10 @@ export default function StrategyPage() {
                   </div>
                 )}
                 <div className="flex items-center gap-2">
-                  <input
-                    className={`${field.inputSm} max-w-xs`}
+                  <Input
+                    size="sm"
+                    aria-label="Add a field, e.g. Tax complexity"
+                    className="max-w-xs"
                     value={newDemographic}
                     onChange={(e) => setNewDemographic(e.target.value)}
                     onKeyDown={(e) => {
@@ -413,9 +442,9 @@ export default function StrategyPage() {
                     }}
                     placeholder="Add a field, e.g. Tax complexity"
                   />
-                  <button className={btn.outlineSm} onClick={addDemographic}>
+                  <Button variant="secondary" size="sm"  onClick={addDemographic}>
                     Add field
-                  </button>
+                  </Button>
                 </div>
                 {demographicError && (
                   <p className="text-xs text-amber-700">{demographicError}</p>
@@ -456,10 +485,10 @@ export default function StrategyPage() {
         <Section id="voice" title="Voice">
           <div className="grid gap-4">
             <Field label="Personality">
-                <textarea
+                <Textarea aria-label="Personality"
+                  className="h-20"
                   value={(voice.personality as string) || ""}
                   onChange={(e) => updateNested("voice", "personality", e.target.value)}
-                  className={`${field.textarea} h-20`}
                 />
               </Field>
             <Field label="Traits">
@@ -470,13 +499,15 @@ export default function StrategyPage() {
                 />
               </Field>
             <Field label="Tone">
-                <input className={field.inputSm}
+                <Input aria-label="Tone"
+                  size="sm"
                   value={(voice.tone as string) || ""}
                   onChange={(e) => updateNested("voice", "tone", e.target.value)}
                 />
               </Field>
             <Field label="Communication Style">
-                <input className={field.inputSm}
+                <Input aria-label="Communication Style"
+                  size="sm"
                   value={(voice.communication_style as string) || ""}
                   onChange={(e) => updateNested("voice", "communication_style", e.target.value)}
                 />
@@ -503,8 +534,9 @@ export default function StrategyPage() {
           <div className="grid gap-4">
             <Field label="Primary Angle" className="space-y-3">
                 <div>
-                  <label className={field.micro}>Type</label>
-                  <input className={field.inputSm}
+                  <Input
+                    label="Type"
+                    size="sm"
                     value={primaryAngle.type || ""}
                     onChange={(e) =>
                       updateNested("positioning", "primary_angle", { ...primaryAngle, type: e.target.value })
@@ -512,23 +544,23 @@ export default function StrategyPage() {
                   />
                 </div>
                 <div>
-                  <label className={field.micro}>Statement</label>
-                  <textarea
+                  <Textarea
+                    label="Statement"
+                    className="h-16"
                     value={primaryAngle.statement || ""}
                     onChange={(e) =>
                       updateNested("positioning", "primary_angle", { ...primaryAngle, statement: e.target.value })
                     }
-                    className={`${field.textarea} h-16`}
                   />
                 </div>
                 <div>
-                  <label className={field.micro}>Why this works</label>
-                  <textarea
+                  <Textarea
+                    label="Why this works"
+                    className="h-16"
                     value={primaryAngle.why || ""}
                     onChange={(e) =>
                       updateNested("positioning", "primary_angle", { ...primaryAngle, why: e.target.value })
                     }
-                    className={`${field.textarea} h-16`}
                   />
                 </div>
               </Field>
@@ -536,18 +568,21 @@ export default function StrategyPage() {
                 {secondaryAngles.map((angle, i) => (
                   <div key={i} className="rounded-lg border border-slate-200 p-3 space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Angle {i + 1}</span>
-                      <button
-                        className={btn.ghost}
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Angle {i + 1}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => {
                           const updated = secondaryAngles.filter((_, j) => j !== i);
                           updateNested("positioning", "secondary_angles", updated);
                         }}
                       >
                         Remove
-                      </button>
+                      </Button>
                     </div>
-                    <input className={field.inputSm}
+                    <Input
+                      size="sm"
+                      aria-label="Type"
                       placeholder="Type"
                       value={angle.type || ""}
                       onChange={(e) => {
@@ -556,7 +591,9 @@ export default function StrategyPage() {
                         updateNested("positioning", "secondary_angles", updated);
                       }}
                     />
-                    <input className={field.inputSm}
+                    <Input
+                      size="sm"
+                      aria-label="Statement"
                       placeholder="Statement"
                       value={angle.statement || ""}
                       onChange={(e) => {
@@ -565,7 +602,9 @@ export default function StrategyPage() {
                         updateNested("positioning", "secondary_angles", updated);
                       }}
                     />
-                    <input className={field.inputSm}
+                    <Input
+                      size="sm"
+                      aria-label="Why this works"
                       placeholder="Why this works"
                       value={angle.why || ""}
                       onChange={(e) => {
@@ -576,8 +615,9 @@ export default function StrategyPage() {
                     />
                   </div>
                 ))}
-                <button
-                  className={btn.outlineSm}
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() =>
                     updateNested("positioning", "secondary_angles", [
                       ...secondaryAngles,
@@ -586,20 +626,20 @@ export default function StrategyPage() {
                   }
                 >
                   Add Angle
-                </button>
+                </Button>
               </Field>
             <Field label="Anti-Positioning">
-                <textarea
+                <Textarea aria-label="Anti-Positioning"
+                  className="h-16"
                   value={(positioning.anti_positioning as string) || ""}
                   onChange={(e) => updateNested("positioning", "anti_positioning", e.target.value)}
-                  className={`${field.textarea} h-16`}
                 />
               </Field>
             <Field label="Differentiation">
-                <textarea
+                <Textarea aria-label="Differentiation"
+                  className="h-16"
                   value={(positioning.differentiation as string) || ""}
                   onChange={(e) => updateNested("positioning", "differentiation", e.target.value)}
-                  className={`${field.textarea} h-16`}
                 />
               </Field>
           </div>
@@ -609,7 +649,8 @@ export default function StrategyPage() {
         <Section id="messaging" title="Messaging">
           <div className="grid gap-4">
             <Field label="Tagline">
-                <input className={field.inputSm}
+                <Input aria-label="Tagline"
+                  size="sm"
                   value={(messaging.tagline as string) || ""}
                   onChange={(e) => updateNested("messaging", "tagline", e.target.value)}
                 />
@@ -620,9 +661,9 @@ export default function StrategyPage() {
                   differently; none of them changes what it is asking for.
                 </p>
                 <div>
-                  <label className={field.micro}>Intent</label>
-                  <input
-                    className={field.inputSm}
+                  <Input
+                    label="Intent"
+                    size="sm"
                     value={primaryCta.intent || ""}
                     placeholder="book a consultation"
                     onChange={(e) =>
@@ -634,9 +675,9 @@ export default function StrategyPage() {
                   />
                 </div>
                 <div>
-                  <label className={field.micro}>Destination</label>
-                  <input
-                    className={field.inputSm}
+                  <Input
+                    label="Destination"
+                    size="sm"
                     value={primaryCta.destination || ""}
                     placeholder="https://example.com/book"
                     onChange={(e) =>
@@ -676,22 +717,24 @@ export default function StrategyPage() {
         <Section id="goals" title="Goals">
           <div className="grid gap-4">
             <Field label="Primary Goal">
-                <input className={field.inputSm}
+                <Input aria-label="Primary Goal"
+                  size="sm"
                   value={(goals.primary as string) || ""}
                   onChange={(e) => updateNested("goals", "primary", e.target.value)}
                 />
               </Field>
             <Field label="Secondary Goal">
-                <input className={field.inputSm}
+                <Input aria-label="Secondary Goal"
+                  size="sm"
                   value={(goals.secondary as string) || ""}
                   onChange={(e) => updateNested("goals", "secondary", e.target.value)}
                 />
               </Field>
             <Field label="90-Day Focus">
-                <textarea
+                <Textarea aria-label="90-Day Focus"
+                  className="h-16"
                   value={(goals.focus_90_days as string) || ""}
                   onChange={(e) => updateNested("goals", "focus_90_days", e.target.value)}
-                  className={`${field.textarea} h-16`}
                 />
               </Field>
             <Field label="Metrics">
@@ -707,7 +750,8 @@ export default function StrategyPage() {
                   Not the same thing as the language your audience speaks, which
                   lives on the ICP — this is what gets published.
                 </p>
-                <select
+                <Select
+                  size="md"
                   value={languageOf(strategy).code}
                   onChange={(e) =>
                     update("content_strategy", {
@@ -715,7 +759,6 @@ export default function StrategyPage() {
                       language: languageFor(e.target.value),
                     })
                   }
-                  className={field.select}
                   aria-label="The language content is written in"
                 >
                   {LANGUAGES.map((l) => (
@@ -723,7 +766,7 @@ export default function StrategyPage() {
                       {l.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
             <Field label="Content Platforms">
                 <EditableList
@@ -753,12 +796,13 @@ export default function StrategyPage() {
                   Why this mix and this volume — what capacity it assumes. Read
                   by whoever reviews the week, not by the planner.
                 </p>
-                <textarea
+                <Textarea
+                  aria-label="Five pieces a week, weighted to the channel with the audience..."
+                  className="h-20"
                   value={quotaRationale}
                   onChange={(e) =>
                     updateNested("content_quota", "rationale", e.target.value)
                   }
-                  className={`${field.textarea} h-20`}
                   placeholder="Five pieces a week, weighted to the channel with the audience..."
                 />
               </Field>
@@ -801,13 +845,15 @@ export default function StrategyPage() {
                           </span>
                         ) : (
                           contentType(row.type)?.component && (
-                            <span className="block text-[10px] uppercase tracking-wide text-slate-400">
+                            <span className="block text-[10px] uppercase tracking-wide text-slate-500">
                               component
                             </span>
                           )
                         )}
                       </span>
-                      <input
+                      <Input aria-label="Weekly Content Budget"
+                        size="sm"
+                        className="w-20"
                         type="number"
                         min={0}
                         value={row.count}
@@ -816,15 +862,16 @@ export default function StrategyPage() {
                           updated[i] = { ...updated[i], count: parseInt(e.target.value) || 0 };
                           saveQuotaRows(updated);
                         }}
-                        className={`${field.inputSm} w-20`}
                       />
                       <span className="text-sm text-slate-500">/ week</span>
-                      <button
-                        className={`${btn.ghost} ml-auto`}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="ml-auto"
                         onClick={() => saveQuotaRows(quotaRows.filter((_, j) => j !== i))}
                       >
                         Remove
-                      </button>
+                      </Button>
                     </div>
                     {contentType(row.type)?.description && (
                       <p
@@ -844,9 +891,10 @@ export default function StrategyPage() {
                       {CHANNELS.map((channel) => {
                         const selected = row.channels.includes(channel);
                         return (
-                          <button
+                          <Button
+                            variant={selected ? "primary" : "secondary"}
+                            size="sm"
                             key={channel}
-                            className={toggle(selected)}
                             onClick={() => {
                               const channels = selected
                                 ? row.channels.filter((ch) => ch !== channel)
@@ -857,7 +905,7 @@ export default function StrategyPage() {
                             }}
                           >
                             {channel}
-                          </button>
+                          </Button>
                         );
                       })}
                       {row.channels.length === 0 && (
@@ -899,31 +947,33 @@ export default function StrategyPage() {
                         <div className="flex gap-2 flex-wrap items-center">
                           <span className="text-sm text-slate-500">Add format:</span>
                           {formats.map((t) => (
-                            <button
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               key={t.key}
-                              className={btn.outlineSm}
                               title={t.description}
                               onClick={() => add(t.key)}
                             >
                               + {t.label}
-                            </button>
+                            </Button>
                           ))}
                         </div>
                       )}
                       {components.length > 0 && (
                         <div className="flex gap-2 flex-wrap items-center">
-                          <span className="text-sm text-slate-400">
+                          <span className="text-sm text-slate-500">
                             Parts of a post:
                           </span>
                           {components.map((t) => (
-                            <button
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               key={t.key}
-                              className={btn.outlineSm}
                               title={t.description}
                               onClick={() => add(t.key)}
                             >
                               + {t.label}
-                            </button>
+                            </Button>
                           ))}
                         </div>
                       )}

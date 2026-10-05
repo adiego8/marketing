@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { btn } from "@/lib/ui";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface CopyButtonProps {
@@ -32,16 +32,15 @@ export function CopyButton({
   };
 
   return (
-    <button
+    // The old `text-xs` override is gone: `sm` is 14px, and a 12px action
+    // label was the legibility problem this size exists to avoid.
+    <Button
+      variant={variant === "ghost" ? "ghost" : "secondary"}
+      size="sm"
       onClick={handleCopy}
-      className={cn(
-        variant === "ghost" ? btn.ghost : btn.outlineSm,
-        "text-xs",
-        copied && "text-teal-700",
-        className
-      )}
+      className={cn(copied && "text-teal-700", className)}
     >
       {copied ? "Copied!" : label}
-    </button>
+    </Button>
   );
 }

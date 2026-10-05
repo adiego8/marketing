@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-3 bg-stone-50">
         <NumericoMark className="h-10 w-10 animate-pulse" />
-        <p className="text-sm text-slate-400">Loading…</p>
+        <p className="text-sm text-slate-500">Loading…</p>
       </div>
     );
   }
